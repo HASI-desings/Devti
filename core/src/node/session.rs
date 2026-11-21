@@ -132,8 +132,9 @@ pub(crate) async fn accept_loop(inner: Arc<Inner>) {
             incoming.refuse();
             continue;
         }
+        let rt = inner.rt.clone();
         let inner = inner.clone();
-        tokio::spawn(async move {
+        rt.spawn(async move {
             let conn = match incoming.accept() {
                 Ok(connecting) => match connecting.await {
                     Ok(c) => c,
@@ -194,14 +195,14 @@ pub(crate) async fn serve_connection(inner: Arc<Inner>, conn: Connection, peer_f
             };
         match open {
             StreamOpen::Pair => {
-                tokio::spawn(ceremony::run_hub(inner.clone(), conn.clone(), send, recv, peer_fp));
+                inner.rt.spawn(ceremony::run_hub(inner.clone(), conn.clone(), send, recv, peer_fp));
             }
             StreamOpen::Control => {
                 if !inner.trust.is_trusted(&peer_fp) {
                     conn.close(VarInt::from_u32(close_code::UNTRUSTED), b"not paired");
                     return;
                 }
-                tokio::spawn(accept_control(inner.clone(), conn.clone(), send, recv, peer_id));
+                inner.rt.spawn(accept_control(inner.clone(), conn.clone(), send, recv, peer_id));
             }
             StreamOpen::Unknown => {
                 let mut send = send;
@@ -242,7 +243,7 @@ pub(crate) async fn establish_outgoing(inner: &Arc<Inner>, conn: Connection, pee
     let (info, status) = exchange_hello(inner, &mut send, &mut recv, peer_id, true).await?;
     let fp = peer_fingerprint(&conn)?;
     register_session(inner, peer_id, conn.clone(), inner.identity.device_id(), send, recv, info, status)?;
-    tokio::spawn(serve_connection(inner.clone(), conn, fp));
+    inner.rt.spawn(serve_connection(inner.clone(), conn, fp));
     Ok(())
 }
 
@@ -324,10 +325,10 @@ fn register_session(
     let _ = inner.store.update_peer_status(&peer_id, &snap.status);
     let _ = inner.store.update_peer_seen(&peer_id, now, &[addr]);
 
-    tokio::spawn(write_loop(send, rx));
-    tokio::spawn(read_loop(inner.clone(), peer_id, recv));
+    inner.rt.spawn(write_loop(send, rx));
+    inner.rt.spawn(read_loop(inner.clone(), peer_id, recv));
     let watcher_inner = inner.clone();
-    tokio::spawn(async move {
+    inner.rt.spawn(async move {
         let reason = conn.closed().await;
         on_session_closed(&watcher_inner, peer_id, session_id, reason);
     });
@@ -472,7 +473,7 @@ pub(crate) async fn reconnect_loop(inner: Arc<Inner>) {
                 .collect()
         };
         for (id, fp, addrs) in due {
-            tokio::spawn(dial_peer(inner.clone(), id, fp, addrs));
+            inner.rt.spawn(dial_peer(inner.clone(), id, fp, addrs));
         }
     }
 }

@@ -1,0 +1,332 @@
+.map {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      ellipse 60% 55% at 50% 50%,
+      color-mix(in oklab, var(--hub) 5%, transparent),
+      transparent 70%
+    ),
+    var(--bg-deep);
+  border-radius: var(--r-sheet);
+  border: 1px solid var(--line);
+  isolation: isolate;
+}
+
+.field,
+.threads {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.threads {
+  overflow: visible;
+}
+
+.thread {
+  fill: none;
+  stroke: var(--voice);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.threadGlow {
+  fill: none;
+  stroke: var(--voice);
+  stroke-width: 7;
+  stroke-linecap: round;
+  opacity: 0.12;
+}
+
+.threadOnline .thread {
+  opacity: 0.75;
+}
+
+.threadOffline .thread {
+  stroke: var(--text-faint);
+  stroke-dasharray: 2 7;
+  opacity: 0.45;
+}
+
+/* A short dash of light that travels from the device into the prism. */
+.pulse {
+  fill: none;
+  stroke: var(--voice);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 0.05 1.2;
+  stroke-dashoffset: 0.05;
+  filter: drop-shadow(0 0 4px var(--voice));
+  animation: travel 5.2s var(--ease-in-out) infinite;
+}
+
+@keyframes travel {
+  0% {
+    stroke-dashoffset: 0.05;
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  52% {
+    stroke-dashoffset: -0.98;
+    opacity: 1;
+  }
+  58%,
+  100% {
+    stroke-dashoffset: -1.1;
+    opacity: 0;
+  }
+}
+
+:global(html[data-hidden="true"]) .pulse {
+  animation-play-state: paused;
+}
+
+/* ---------- Hub ---------- */
+.hub {
+  position: absolute;
+  translate: -50% -50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 2;
+}
+
+.hubButton {
+  all: unset;
+  cursor: pointer;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  margin-top: 30px;
+}
+
+.hubButton:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 6px;
+}
+
+.hubLabel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: var(--s-2);
+  pointer-events: none;
+}
+
+.hubName {
+  text-shadow:
+    0 0 12px var(--bg-deep),
+    0 0 4px var(--bg-deep);
+  font-family: var(--font-display);
+  font-size: var(--t-20);
+  font-weight: 650;
+  font-stretch: 88%;
+  letter-spacing: -0.01em;
+}
+
+.hubSub {
+  font-size: var(--t-13);
+  color: var(--text-dim);
+}
+
+/* ---------- Device nodes ---------- */
+.node {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -38px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 3;
+  width: 160px;
+}
+
+.lens {
+  all: unset;
+  position: relative;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  background: color-mix(in oklab, var(--surface) 88%, var(--voice));
+  color: var(--text);
+  box-shadow: 0 10px 30px -14px color-mix(in oklab, var(--voice) 70%, transparent);
+  transition:
+    transform var(--d-base) var(--ease-out),
+    background var(--d-base);
+}
+
+.lens:hover {
+  transform: scale(1.05);
+}
+
+.lens:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+
+.node:not([data-online]) .lens {
+  background: var(--surface);
+  color: var(--text-faint);
+  box-shadow: none;
+}
+
+.node[data-selected] .lens {
+  transform: scale(1.08);
+  box-shadow:
+    0 0 0 3px color-mix(in oklab, var(--voice) 45%, transparent),
+    0 14px 36px -12px color-mix(in oklab, var(--voice) 80%, transparent);
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ringTrack {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+}
+
+.ringFill {
+  fill: none;
+  stroke: var(--voice);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  transition: stroke-dasharray var(--d-slow) var(--ease-out);
+}
+
+.node:not([data-online]) .ringFill {
+  stroke: var(--text-faint);
+}
+
+.flash {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid var(--voice);
+  animation: flash 1.6s var(--ease-out) 0.7s both;
+  pointer-events: none;
+}
+
+@keyframes flash {
+  from {
+    transform: scale(0.85);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+.name {
+  margin-top: var(--s-2);
+  font-family: var(--font-display);
+  font-weight: 620;
+  font-size: var(--t-16);
+  font-stretch: 86%;
+  text-align: center;
+  line-height: 1.15;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sub {
+  font-size: var(--t-12);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.node:not([data-online]) .name {
+  color: var(--text-dim);
+}
+
+/* ---------- Empty, paused, caption ---------- */
+.empty {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-4);
+  z-index: 2;
+  margin-top: var(--s-10);
+}
+
+.ghostRing {
+  position: absolute;
+  left: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.ghostEllipse {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-dasharray: 3 9;
+  animation: drift 60s linear infinite;
+}
+
+@keyframes drift {
+  to {
+    stroke-dashoffset: -240;
+  }
+}
+
+.emptyText {
+  color: var(--text-dim);
+  font-size: var(--t-16);
+}
+
+.pausedVeil {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-3);
+  text-align: center;
+  padding: var(--s-6);
+  background: color-mix(in oklab, var(--bg-deep) 70%, transparent);
+  backdrop-filter: grayscale(1) blur(2px);
+}
+
+.pausedTitle {
+  font-family: var(--font-display);
+  font-size: var(--t-31);
+  font-weight: 650;
+  font-stretch: 85%;
+}
+
+.pausedText {
+  color: var(--text-dim);
+  max-width: 36ch;
+  margin-bottom: var(--s-3);
+}
+
+.caption {
+  position: absolute;
+  left: var(--s-6);
+  bottom: var(--s-5);
+  font-size: var(--t-13);
+  color: var(--text-dim);
+  z-index: 4;
+}

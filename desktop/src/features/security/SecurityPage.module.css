@@ -1,0 +1,121 @@
+.kill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-8);
+  padding: var(--s-8);
+  border-radius: var(--r-sheet);
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in oklab, var(--ok) 10%, transparent), transparent 60%),
+    var(--surface);
+  border: 1px solid var(--line);
+}
+
+.kill[data-paused] {
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in oklab, var(--danger) 14%, transparent), transparent 60%),
+    var(--surface);
+}
+
+.killText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+}
+
+.peerRow {
+  width: 100%;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.peerRow:hover {
+  background: var(--surface-2);
+}
+
+.peerRow:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.filter {
+  display: inline-flex;
+}
+
+.select {
+  height: 38px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-control);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+
+.log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.logRow {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 2px var(--s-4);
+  padding: var(--s-3) var(--s-5);
+  border-bottom: 1px solid var(--line);
+}
+
+.logRow:last-child {
+  border-bottom: none;
+}
+
+.logTime {
+  color: var(--text-faint);
+  font-size: var(--t-13);
+  font-variant-numeric: tabular-nums;
+}
+
+.logWhat {
+  font-weight: 560;
+}
+
+.logWho {
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.logDetail {
+  grid-column: 2;
+  color: var(--text-faint);
+  font-size: var(--t-13);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .kill {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .logRow {
+    grid-template-columns: 1fr;
+  }
+  .logDetail {
+    grid-column: 1;
+  }
+}

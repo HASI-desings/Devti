@@ -134,6 +134,9 @@ pub(crate) struct Inner {
     pub discovery_tx: mpsc::UnboundedSender<DiscoveryEvent>,
     pub session_seq: AtomicU64,
     pub shutdown: watch::Sender<bool>,
+    /// The runtime the node was started on. Every background task is spawned here, so
+    /// the public API is safe to call from any thread (UI threads, FFI callbacks).
+    pub rt: tokio::runtime::Handle,
 }
 
 /// Handle to a running node. Cheap to clone.
@@ -207,14 +210,15 @@ impl Node {
             discovery_tx,
             session_seq: AtomicU64::new(1),
             shutdown,
+            rt: tokio::runtime::Handle::current(),
         });
 
         if config.discovery && !paused {
             inner.start_discovery();
         }
-        tokio::spawn(session::accept_loop(inner.clone()));
-        tokio::spawn(session::reconnect_loop(inner.clone()));
-        tokio::spawn(session::discovery_loop(inner.clone(), discovery_rx));
+        inner.rt.spawn(session::accept_loop(inner.clone()));
+        inner.rt.spawn(session::reconnect_loop(inner.clone()));
+        inner.rt.spawn(session::discovery_loop(inner.clone(), discovery_rx));
         tracing::info!(id = %inner.identity.device_id(), addr = %local_addr, "devti node started");
         Ok(Node { inner })
     }
@@ -285,7 +289,7 @@ impl Node {
             method: PairMethod::Qr,
             password: crate::pairing::pake::password_for_qr(&uri.secret),
         };
-        tokio::spawn(ceremony::run_joiner(self.inner.clone(), pairing_id, target));
+        self.inner.rt.spawn(ceremony::run_joiner(self.inner.clone(), pairing_id, target));
         Ok(pairing_id)
     }
 
@@ -325,7 +329,7 @@ impl Node {
             method: PairMethod::Code,
             password: crate::pairing::pake::password_for_code(&digits),
         };
-        tokio::spawn(ceremony::run_joiner(self.inner.clone(), pairing_id, target));
+        self.inner.rt.spawn(ceremony::run_joiner(self.inner.clone(), pairing_id, target));
         Ok(pairing_id)
     }
 
@@ -427,6 +431,11 @@ impl Node {
 
     pub fn set_setting(&self, key: &str, value: &str) -> Result<()> {
         self.inner.store.set_setting(key, value)
+    }
+
+    /// Every stored setting (UI preferences live here too).
+    pub fn settings(&self) -> Result<Vec<(String, String)>> {
+        self.inner.store.settings()
     }
 
     /// Says goodbye to every peer, closes the endpoint and stops background tasks.
@@ -598,7 +607,7 @@ impl Inner {
 
         // Expire the window automatically.
         let inner = self.clone();
-        tokio::spawn(async move {
+        self.rt.spawn(async move {
             tokio::time::sleep(PAIRING_WINDOW_TTL).await;
             let expired = inner.window.lock().as_ref().is_some_and(|w| w.id == id && !w.busy);
             if expired {
@@ -628,7 +637,7 @@ impl Inner {
                 let _ = s.tx.send(ControlMsg::Goodbye { reason: GoodbyeReason::Revoked });
             }
             let conn = s.conn.clone();
-            tokio::spawn(async move {
+            self.rt.spawn(async move {
                 tokio::time::sleep(Duration::from_millis(150)).await;
                 conn.close(quinn::VarInt::from_u32(close_code::REVOKED), b"revoked");
             });
@@ -661,7 +670,7 @@ impl Inner {
                     })
                     .collect()
             };
-            tokio::spawn(async move {
+            self.rt.spawn(async move {
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 for c in sessions {
                     c.close(quinn::VarInt::from_u32(close_code::PAUSED), b"paused");

@@ -1,0 +1,288 @@
+// Devti's own icon set. 24-unit grid, 1.6 stroke, round caps and joins.
+// Signature: every *device* icon carries one filled dot — its camera / status light —
+// which the ecosystem map lights up in that device's voice color.
+
+import type { CSSProperties } from "react";
+import type { DeviceKind } from "../bridge";
+
+type Glyph = { d: string[]; dots?: [number, number, number][]; fill?: string[] };
+
+const G: Record<string, Glyph> = {
+  laptop: {
+    d: [
+      "M5.5 5h13A1.5 1.5 0 0 1 20 6.5V15H4V6.5A1.5 1.5 0 0 1 5.5 5Z",
+      "M2.5 15h19l-.6 2.4a1.5 1.5 0 0 1-1.46 1.1H4.56a1.5 1.5 0 0 1-1.46-1.1Z",
+    ],
+    dots: [[12, 7.6, 0.95]],
+  },
+  desktop: {
+    d: [
+      "M4.5 4h15A1.5 1.5 0 0 1 21 5.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 14.5v-9A1.5 1.5 0 0 1 4.5 4Z",
+      "M12 16v3.5",
+      "M8.5 20h7",
+    ],
+    dots: [[12, 13.2, 0.9]],
+  },
+  phone: {
+    d: [
+      "M8.5 2.75h7a1.75 1.75 0 0 1 1.75 1.75v15a1.75 1.75 0 0 1-1.75 1.75h-7a1.75 1.75 0 0 1-1.75-1.75v-15A1.75 1.75 0 0 1 8.5 2.75Z",
+      "M10.75 18.4h2.5",
+    ],
+    dots: [[12, 5.7, 0.95]],
+  },
+  tablet: {
+    d: [
+      "M5.75 3h12.5A1.75 1.75 0 0 1 20 4.75v14.5A1.75 1.75 0 0 1 18.25 21H5.75A1.75 1.75 0 0 1 4 19.25V4.75A1.75 1.75 0 0 1 5.75 3Z",
+      "M10.25 18.4h3.5",
+    ],
+    dots: [[12, 5.7, 0.95]],
+  },
+  accessory: {
+    d: [
+      "M8 4.75a3.25 3.25 0 0 0-1.1 6.3V18a1.35 1.35 0 0 0 2.7 0V8a3.25 3.25 0 0 0-1.6-3.25Z",
+      "M16 4.75a3.25 3.25 0 0 1 1.1 6.3V18a1.35 1.35 0 0 1-2.7 0V8A3.25 3.25 0 0 1 16 4.75Z",
+    ],
+    dots: [[7.9, 8, 0.9]],
+  },
+  hub: { d: ["M12 3.5 20.5 19H3.5Z", "M12 3.5 14.4 19"], dots: [[11.6, 14.6, 1.1]] },
+  ecosystem: {
+    d: ["M10.6 7.7 7.4 15.3", "M13.4 7.7l3.2 7.6", "M8.2 17h7.6"],
+    fill: [],
+    dots: [
+      [12, 6, 2.1],
+      [6.4, 17, 2.1],
+      [17.6, 17, 2.1],
+    ],
+  },
+  link: {
+    d: [
+      "M10 14l4-4",
+      "M8.6 11.4 6.8 13.2a3 3 0 0 0 4.24 4.24l1.8-1.8",
+      "M15.4 12.6l1.8-1.8a3 3 0 0 0-4.24-4.24l-1.8 1.8",
+    ],
+  },
+  qr: {
+    d: [
+      "M4 4h5.5v5.5H4Z",
+      "M14.5 4H20v5.5h-5.5Z",
+      "M4 14.5h5.5V20H4Z",
+      "M14.5 14.5h2.2v2.2h-2.2Z",
+      "M17.8 17.8H20V20h-2.2Z",
+    ],
+  },
+  shield: { d: ["M12 3l7 2.8v5.4c0 4.3-2.9 8-7 9.3-4.1-1.3-7-5-7-9.3V5.8Z", "M9 12l2.1 2.1L15.2 10"] },
+  settings: {
+    d: [
+      "M4 7.5h8.5",
+      "M17.5 7.5H20",
+      "M4 16.5h2.5",
+      "M11.5 16.5H20",
+      "M15 5.4a2.1 2.1 0 1 1 0 4.2 2.1 2.1 0 0 1 0-4.2Z",
+      "M9 14.4a2.1 2.1 0 1 1 0 4.2 2.1 2.1 0 0 1 0-4.2Z",
+    ],
+  },
+  help: {
+    d: [
+      "M12 3.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17Z",
+      "M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z",
+      "M6 6l3.5 3.5",
+      "M14.5 14.5 18 18",
+      "M18 6l-3.5 3.5",
+      "M9.5 14.5 6 18",
+    ],
+  },
+  pause: { d: ["M8.5 5.5v13", "M15.5 5.5v13"] },
+  play: { d: ["M8 5.5v13l10.5-6.5Z"] },
+  power: { d: ["M12 3.5v8", "M7 6.3a7.5 7.5 0 1 0 10 0"] },
+  plus: { d: ["M12 5v14", "M5 12h14"] },
+  close: { d: ["M6.5 6.5l11 11", "M17.5 6.5l-11 11"] },
+  check: { d: ["M5 12.5l4.5 4.5L19 7.5"] },
+  chevronRight: { d: ["M9.5 6l6 6-6 6"] },
+  chevronLeft: { d: ["M14.5 6l-6 6 6 6"] },
+  chevronDown: { d: ["M6 9.5l6 6 6-6"] },
+  trash: {
+    d: [
+      "M4.5 7h15",
+      "M9.5 7V4.5h5V7",
+      "M6.5 7l1 12.5A1.5 1.5 0 0 0 9 21h6a1.5 1.5 0 0 0 1.5-1.5l1-12.5",
+      "M10 11v6",
+      "M14 11v6",
+    ],
+  },
+  pencil: { d: ["M4 20l1-4.5L15.5 5a2.1 2.1 0 0 1 3 3L8 18.5Z", "M13.5 7l3 3"] },
+  bluetooth: { d: ["M7 7.5l10 9-5 4.5V3l5 4.5-10 9"] },
+  signal: {
+    d: ["M3.5 9.5a12 12 0 0 1 17 0", "M6.5 12.8a7.5 7.5 0 0 1 11 0", "M9.5 16a3.2 3.2 0 0 1 5 0"],
+    dots: [[12, 19, 1.1]],
+  },
+  battery: {
+    d: [
+      "M3.5 8h13A1.5 1.5 0 0 1 18 9.5v5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 2 14.5v-5A1.5 1.5 0 0 1 3.5 8Z",
+      "M21 10.5v3",
+    ],
+  },
+  bolt: { d: ["M13 3 5.5 13.5H12l-1 7.5 7.5-10.5H12Z"] },
+  bell: { d: ["M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z", "M10 20.5a2 2 0 0 0 4 0"] },
+  radar: {
+    d: ["M12 3.5a8.5 8.5 0 1 1-8.5 8.5", "M12 7.5a4.5 4.5 0 1 1-4.5 4.5", "M12 12l6-6"],
+    dots: [[12, 12, 1.1]],
+  },
+  eye: {
+    d: [
+      "M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z",
+      "M12 9.2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6Z",
+    ],
+  },
+  lock: {
+    d: [
+      "M6.5 10.5h11A1.5 1.5 0 0 1 19 12v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19v-7a1.5 1.5 0 0 1 1.5-1.5Z",
+      "M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5",
+    ],
+  },
+  cast: {
+    d: [
+      "M3 15.5V6a1.5 1.5 0 0 1 1.5-1.5h15A1.5 1.5 0 0 1 21 6v10a1.5 1.5 0 0 1-1.5 1.5H13",
+      "M3 17.5a3 3 0 0 1 3 3",
+      "M3 13.5a7 7 0 0 1 7 7",
+    ],
+    dots: [[3.4, 20.4, 0.9]],
+  },
+  cursor: { d: ["M5 4l13 6-5.5 1.8L10.5 18Z"] },
+  folder: {
+    d: [
+      "M3.5 6.5A1.5 1.5 0 0 1 5 5h4l2 2.5h8a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 18Z",
+    ],
+  },
+  clipboard: {
+    d: [
+      "M9 3.75h6V6.5H9Z",
+      "M7.5 5H6.5A1.5 1.5 0 0 0 5 6.5v13A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-13A1.5 1.5 0 0 0 17.5 5h-1",
+    ],
+  },
+  copy: {
+    d: [
+      "M9 8.5h9.5A1.5 1.5 0 0 1 20 10v9a1.5 1.5 0 0 1-1.5 1.5H9A1.5 1.5 0 0 1 7.5 19v-9A1.5 1.5 0 0 1 9 8.5Z",
+      "M16.5 8.5V5A1.5 1.5 0 0 0 15 3.5H5.5A1.5 1.5 0 0 0 4 5v9.5A1.5 1.5 0 0 0 5.5 16h2",
+    ],
+  },
+  external: {
+    d: [
+      "M14 4.5h5.5V10",
+      "M19.5 4.5 11 13",
+      "M17 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 4 18.5v-10A1.5 1.5 0 0 1 5.5 7H10",
+    ],
+  },
+  sun: {
+    d: [
+      "M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z",
+      "M12 2.5v2",
+      "M12 19.5v2",
+      "M2.5 12h2",
+      "M19.5 12h2",
+      "M5.3 5.3l1.4 1.4",
+      "M17.3 17.3l1.4 1.4",
+      "M5.3 18.7l1.4-1.4",
+      "M17.3 6.7l1.4-1.4",
+    ],
+  },
+  moon: { d: ["M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10Z"] },
+  sparkle: { d: ["M12 3.5l1.9 5.6 5.6 1.9-5.6 1.9L12 18.5l-1.9-5.6L4.5 11l5.6-1.9Z"] },
+  download: { d: ["M12 4v11", "M7.5 10.5 12 15l4.5-4.5", "M5 19.5h14"] },
+  key: {
+    d: ["M8 11.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z", "M10.5 12.5 19 4", "M16 7l2.5 2.5", "M13.5 9.5l2 2"],
+  },
+  info: { d: ["M12 3.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17Z", "M12 11v5"], dots: [[12, 7.9, 1]] },
+  warning: { d: ["M12 4 21 19.5H3Z", "M12 10v4.5"], dots: [[12, 17, 1]] },
+  network: {
+    d: [
+      "M12 3.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17Z",
+      "M3.5 12h17",
+      "M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5Z",
+    ],
+  },
+  monitor: {
+    d: [
+      "M4.5 4.5h15A1.5 1.5 0 0 1 21 6v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 15.5V6a1.5 1.5 0 0 1 1.5-1.5Z",
+      "M9 20.5h6",
+    ],
+  },
+  keyboard: {
+    d: [
+      "M4 6.5h16A1.5 1.5 0 0 1 21.5 8v8a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 16V8A1.5 1.5 0 0 1 4 6.5Z",
+      "M8 14.5h8",
+    ],
+    dots: [
+      [6.5, 10.5, 0.8],
+      [10, 10.5, 0.8],
+      [13.5, 10.5, 0.8],
+      [17, 10.5, 0.8],
+    ],
+  },
+  activity: { d: ["M3 12h4l2.5-6 5 12 2.5-6h4"] },
+};
+
+export type IconName = keyof typeof G;
+
+export function Icon({
+  name,
+  size = 20,
+  stroke = 1.6,
+  dotColor,
+  className,
+  style,
+  title,
+}: {
+  name: IconName;
+  size?: number;
+  stroke?: number;
+  /** Colors the device's signature dot (its voice). */
+  dotColor?: string;
+  className?: string;
+  style?: CSSProperties;
+  title?: string;
+}) {
+  const g = G[name] ?? G.info!;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={stroke}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      style={style}
+      role={title ? "img" : undefined}
+      aria-hidden={title ? undefined : true}
+      aria-label={title}
+    >
+      {g.d.map((d) => (
+        <path key={d} d={d} />
+      ))}
+      {g.dots?.map(([cx, cy, r]) => (
+        <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={r} fill={dotColor ?? "currentColor"} stroke="none" />
+      ))}
+    </svg>
+  );
+}
+
+export function deviceIcon(kind: DeviceKind): IconName {
+  switch (kind) {
+    case "desktop":
+      return "desktop";
+    case "laptop":
+      return "laptop";
+    case "phone":
+      return "phone";
+    case "tablet":
+      return "tablet";
+    case "accessory":
+      return "accessory";
+    default:
+      return "monitor";
+  }
+}
+
+export const ALL_ICONS = Object.keys(G) as IconName[];

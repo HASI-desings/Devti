@@ -351,8 +351,36 @@ async fn local_snapshot_and_settings() {
     assert_eq!(local.addresses, vec!["127.0.0.1".to_string()]);
     n.node.set_setting("theme", "dark").unwrap();
     assert_eq!(n.node.setting("theme").unwrap().as_deref(), Some("dark"));
+    assert!(n.node.settings().unwrap().iter().any(|(k, v)| k == "theme" && v == "dark"));
     assert!(n.node.nearby().is_empty());
     assert!(n.node.pair_with_uri("devti://nope").is_err());
     assert!(n.node.pair_with_code_at_address(n.node.local_addr(), "12").is_err());
     assert!(n.node.pair_with_code(&devti_core::model::DeviceId::from_bytes([1; 10]), "123456").is_err());
+}
+
+#[test]
+fn api_is_callable_from_threads_outside_the_runtime() {
+    // UI frameworks (Tauri sync commands, Android main thread) call the node from
+    // plain threads. Nothing may assume an ambient Tokio runtime.
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let node = rt.block_on(async {
+        let mut cfg = NodeConfig::new(dir.path(), "Threaded", DeviceKind::Desktop);
+        cfg.bind_ip = "127.0.0.1".parse().unwrap();
+        cfg.port = 0;
+        cfg.discovery = false;
+        Node::start(cfg, Arc::new(MemorySecretStore::new())).await.unwrap()
+    });
+    let handle = std::thread::spawn(move || {
+        let w = node.open_pairing_window().unwrap();
+        node.close_pairing_window();
+        assert!(node.pair_with_uri(&w.uri).is_ok());
+        node.set_paused(true).unwrap();
+        node.set_paused(false).unwrap();
+        node.set_status(DeviceStatus { battery: Some(BatteryState::new(50, false)) });
+        node.rename("Still fine").unwrap();
+        node
+    });
+    let node = handle.join().expect("no panic outside the runtime");
+    rt.block_on(node.shutdown());
 }

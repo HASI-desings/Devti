@@ -31,9 +31,11 @@ pub fn new_code() -> Result<String> {
     }
 }
 
-/// Random identifier for a pairing attempt / window.
+/// Random identifier for a pairing attempt / window. Kept below 2^53 so it survives
+/// a round trip through JavaScript numbers (the desktop UI) unchanged.
 pub fn new_id() -> Result<u64> {
-    getrandom::u64().map_err(|e| Error::Crypto(e.to_string()))
+    const JS_SAFE: u64 = (1 << 53) - 1;
+    Ok((getrandom::u64().map_err(|e| Error::Crypto(e.to_string()))? & JS_SAFE).max(1))
 }
 
 #[cfg(test)]
@@ -47,5 +49,6 @@ mod tests {
         assert!(codes.len() > 40);
         assert_ne!(new_qr_secret().unwrap(), new_qr_secret().unwrap());
         assert_ne!(new_id().unwrap(), new_id().unwrap());
+        assert!((0..1000).all(|_| new_id().unwrap() < (1 << 53)));
     }
 }

@@ -1,0 +1,273 @@
+.panel {
+  position: relative;
+  min-height: 420px;
+  padding: var(--s-10);
+  display: flex;
+}
+
+.panel[data-compact] {
+  padding: 0;
+  min-height: 380px;
+}
+
+.step,
+.stepCenter {
+  flex: 1;
+  display: flex;
+  gap: var(--s-10);
+}
+
+.step {
+  align-items: center;
+}
+
+.stepCenter {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--s-4);
+}
+
+.qrSide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.qrCard {
+  padding: var(--s-4);
+  border-radius: var(--r-panel);
+  background: #fbfaff;
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 30px 60px -30px color-mix(in oklab, var(--voice-iris) 60%, transparent);
+}
+
+.qrPlaceholder {
+  width: 224px;
+  height: 224px;
+  border-radius: var(--r-control);
+  background: repeating-linear-gradient(45deg, #ecebf7 0 6px, #f6f5fc 6px 12px);
+}
+
+.expiry {
+  font-size: var(--t-13);
+  color: var(--text-faint);
+}
+
+.copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+  max-width: 420px;
+}
+
+.title {
+  font-size: var(--t-31);
+  font-weight: 640;
+  font-stretch: 86%;
+  letter-spacing: -0.015em;
+}
+
+.lead {
+  color: var(--text-dim);
+  font-size: var(--t-16);
+  max-width: 46ch;
+}
+
+.steps {
+  margin: 0;
+  padding-left: 1.3em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  color: var(--text-dim);
+  font-size: var(--t-16);
+}
+
+.steps li::marker {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.fine {
+  font-size: var(--t-13);
+  color: var(--text-faint);
+  max-width: 50ch;
+}
+
+.link {
+  all: unset;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--focus);
+}
+
+.error {
+  color: var(--danger);
+}
+
+.switchRow {
+  margin-top: var(--s-2);
+}
+
+.actions {
+  display: flex;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: var(--s-2);
+}
+
+.sas {
+  display: flex;
+  gap: var(--s-2);
+  margin: var(--s-2) 0;
+}
+
+.sasDigit {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 76px;
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  font-family: var(--font-display);
+  font-size: var(--t-49);
+  font-weight: 600;
+  font-stretch: 80%;
+  font-variant-numeric: tabular-nums;
+}
+
+.sasGap {
+  width: var(--s-4);
+}
+
+.waiting {
+  color: var(--text-dim);
+  animation: breathe 1.8s var(--ease-in-out) infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.joined {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: color-mix(in oklab, currentColor 14%, var(--surface));
+  box-shadow: 0 0 0 2px currentColor;
+}
+
+.failIcon {
+  color: var(--danger);
+}
+
+/* ---------- Computer pairing ---------- */
+.computer {
+  flex: 1;
+  display: flex;
+  gap: var(--s-10);
+  align-items: flex-start;
+}
+
+.codeSide {
+  width: 260px;
+  padding: var(--s-6);
+  border-radius: var(--r-panel);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.label {
+  color: var(--text-dim);
+}
+
+.bigCode {
+  font-family: var(--font-display);
+  font-size: var(--t-49);
+  font-weight: 620;
+  font-stretch: 78%;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+}
+
+.nearby {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.nearbyRow {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.nearbyRow:hover {
+  background: var(--surface-3);
+}
+
+.nearbyRow:focus-visible {
+  outline: 2px solid var(--focus);
+}
+
+.nearbyName {
+  font-weight: 600;
+}
+
+.nearbyMeta {
+  color: var(--text-faint);
+  font-size: var(--t-13);
+}
+
+.codeForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.codeForm .actions {
+  justify-content: flex-start;
+}
+
+@media (max-width: 760px) {
+  .step,
+  .computer {
+    flex-direction: column;
+  }
+  .panel {
+    padding: var(--s-6);
+  }
+}

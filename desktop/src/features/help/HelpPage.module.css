@@ -1,0 +1,118 @@
+.how {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s-6);
+}
+
+.how > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.how h3 {
+  font-size: var(--t-20);
+  font-stretch: 88%;
+  margin-top: var(--s-2);
+}
+
+.how p {
+  color: var(--text-dim);
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-13);
+}
+
+.table th,
+.table td {
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+}
+
+.table th[scope="row"],
+.table thead th:first-child {
+  text-align: left;
+  font-weight: 560;
+}
+
+.table thead th {
+  color: var(--text-dim);
+  font-weight: 540;
+}
+
+.table tr:last-child th,
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table td[data-support="yes"] {
+  color: var(--ok);
+}
+
+.table td[data-support="partial"] {
+  color: var(--warn);
+}
+
+.table td[data-support="no"] {
+  color: var(--text-faint);
+}
+
+.note {
+  display: block;
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.faq {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-panel);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.faq details {
+  border-bottom: 1px solid var(--line);
+}
+
+.faq details:last-child {
+  border-bottom: none;
+}
+
+.faq summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-4) var(--s-5);
+  cursor: pointer;
+  font-weight: 560;
+}
+
+.faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq summary svg {
+  transition: transform var(--d-base) var(--ease-out);
+  flex: none;
+}
+
+.faq details[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.faq details p {
+  padding: 0 var(--s-5) var(--s-5);
+  color: var(--text-dim);
+  max-width: 70ch;
+}

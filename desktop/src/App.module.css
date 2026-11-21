@@ -1,0 +1,45 @@
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+}
+
+.main {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.center {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-4);
+  text-align: center;
+  padding: var(--s-6);
+}
+
+.centerTitle {
+  font-size: var(--t-31);
+  font-stretch: 86%;
+}
+
+.centerText {
+  color: var(--text-dim);
+  max-width: 52ch;
+}
+
+.sheetHead {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--s-4) var(--s-4) 0;
+  margin-bottom: calc(-1 * var(--s-8));
+  position: relative;
+  z-index: 1;
+}
+
+.doneSheet {
+  padding: var(--s-10);
+}

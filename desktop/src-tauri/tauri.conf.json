@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Devti",
+  "version": "0.1.0",
+  "identifier": "app.devti.hub",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Devti",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 900,
+        "minHeight": 620,
+        "center": true,
+        "create": false,
+        "backgroundColor": "#15122a"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi", "deb", "rpm", "appimage"],
+    "publisher": "Devti contributors",
+    "category": "Utility",
+    "shortDescription": "All your devices, one living system.",
+    "longDescription": "Devti connects your computers, phones, tablets and Bluetooth accessories into one private, encrypted, local-first ecosystem.",
+    "license": "GPL-3.0-or-later",
+    "copyright": "© Devti contributors. GPL-3.0-or-later.",
+    "homepage": "https://github.com/hasi-desings/devti",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.png", "icons/icon.ico"],
+    "linux": {
+      "deb": { "depends": ["libwebkit2gtk-4.1-0", "libayatana-appindicator3-1"], "section": "net" },
+      "rpm": { "depends": ["webkit2gtk4.1", "libayatana-appindicator-gtk3"] }
+    },
+    "windows": {
+      "nsis": { "installMode": "currentUser" },
+      "webviewInstallMode": { "type": "downloadBootstrapper" }
+    }
+  },
+  "plugins": {}
+}

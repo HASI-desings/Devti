@@ -1,0 +1,52 @@
+.root {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+}
+
+.hole {
+  position: absolute;
+  border-radius: var(--r-panel);
+  box-shadow:
+    0 0 0 2px var(--hub),
+    0 0 0 9999px color-mix(in oklab, var(--bg-deep) 78%, transparent);
+  pointer-events: none;
+}
+
+.card {
+  position: absolute;
+  padding: var(--s-5);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-panel);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.count {
+  font-size: var(--t-12);
+  color: var(--text-faint);
+}
+
+.title {
+  font-size: var(--t-25);
+  font-stretch: 86%;
+}
+
+.text {
+  color: var(--text-dim);
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--s-3);
+}
+
+.nav {
+  display: flex;
+  gap: var(--s-2);
+}

@@ -1,0 +1,488 @@
+.shell {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background:
+    radial-gradient(70% 60% at 50% 42%, color-mix(in oklab, var(--hub) 5%, transparent), transparent 70%),
+    var(--bg);
+  overflow: hidden;
+}
+
+/* ---------- Progress filament ---------- */
+.progress {
+  position: relative;
+  padding: var(--s-6) var(--s-10) var(--s-4);
+}
+
+.progress ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  z-index: 1;
+}
+
+.progress li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
+  width: 90px;
+  font-size: var(--t-12);
+  color: var(--text-faint);
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  border: 2px solid var(--bg);
+  transition:
+    background var(--d-base),
+    box-shadow var(--d-base);
+}
+
+.progress li[data-state="done"] .dot {
+  background: var(--voice);
+}
+
+.progress li[data-state="current"] .dot {
+  background: var(--hub);
+  box-shadow: 0 0 0 5px color-mix(in oklab, var(--hub) 18%, transparent);
+}
+
+.progress li[data-state="current"] {
+  color: var(--text);
+}
+
+.stepName {
+  white-space: nowrap;
+}
+
+.track {
+  position: absolute;
+  left: calc(var(--s-10) + 45px);
+  right: calc(var(--s-10) + 45px);
+  top: calc(var(--s-6) + 5px);
+  height: 2px;
+  background: var(--line-strong);
+  border-radius: 2px;
+}
+
+.fill {
+  height: 100%;
+  transform-origin: left;
+  background: linear-gradient(
+    90deg,
+    var(--voice-iris),
+    var(--voice-aqua),
+    var(--voice-coral),
+    var(--voice-mint),
+    var(--voice-marigold),
+    var(--voice-rose)
+  );
+  border-radius: inherit;
+}
+
+/* ---------- Stage ---------- */
+.stage {
+  overflow: auto;
+  display: grid;
+  padding: var(--s-6) var(--s-10) var(--s-10);
+}
+
+.step {
+  margin: auto;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.narrow,
+.wide {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.narrow {
+  max-width: 560px;
+}
+
+.wide {
+  max-width: 860px;
+}
+
+.title {
+  font-size: var(--t-49);
+  font-weight: 660;
+  font-stretch: 80%;
+  letter-spacing: -0.02em;
+}
+
+.lead {
+  color: var(--text-dim);
+  font-size: var(--t-16);
+  max-width: 62ch;
+}
+
+.fine {
+  color: var(--text-faint);
+  font-size: var(--t-13);
+  max-width: 70ch;
+}
+
+.nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--s-4);
+}
+
+.navRight {
+  display: flex;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+/* ---------- Welcome ---------- */
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--s-5);
+  max-width: 720px;
+}
+
+.converge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 210px;
+  margin-bottom: var(--s-4);
+}
+
+.spark {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  margin: -6px;
+}
+
+.hero {
+  font-size: var(--t-61);
+  font-weight: 680;
+  font-stretch: 76%;
+  letter-spacing: -0.025em;
+  line-height: 1;
+}
+
+/* ---------- Permissions ---------- */
+.perms {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.perms li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--s-4);
+  align-items: center;
+  padding: var(--s-4) var(--s-5);
+  border-bottom: 1px solid var(--line);
+}
+
+.perms li:last-child {
+  border-bottom: none;
+}
+
+.permIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+}
+
+.permText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-dim);
+}
+
+.permTitle {
+  font-weight: 620;
+  color: var(--text);
+}
+
+.permWhen {
+  font-size: var(--t-13);
+  color: var(--text-faint);
+}
+
+/* ---------- Identity ---------- */
+.roles {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.legend {
+  font-size: var(--t-13);
+  color: var(--text-dim);
+  font-weight: 520;
+  margin-bottom: var(--s-2);
+}
+
+.role {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--s-4);
+  align-items: center;
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--r-panel);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  cursor: pointer;
+  color: var(--text-dim);
+  transition:
+    border-color var(--d-fast),
+    background var(--d-fast);
+}
+
+.role[data-checked] {
+  border-color: var(--hub);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.role:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.roleText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.roleTitle {
+  font-weight: 640;
+  color: var(--text);
+  font-size: var(--t-16);
+}
+
+.radio {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+}
+
+.role[data-checked] .radio {
+  border: 6px solid var(--hub);
+}
+
+/* ---------- Pair ---------- */
+.pairBox {
+  padding: var(--s-6);
+  border-radius: var(--r-sheet);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+/* ---------- Bluetooth ---------- */
+.scan {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: var(--s-8);
+  align-items: start;
+  padding: var(--s-6);
+  border-radius: var(--r-sheet);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  min-height: 240px;
+}
+
+.radar {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--voice-aqua);
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--voice-aqua) 14%, transparent) 0 30%,
+    transparent 31%
+  );
+}
+
+.radar::before,
+.radar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--voice-aqua);
+  opacity: 0;
+}
+
+.radar[data-active]::before,
+.radar[data-active]::after {
+  animation: ping 2.4s var(--ease-out) infinite;
+}
+
+.radar[data-active]::after {
+  animation-delay: 1.2s;
+}
+
+@keyframes ping {
+  from {
+    transform: scale(0.35);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+.scanList ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.scanNote {
+  color: var(--text-dim);
+  padding: var(--s-3) 0;
+}
+
+.btRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--s-3);
+  align-items: center;
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+}
+
+.btText {
+  display: flex;
+  flex-direction: column;
+}
+
+.signal {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+}
+
+.signal span {
+  width: 4px;
+  border-radius: 1px;
+  background: var(--surface-3);
+}
+
+.signal span[data-on] {
+  background: var(--voice-aqua);
+}
+
+/* ---------- Tour + Done ---------- */
+.tourIcon {
+  color: var(--voice-marigold);
+}
+
+.suggest {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-4);
+}
+
+.card {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-5);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+}
+
+button.card {
+  cursor: pointer;
+  transition:
+    border-color var(--d-fast),
+    transform var(--d-fast) var(--ease-out);
+}
+
+button.card:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-2px);
+}
+
+button.card:focus-visible {
+  outline: 2px solid var(--focus);
+}
+
+.card > svg {
+  color: var(--text);
+  margin-bottom: var(--s-2);
+}
+
+@media (max-width: 860px) {
+  .suggest {
+    grid-template-columns: 1fr;
+  }
+  .scan {
+    grid-template-columns: 1fr;
+  }
+  .stepName {
+    display: none;
+  }
+  .progress li {
+    width: 24px;
+  }
+  .track {
+    left: calc(var(--s-10) + 12px);
+    right: calc(var(--s-10) + 12px);
+  }
+  .hero {
+    font-size: var(--t-39);
+  }
+  .stage,
+  .progress {
+    padding-left: var(--s-4);
+    padding-right: var(--s-4);
+  }
+}

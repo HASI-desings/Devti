@@ -1,0 +1,282 @@
+/* ---------- Button ---------- */
+.button {
+  --h: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  height: var(--h);
+  padding: 0 var(--s-4);
+  border-radius: var(--r-control);
+  border: 1px solid transparent;
+  font-weight: 560;
+  font-size: var(--t-14);
+  letter-spacing: 0.005em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--d-fast) var(--ease-out),
+    border-color var(--d-fast) var(--ease-out),
+    transform var(--d-fast) var(--ease-out),
+    opacity var(--d-fast);
+}
+.button[data-pressed] {
+  transform: scale(0.97);
+}
+.button[data-disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+.button[data-focus-visible] {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.lg {
+  --h: 46px;
+  padding: 0 var(--s-6);
+  font-size: var(--t-16);
+}
+.sm {
+  --h: 30px;
+  padding: 0 var(--s-3);
+  font-size: var(--t-13);
+}
+.primary {
+  background: var(--hub);
+  color: var(--bg);
+}
+.primary[data-hovered] {
+  background: color-mix(in oklab, var(--hub) 88%, var(--bg));
+}
+.quiet {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+.quiet[data-hovered] {
+  background: var(--surface-3);
+}
+.ghost {
+  background: transparent;
+  color: var(--text-dim);
+  padding: 0 var(--s-3);
+}
+.ghost[data-hovered] {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.danger {
+  background: var(--danger);
+  color: var(--danger-ink);
+}
+.danger[data-hovered] {
+  background: color-mix(in oklab, var(--danger) 88%, var(--bg));
+}
+.iconOnly {
+  padding: 0;
+  width: var(--h);
+}
+
+/* ---------- Switch ---------- */
+.switch {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  cursor: pointer;
+  color: var(--text);
+}
+.track {
+  flex: none;
+  width: 42px;
+  height: 24px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  position: relative;
+  transition: background var(--d-base) var(--ease-out);
+}
+.thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition:
+    transform var(--d-base) var(--ease-out),
+    background var(--d-base);
+}
+.switch[data-selected] .track {
+  background: var(--accent, var(--hub));
+  border-color: transparent;
+}
+.switch[data-selected] .thumb {
+  transform: translateX(18px);
+  background: var(--bg);
+}
+.switch[data-focus-visible] .track {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.switch[data-disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---------- Text field ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.label {
+  font-size: var(--t-13);
+  color: var(--text-dim);
+  font-weight: 520;
+}
+.input {
+  height: 44px;
+  padding: 0 var(--s-4);
+  border-radius: var(--r-control);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--t-16);
+  transition: border-color var(--d-fast);
+}
+.input[data-focused] {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 25%, transparent);
+}
+.input[data-invalid] {
+  border-color: var(--danger);
+}
+.hint {
+  font-size: var(--t-13);
+  color: var(--text-faint);
+}
+.error {
+  font-size: var(--t-13);
+  color: var(--danger);
+}
+
+/* ---------- Segmented control ---------- */
+.segmented {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 3px;
+  gap: 2px;
+  border-radius: calc(var(--r-control) + 3px);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.segment {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  height: 32px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-control);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-weight: 540;
+  transition:
+    background var(--d-fast),
+    color var(--d-fast);
+}
+.segment[data-hovered] {
+  color: var(--text);
+}
+.segment[data-selected] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+.segment[data-focus-visible] {
+  outline: 2px solid var(--focus);
+}
+
+/* ---------- Sheet (modal) ---------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--s-6);
+  background: color-mix(in oklab, var(--bg-deep) 72%, transparent);
+  backdrop-filter: blur(6px);
+}
+.sheet {
+  width: min(880px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sheet);
+  box-shadow: var(--shadow-panel);
+  outline: none;
+}
+.sheetNarrow {
+  width: min(520px, 100%);
+}
+
+/* ---------- Toasts ---------- */
+.toasts {
+  position: fixed;
+  right: var(--s-6);
+  bottom: var(--s-6);
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  max-width: 420px;
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-control);
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-panel);
+}
+.toast[data-tone="ok"] {
+  border-color: color-mix(in oklab, var(--ok) 50%, transparent);
+}
+.toast[data-tone="danger"] {
+  border-color: color-mix(in oklab, var(--danger) 60%, transparent);
+}
+
+/* ---------- Battery meter ---------- */
+.battery {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  font-size: var(--t-13);
+}
+.batteryTrack {
+  position: relative;
+  width: 34px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.batteryFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--accent, var(--ok));
+  transition: width var(--d-slow) var(--ease-out);
+}
+.batteryLow .batteryFill {
+  background: var(--danger);
+}

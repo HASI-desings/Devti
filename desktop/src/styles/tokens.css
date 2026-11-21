@@ -1,0 +1,165 @@
+/*
+ * Devti design tokens — direction "Prism" (see docs/DESIGN.md).
+ * White light holds every color at once: the Hub is the prism, every device is one
+ * color of the spectrum ("its voice"). Neutrals are a cool violet ink, never black.
+ */
+
+:root {
+  /* Type */
+  --font-display: "Bricolage Grotesque Variable", "Segoe UI Variable Display", system-ui, sans-serif;
+  --font-ui: "Instrument Sans Variable", "Segoe UI Variable Text", system-ui, sans-serif;
+
+  /* Major-third scale anchored at 14px */
+  --t-12: 0.75rem;
+  --t-13: 0.8125rem;
+  --t-14: 0.875rem;
+  --t-16: 1rem;
+  --t-20: 1.25rem;
+  --t-25: 1.5625rem;
+  --t-31: 1.953rem;
+  --t-39: 2.441rem;
+  --t-49: 3.052rem;
+  --t-61: 3.815rem;
+
+  /* 4-pt spacing */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-14: 56px;
+  --s-18: 72px;
+
+  /* Radii carry hierarchy: controls < panels < sheets */
+  --r-control: 10px;
+  --r-panel: 18px;
+  --r-sheet: 28px;
+  --r-pill: 999px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --d-fast: 140ms;
+  --d-base: 240ms;
+  --d-slow: 420ms;
+
+  /* Voices — one hue per device, assigned from its ID. `-l` reads on night, `-d` on day. */
+  --voice-coral-l: #ff8f7e;
+  --voice-coral-d: #c8432f;
+  --voice-marigold-l: #ffcb62;
+  --voice-marigold-d: #9c6a00;
+  --voice-mint-l: #63e4b3;
+  --voice-mint-d: #0f8158;
+  --voice-aqua-l: #5ad6f3;
+  --voice-aqua-d: #0b7496;
+  --voice-iris-l: #a596ff;
+  --voice-iris-d: #5643dc;
+  --voice-rose-l: #ff82c4;
+  --voice-rose-d: #b52a76;
+}
+
+/* Night (default) */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #15122a;
+  --bg-deep: #0f0c21;
+  --surface: #1d1937;
+  --surface-2: #262145;
+  --surface-3: #312b55;
+  --line: rgb(214 208 255 / 0.1);
+  --line-strong: rgb(214 208 255 / 0.2);
+  --text: #f2f0fb;
+  --text-dim: #aaa4ca;
+  --text-faint: #736d95;
+  --hub: #ffffff;
+  --focus: #c4bbff;
+  --danger: #ff6680;
+  --danger-ink: #2a0c14;
+  --ok: var(--voice-mint-l);
+  --warn: var(--voice-marigold-l);
+  --shadow-panel: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 24px 48px -24px rgb(5 3 20 / 0.7);
+  --dot: rgb(196 188 255 / 0.16);
+  --voice-mode: l;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eeedf6;
+  --bg-deep: #e5e3f1;
+  --surface: #fbfbfe;
+  --surface-2: #f2f1f9;
+  --surface-3: #e8e6f4;
+  --line: rgb(30 24 70 / 0.1);
+  --line-strong: rgb(30 24 70 / 0.18);
+  --text: #1a1733;
+  --text-dim: #56517a;
+  --text-faint: #8b87a7;
+  --hub: #1a1733;
+  --focus: #5643dc;
+  --danger: #cf1f48;
+  --danger-ink: #ffffff;
+  --ok: var(--voice-mint-d);
+  --warn: var(--voice-marigold-d);
+  --shadow-panel: 0 1px 0 rgb(255 255 255 / 0.9) inset, 0 18px 40px -24px rgb(40 30 90 / 0.28);
+  --dot: rgb(40 30 110 / 0.13);
+  --voice-mode: d;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="light"]) {
+    color-scheme: light;
+    --bg: #eeedf6;
+    --bg-deep: #e5e3f1;
+    --surface: #fbfbfe;
+    --surface-2: #f2f1f9;
+    --surface-3: #e8e6f4;
+    --line: rgb(30 24 70 / 0.1);
+    --line-strong: rgb(30 24 70 / 0.18);
+    --text: #1a1733;
+    --text-dim: #56517a;
+    --text-faint: #8b87a7;
+    --hub: #1a1733;
+    --focus: #5643dc;
+    --danger: #cf1f48;
+    --danger-ink: #ffffff;
+    --ok: var(--voice-mint-d);
+    --warn: var(--voice-marigold-d);
+    --shadow-panel: 0 1px 0 rgb(255 255 255 / 0.9) inset, 0 18px 40px -24px rgb(40 30 90 / 0.28);
+    --dot: rgb(40 30 110 / 0.13);
+  }
+}
+
+/* Theme-resolved voice colors */
+:root,
+:root[data-theme="dark"] {
+  --voice-coral: var(--voice-coral-l);
+  --voice-marigold: var(--voice-marigold-l);
+  --voice-mint: var(--voice-mint-l);
+  --voice-aqua: var(--voice-aqua-l);
+  --voice-iris: var(--voice-iris-l);
+  --voice-rose: var(--voice-rose-l);
+}
+
+:root[data-theme="light"] {
+  --voice-coral: var(--voice-coral-d);
+  --voice-marigold: var(--voice-marigold-d);
+  --voice-mint: var(--voice-mint-d);
+  --voice-aqua: var(--voice-aqua-d);
+  --voice-iris: var(--voice-iris-d);
+  --voice-rose: var(--voice-rose-d);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="light"]) {
+    --voice-coral: var(--voice-coral-d);
+    --voice-marigold: var(--voice-marigold-d);
+    --voice-mint: var(--voice-mint-d);
+    --voice-aqua: var(--voice-aqua-d);
+    --voice-iris: var(--voice-iris-d);
+    --voice-rose: var(--voice-rose-d);
+  }
+}
