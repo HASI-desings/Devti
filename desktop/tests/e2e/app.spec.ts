@@ -130,3 +130,15 @@ test("pairing another computer by code shows a clear message in preview", async 
   await page.getByRole("button", { name: "Pair", exact: true }).last().click();
   await expect(page.getByText(/needs the real Devti app/)).toBeVisible();
 });
+
+test("browser preview says so and never invents devices", async ({ page }) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await expect(page.getByRole("note").getByText("Browser preview.")).toBeVisible();
+  await rail(page).getByRole("button", { name: "Pair" }).click();
+  // Nothing joins by itself.
+  await page.waitForTimeout(5000);
+  await expect(page.getByText(/show this code\?/)).toBeHidden();
+  // Only the explicit demo button simulates a phone.
+  await page.getByRole("button", { name: "Simulate a phone" }).click();
+  await expect(page.getByText("Does Demo phone show this code?")).toBeVisible();
+});

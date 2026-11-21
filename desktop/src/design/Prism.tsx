@@ -1,4 +1,3 @@
-import { motion, useReducedMotion } from "motion/react";
 import { useId } from "react";
 import { type Voice, voiceVar } from "./voice";
 
@@ -17,7 +16,6 @@ export function Prism({
   glow?: boolean;
 }) {
   const uid = useId().replace(/:/g, "");
-  const reduce = useReducedMotion();
   const facet = (i: number) => (voices.length ? voiceVar(voices[i % voices.length]!) : "var(--text-faint)");
   const A = [60, 10];
   const B = [10, 98];
@@ -57,15 +55,13 @@ export function Prism({
         <line x1={O[0]} y1={O[1]} x2={C[0]} y2={C[1]} opacity="0.45" />
       </g>
       {glow && (
-        <motion.circle
+        <circle
+          className="prism-core"
           cx={O[0]}
           cy={O[1]}
+          r={18}
           fill={`url(#${uid}-core)`}
-          initial={{ r: 16 }}
-          animate={reduce ? { r: 18 } : { r: [16, 21, 16] }}
-          transition={
-            reduce ? { duration: 0 } : { duration: 5.5, repeat: Number.POSITIVE_INFINITY, ease: "easeInOut" }
-          }
+          style={{ transformOrigin: `${O[0]}px ${O[1]}px` }}
         />
       )}
       <circle cx={O[0]} cy={O[1]} r="3.2" fill="var(--hub)" />

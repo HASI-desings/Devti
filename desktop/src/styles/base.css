@@ -104,3 +104,38 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* The prism's white core breathes while someone is using Devti. */
+.prism-core {
+  animation: prism-breathe 5.5s var(--ease-in-out) infinite;
+}
+
+@keyframes prism-breathe {
+  50% {
+    transform: scale(1.18);
+  }
+}
+
+/*
+ * Ambient motion rests when nobody is interacting (15 s without input) or the window is
+ * hidden. State changes still animate. This keeps idle CPU near zero.
+ */
+html[data-idle="true"] .prism-core,
+html[data-hidden="true"] .prism-core {
+  animation-play-state: paused;
+}
+
+/* App frame: optional preview banner on top, the app fills the rest. */
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+#root > * {
+  flex: 1;
+  min-height: 0;
+}
+
+#root > [role="note"] {
+  flex: none;
+}

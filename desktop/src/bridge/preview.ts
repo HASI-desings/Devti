@@ -257,10 +257,9 @@ export function createPreviewBridge(): Bridge {
         addresses: ["192.168.1.24:47810"],
       };
       emit({ type: "pairing_window_changed", window: window_ });
-      if (settings.preview_autojoin !== "false") {
-        clearTimeout(joinTimer);
-        joinTimer = setTimeout(() => controls.join(), 4500);
-      }
+      // Nothing joins on its own: the demo phone only appears when the person presses
+      // "Simulate a phone" (see PairPanel), so preview never pretends to be real.
+      clearTimeout(joinTimer);
       return window_;
     },
     async closePairingWindow() {

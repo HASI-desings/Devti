@@ -9,9 +9,11 @@ import { Done, Onboarding } from "./features/onboarding/Onboarding";
 import { PairPanel } from "./features/pairing/PairPanel";
 import { SecurityPage } from "./features/security/SecurityPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
+import { PreviewBanner } from "./features/shell/PreviewBanner";
 import { Rail } from "./features/shell/Rail";
 import { Tour } from "./features/shell/Tour";
 import { useBridge } from "./lib/bridge-context";
+import { trackIdle } from "./lib/idle";
 import { useStore } from "./state/store";
 import { Button, Sheet, Toasts } from "./ui";
 
@@ -74,6 +76,8 @@ export function App() {
     html.dataset.reduceMotion = settings.motion === "reduced" ? "true" : "false";
   }, [settings.theme, settings.motion]);
 
+  useEffect(() => trackIdle(), []);
+
   useEffect(() => {
     const onVis = () => {
       document.documentElement.dataset.hidden = String(document.hidden);
@@ -117,6 +121,7 @@ export function App() {
   if (settings.onboarding_done !== "true") {
     return (
       <MotionConfig reducedMotion={reducedMotion}>
+        <PreviewBanner />
         <Onboarding
           onFinish={finishOnboarding}
           onFinishWithTour={() => {
@@ -133,6 +138,7 @@ export function App() {
 
   return (
     <MotionConfig reducedMotion={reducedMotion}>
+      <PreviewBanner />
       <div className={s.app}>
         <Rail onPair={() => setPairOpen(true)} />
         <main className={s.main} id="main">

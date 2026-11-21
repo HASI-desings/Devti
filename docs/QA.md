@@ -41,7 +41,21 @@ the results recorded here. A phase is only marked done when all of this passes.
 | Release APK signing needed the debug keystore before it existed | CI | build debug first; real releases use a keystore secret |
 
 ### Performance
-Measurement on the optimized release build is in progress; results will be recorded here.
+Measured on Linux (Xvfb, software rendering, no GPU), sampling CPU time and PSS memory (which
+counts shared libraries fairly) across the Hub and its WebKit helper processes.
+
+| State | CPU | Memory (PSS) | Target |
+|---|---|---|---|
+| Running in the background, window closed (autostart / tray) — release build | **0.03 %** of one core | **89 MB** | CPU < 2 %, RAM < 250 MB ✅ |
+| Window open on the dashboard, nobody interacting (paired device, idle) — debug build | **0.13 %** of one core | **245 MB** (host 108 MB, renderer 115 MB, network 21 MB) | ✅ (release host is ~20 MB smaller) |
+| Window open while being used (ambient motion running) | ~21 % of one core with *software* rendering | — | not an idle state; GPU compositing on real desktops is far cheaper |
+
+What made the difference: ambient motion (prism breathing, light pulses) now **rests after 15 s
+without input** or whenever the window is hidden; it used to run forever (~9 % CPU idle). The
+prism breathing also moved from a JavaScript-driven animation to a CSS transform. Closing the
+window destroys the webview entirely, which is why the background state needs only 89 MB.
+
+Screen-extension latency (< 50 ms) is a Phase 4 target and will be measured there.
 
 ### Manual checklist (Phase 1)
 

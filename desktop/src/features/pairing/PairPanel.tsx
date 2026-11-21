@@ -90,6 +90,18 @@ export function PairPanel({ onFinished, compact }: { onFinished?: () => void; co
                 </button>
                 .
               </p>
+              {bridge.mode === "preview" && (
+                <div className={s.demo}>
+                  <span>Browser preview: no real phone can reach this code.</span>
+                  <Button
+                    size="sm"
+                    variant="quiet"
+                    onPress={() => window.__devtiPreview?.join("Demo phone", "phone")}
+                  >
+                    Simulate a phone
+                  </Button>
+                </div>
+              )}
               <div className={s.switchRow}>
                 <Segmented<Method>
                   label="What are you pairing?"

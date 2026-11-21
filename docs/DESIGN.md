@@ -129,8 +129,10 @@ Rules:
 * **Reduced motion** (system setting or Settings → Motion → Reduced): drift, parallax, pulses and
   the welcome flight are removed, and state changes become instant crossfades. Nothing is lost
   except the movement.
-* Ambient work runs only while visible: CSS pulses pause on `visibilitychange`, the dot field
-  redraws on demand, and the window is destroyed when closed to the tray.
+* Ambient work runs only while someone is there: pulses and the prism's breathing **rest after
+  15 s without input** and whenever the window is hidden, the dot field redraws only on change,
+  and the window is destroyed when closed to the tray. Measured idle CPU: 0.13 % with the window
+  open, 0.03 % in the tray (see QA.md).
 
 ---
 

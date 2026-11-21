@@ -83,7 +83,10 @@
   }
 }
 
-:global(html[data-hidden="true"]) .pulse {
+:global(html[data-hidden="true"]) .pulse,
+:global(html[data-idle="true"]) .pulse,
+:global(html[data-idle="true"]) .ghostEllipse,
+:global(html[data-hidden="true"]) .ghostEllipse {
   animation-play-state: paused;
 }
 
