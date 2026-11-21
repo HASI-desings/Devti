@@ -16,7 +16,12 @@ if (!app || !sim) {
 }
 mkdirSync(shots, { recursive: true });
 const home = mkdtempSync(join(tmpdir(), "devti-home-"));
-const env = { ...process.env, HOME: home, XDG_DATA_HOME: join(home, "data"), XDG_CONFIG_HOME: join(home, "cfg") };
+const env = {
+  ...process.env,
+  HOME: home,
+  XDG_DATA_HOME: join(home, "data"),
+  XDG_CONFIG_HOME: join(home, "cfg"),
+};
 
 const driver = spawn("tauri-driver", ["--port", "4444"], { env, stdio: "inherit" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -48,7 +53,8 @@ async function find(xpath, timeout = 15000) {
     }
   }
 }
-const button = (text) => `//button[normalize-space(.)="${text}"] | //*[@role="button" and normalize-space(.)="${text}"]`;
+const button = (text) =>
+  `//button[normalize-space(.)="${text}"] | //*[@role="button" and normalize-space(.)="${text}"]`;
 async function click(xpath) {
   const id = await find(xpath);
   await wd("POST", s(`/element/${id}/click`), {});
@@ -60,7 +66,8 @@ async function shot(name) {
 }
 async function invoke(cmd, args = {}) {
   return wd("POST", s("/execute/async"), {
-    script: "const [c, a, done] = arguments; window.__TAURI_INTERNALS__.invoke(c, a).then(done, (e) => done({ error: String(e) }));",
+    script:
+      "const [c, a, done] = arguments; window.__TAURI_INTERNALS__.invoke(c, a).then(done, (e) => done({ error: String(e) }));",
     args: [cmd, args],
   });
 }
@@ -95,7 +102,9 @@ try {
   if (!snap?.window?.uri) throw new Error(`no pairing window: ${JSON.stringify(snap)}`);
   console.log("hub:", snap.local.info.name, snap.local.info.id, "window", snap.window.addresses);
 
-  simProc = spawn(sim, ["--uri", snap.window.uri, "--name", "Pixel 8 (sim)", "--seconds", "120"], { stdio: "inherit" });
+  simProc = spawn(sim, ["--uri", snap.window.uri, "--name", "Pixel 8 (sim)", "--seconds", "120"], {
+    stdio: "inherit",
+  });
   await find(`//*[contains(., "show this code?")]`, 20000);
   await sleep(500);
   await shot("04-verify");
@@ -116,7 +125,9 @@ try {
   const peer = after.peers[0];
   if (!peer?.online) throw new Error(`peer not online: ${JSON.stringify(after.peers)}`);
   if (!peer.status.battery) throw new Error("no battery reported by the simulated phone");
-  console.log(`PASS: ${peer.info.name} online, battery ${peer.status.battery.percent}%, rtt ${peer.connection.rtt_ms} ms`);
+  console.log(
+    `PASS: ${peer.info.name} online, battery ${peer.status.battery.percent}%, rtt ${peer.connection.rtt_ms} ms`,
+  );
 
   // Kill switch over the real stack.
   await invoke("set_paused", { paused: true });
