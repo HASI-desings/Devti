@@ -1,0 +1,29 @@
+name: Bug report
+description: Something in Devti doesn't work as described.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Where?
+      multiple: true
+      options: [Windows, Linux X11, Linux Wayland, Android, iPhone or iPad]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Devti version
+      placeholder: Settings → About
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Settings → Diagnostics → Export, then attach the file. Secrets and personal paths are already removed — check before sharing.

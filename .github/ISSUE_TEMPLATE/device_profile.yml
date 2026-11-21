@@ -1,0 +1,34 @@
+name: Bluetooth device profile
+description: Help Devti support an accessory (earbuds, headphones, speaker, watch, controller…).
+labels: [device-profile]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! Standard features (battery, media, volume) work for every accessory. Vendor features
+        (noise cancelling, EQ, touch controls) need a profile. Devti never sends anything automatically —
+        you choose what to paste here. Do **not** include MAC addresses or serial numbers.
+  - type: input
+    id: device
+    attributes:
+      label: Accessory
+      placeholder: "Brand and model, e.g. Sony WF-1000XM5"
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+  - type: textarea
+    id: report
+    attributes:
+      label: Capability report
+      description: Paste the report from Devti's "Help support this device" screen (GATT services and characteristics).
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: features
+    attributes:
+      label: Features the official app offers
+      description: List the controls you'd like in Devti.
