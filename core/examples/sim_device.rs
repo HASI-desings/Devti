@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use devti_core::model::{BatteryState, DeviceKind, DeviceStatus, Platform};
+use devti_core::protocol::{NotifAction, NotificationInfo};
 use devti_core::secret::MemorySecretStore;
 use devti_core::{Node, NodeConfig, NodeEvent};
 
@@ -24,6 +25,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let name = arg("--name").unwrap_or_else(|| "Simulated Phone".into());
     let kind = DeviceKind::parse(&arg("--kind").unwrap_or_else(|| "phone".into()));
     let seconds: u64 = arg("--seconds").and_then(|s| s.parse().ok()).unwrap_or(600);
+    let send_path = arg("--send");
+    let mut greeted = false;
 
     let dir = std::env::temp_dir().join(format!("devti-sim-{}", std::process::id()));
     let mut cfg = NodeConfig::new(&dir, &name, kind);
@@ -63,7 +66,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("pairing failed: {message}");
                     std::process::exit(1);
                 }
-                Ok(NodeEvent::PeerChanged { peer }) => println!("peer {} online={}", peer.info.name, peer.online),
+                Ok(NodeEvent::PeerChanged { peer }) => {
+                    println!("peer {} online={}", peer.info.name, peer.online);
+                    // Once connected: share a notification and (optionally) a file, like a phone would.
+                    if peer.online && !greeted {
+                        greeted = true;
+                        node.publish_notification(NotificationInfo {
+                            key: "sim:1".into(),
+                            app_id: "org.example.chat".into(),
+                            app_name: "Messages".into(),
+                            title: "Simulated phone".into(),
+                            text: "Hello from the simulator".into(),
+                            ts: devti_core::net::now_ms(),
+                            actions: vec![NotifAction { id: "reply".into(), label: "Reply".into(), reply: true }],
+                            icon_png: None,
+                            dismissable: true,
+                        });
+                        if let Some(path) = &send_path {
+                            match node.send_file(&peer.info.id, std::path::Path::new(path)) {
+                                Ok(id) => println!("sending {path} as transfer {id}"),
+                                Err(e) => println!("send failed: {e}"),
+                            }
+                        }
+                    }
+                }
+                Ok(NodeEvent::ClipboardReceived { text, from_name, .. }) => println!("clipboard from {from_name}: {text}"),
+                Ok(NodeEvent::RingRequested { on, from_name, .. }) => println!("ring from {from_name}: {on}"),
+                Ok(NodeEvent::NotificationActionRequested { action, reply, .. }) => {
+                    println!("notification action {action} reply={}", reply.unwrap_or_default())
+                }
+                Ok(NodeEvent::Transfer { transfer, .. }) if transfer.state == "done" => {
+                    println!("transfer {} done", transfer.name)
+                }
                 Ok(NodeEvent::PeerRemoved { .. }) => {
                     println!("removed by the hub");
                     break;

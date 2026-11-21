@@ -73,6 +73,14 @@ async function invoke(cmd, args = {}) {
 }
 
 let simProc;
+let simOut = "";
+const waitSim = async (text, ms = 15000) => {
+  const end = Date.now() + ms;
+  while (!simOut.includes(text)) {
+    if (Date.now() > end) throw new Error(`simulated phone never printed: ${text}`);
+    await sleep(200);
+  }
+};
 let failed = false;
 try {
   for (let i = 0; i < 40; i++) {
@@ -102,8 +110,17 @@ try {
   if (!snap?.window?.uri) throw new Error(`no pairing window: ${JSON.stringify(snap)}`);
   console.log("hub:", snap.local.info.name, snap.local.info.id, "window", snap.window.addresses);
 
-  simProc = spawn(sim, ["--uri", snap.window.uri, "--name", "Pixel 8 (sim)", "--seconds", "120"], {
-    stdio: "inherit",
+  // A 3 MiB file the simulated phone sends once it is connected.
+  const payload = join(home, "from-the-phone.bin");
+  writeFileSync(payload, Buffer.alloc(3 * 1024 * 1024, 7));
+  simProc = spawn(
+    sim,
+    ["--uri", snap.window.uri, "--name", "Pixel 8 (sim)", "--seconds", "180", "--send", payload],
+    { stdio: ["ignore", "pipe", "inherit"] },
+  );
+  simProc.stdout.on("data", (d) => {
+    simOut += d;
+    process.stdout.write(`[sim] ${d}`);
   });
   await find(`//*[contains(., "show this code?")]`, 20000);
   await sleep(500);
@@ -129,6 +146,44 @@ try {
     `PASS: ${peer.info.name} online, battery ${peer.status.battery.percent}%, rtt ${peer.connection.rtt_ms} ms`,
   );
 
+  // Phase 2 over the real stack.
+  const waitFor = async (what, check, ms = 20000) => {
+    const end = Date.now() + ms;
+    for (;;) {
+      const v = await check();
+      if (v) return v;
+      if (Date.now() > end) throw new Error(`timed out: ${what}`);
+      await sleep(400);
+    }
+  };
+  await waitFor("mirrored notification", async () =>
+    (await invoke("snapshot")).notifications.some((n) => n.notif.text === "Hello from the simulator"),
+  );
+  console.log("PASS: phone notification mirrored to the Hub");
+  const received = await waitFor("file received", async () =>
+    (await invoke("transfers")).find((t) => t.incoming && t.state === "done" && t.size === 3 * 1024 * 1024),
+  );
+  console.log(`PASS: received ${received.name} (${received.size} bytes)`);
+  await invoke("share_clipboard", { text: "hello from the real hub" });
+  await waitSim("clipboard from");
+  console.log("PASS: clipboard reached the phone");
+  await invoke("ring", { id: peer.info.id, on: true });
+  await waitSim("ring from");
+  console.log("PASS: find my device rang the phone");
+  const key = (await invoke("snapshot")).notifications[0].notif.key;
+  await invoke("notification_action", { id: peer.info.id, key, action: "reply", reply: "On my way" });
+  await waitSim("reply=On my way");
+  console.log("PASS: quick reply reached the phone");
+  await click(`//nav//button[contains(., "Alerts")]`);
+  await sleep(800);
+  await shot("08-alerts");
+  await click(`//nav//button[contains(., "Files")]`);
+  await sleep(800);
+  await shot("09-files");
+  await click(`//nav//button[contains(., "Battery")]`);
+  await sleep(1200);
+  await shot("10-battery");
+
   // Optional pause so performance can be measured on a live, connected dashboard.
   const hold = Number(process.env.DEVTI_SMOKE_HOLD_MS || 0);
   if (hold > 0) {
@@ -141,7 +196,7 @@ try {
   await sleep(1500);
   const paused = await invoke("snapshot");
   if (paused.peers[0].online) throw new Error("peer still online while paused");
-  await shot("08-paused");
+  await shot("11-paused");
   await invoke("set_paused", { paused: false });
   console.log("PASS: kill switch disconnects");
 } catch (e) {
