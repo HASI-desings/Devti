@@ -4,15 +4,25 @@ import type {
   DeviceInfo,
   DiscoveredDevice,
   LocalSnapshot,
+  MirroredNotification,
   NodeEvent,
   PairAbortReason,
   PairingWindowInfo,
   PeerSnapshot,
   Snapshot,
+  TransferRecord,
 } from "../bridge";
 import { assignVoices, type Voice } from "../design/voice";
 
-export type Page = "ecosystem" | "device" | "security" | "settings" | "help";
+export type Page =
+  | "ecosystem"
+  | "device"
+  | "files"
+  | "notifications"
+  | "battery"
+  | "security"
+  | "settings"
+  | "help";
 
 export type PairingStage =
   | { stage: "waiting" }
@@ -52,6 +62,15 @@ interface State {
   selected: string | null;
   toasts: Toast[];
   tour: boolean;
+  dnd: boolean;
+  lowBatteryThreshold: number;
+  downloadsDir: string;
+  notifications: MirroredNotification[];
+  transfers: Record<number, TransferRecord & { rate: number }>;
+  /** A device asked this computer to ring (find my device). */
+  ringing: { from: string; name: string } | null;
+  /** Files waiting for the user to pick a device (drag and drop, Send to Devti). */
+  sendPaths: string[] | null;
 }
 
 interface Actions {
@@ -65,6 +84,9 @@ interface Actions {
   toast(text: string, tone?: Toast["tone"]): void;
   dismissToast(id: number): void;
   setTour(on: boolean): void;
+  setTransfers(list: TransferRecord[]): void;
+  setSendPaths(paths: string[] | null): void;
+  stopRinging(): void;
 }
 
 let toastSeq = 1;
@@ -93,6 +115,13 @@ export const useStore = create<State & Actions>((set, get) => ({
   selected: null,
   toasts: [],
   tour: false,
+  dnd: false,
+  lowBatteryThreshold: 15,
+  downloadsDir: "",
+  notifications: [],
+  transfers: {},
+  ringing: null,
+  sendPaths: null,
 
   load(s, mode) {
     const peers = Object.fromEntries(s.peers.map((p) => [p.info.id, p]));
@@ -106,6 +135,10 @@ export const useStore = create<State & Actions>((set, get) => ({
       window: s.window,
       settings: s.settings,
       voices: withVoices(peers),
+      dnd: s.dnd ?? false,
+      lowBatteryThreshold: s.low_battery_threshold ?? 15,
+      downloadsDir: s.downloads_dir ?? "",
+      notifications: s.notifications ?? [],
     });
   },
 
@@ -186,6 +219,43 @@ export const useStore = create<State & Actions>((set, get) => ({
         break;
       case "resync":
         break;
+      case "notification_posted": {
+        const n = e.notification;
+        const rest = st.notifications.filter((x) => !(x.from === n.from && x.notif.key === n.notif.key));
+        set({ notifications: [n, ...rest].slice(0, 300) });
+        break;
+      }
+      case "notification_removed":
+        set({ notifications: st.notifications.filter((x) => !(x.from === e.from && x.notif.key === e.key)) });
+        break;
+      case "dnd_changed":
+        set({ dnd: e.on });
+        break;
+      case "ring_requested":
+        set({ ringing: e.on ? { from: e.from, name: e.from_name } : null });
+        break;
+      case "low_battery":
+        get().toast(`${e.name} is at ${e.percent}%. Plug it in soon.`, "danger");
+        break;
+      case "clipboard_received":
+        break;
+      case "transfer": {
+        const t = e.transfer;
+        set({ transfers: { ...st.transfers, [t.id]: { ...t, rate: e.rate_bps } } });
+        if (t.state === "done" && st.transfers[t.id]?.state !== "done") {
+          get().toast(
+            t.incoming ? `Received ${t.name} from ${t.device_name}.` : `Sent ${t.name} to ${t.device_name}.`,
+            "ok",
+          );
+        }
+        if (t.state === "failed" && st.transfers[t.id]?.state !== "failed") {
+          get().toast(`${t.name} couldn't be sent to ${t.device_name}.`, "danger");
+        }
+        break;
+      }
+      case "notification_action_requested":
+      case "notification_dismiss_requested":
+        break;
     }
   },
 
@@ -211,6 +281,15 @@ export const useStore = create<State & Actions>((set, get) => ({
   },
   setTour(on) {
     set({ tour: on });
+  },
+  setTransfers(list) {
+    set({ transfers: Object.fromEntries(list.map((t) => [t.id, { ...t, rate: 0 }])) });
+  },
+  setSendPaths(paths) {
+    set({ sendPaths: paths?.length ? paths : null });
+  },
+  stopRinging() {
+    set({ ringing: null });
   },
 }));
 

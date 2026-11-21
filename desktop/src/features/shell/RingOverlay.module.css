@@ -1,0 +1,31 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-5);
+  text-align: center;
+  background: color-mix(in oklab, var(--bg-deep) 92%, var(--voice-coral));
+}
+
+.halo {
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  border: 3px solid var(--voice-coral);
+  pointer-events: none;
+}
+
+.title {
+  font-size: var(--t-61);
+  font-stretch: 76%;
+}
+
+.text {
+  color: var(--text-dim);
+  font-size: var(--t-20);
+}

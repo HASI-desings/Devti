@@ -83,13 +83,6 @@
   }
 }
 
-:global(html[data-hidden="true"]) .pulse,
-:global(html[data-idle="true"]) .pulse,
-:global(html[data-idle="true"]) .ghostEllipse,
-:global(html[data-hidden="true"]) .ghostEllipse {
-  animation-play-state: paused;
-}
-
 /* ---------- Hub ---------- */
 .hub {
   position: absolute;
@@ -332,4 +325,12 @@
   font-size: var(--t-13);
   color: var(--text-dim);
   z-index: 4;
+}
+
+/* Ambient motion rests when nobody is interacting or the window is hidden. */
+:global(html[data-hidden="true"]) .pulse,
+:global(html[data-idle="true"]) .pulse,
+:global(html[data-idle="true"]) .ghostEllipse,
+:global(html[data-hidden="true"]) .ghostEllipse {
+  animation-play-state: paused;
 }

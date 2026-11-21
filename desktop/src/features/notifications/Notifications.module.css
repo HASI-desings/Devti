@@ -1,0 +1,134 @@
+.dnd {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-5) var(--s-6);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.dnd[data-on] {
+  background: color-mix(in oklab, var(--voice-iris) 12%, var(--surface));
+  border-color: color-mix(in oklab, var(--voice-iris) 40%, transparent);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--s-2);
+  padding: var(--s-14) var(--s-6);
+  color: var(--text-dim);
+}
+
+.groupTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-20);
+  font-stretch: 88%;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--voice);
+}
+
+.count {
+  font-family: var(--font-ui);
+  font-size: var(--t-13);
+  font-weight: 500;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s-4);
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--voice);
+}
+
+.icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  font-family: var(--font-display);
+  font-weight: 650;
+}
+
+.icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.app {
+  font-size: var(--t-13);
+  color: var(--text-dim);
+  font-weight: 560;
+}
+
+.time {
+  font-size: var(--t-12);
+  color: var(--text-faint);
+}
+
+.title {
+  font-weight: 640;
+}
+
+.text {
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+
+.reply {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}

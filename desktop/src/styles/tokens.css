@@ -163,3 +163,38 @@
     --voice-rose: var(--voice-rose-d);
   }
 }
+
+/*
+ * Chart steps of each voice — same hues, lightness tuned and validated with the dataviz
+ * palette validator (lightness band, chroma floor, colour-blind separation ≥ 15.9 ΔE
+ * between neighbours in both themes). Used only for chart lines and fills.
+ */
+:root,
+:root[data-theme="dark"] {
+  --chart-iris: #6350b2;
+  --chart-aqua: #08a3bf;
+  --chart-coral: #a33d30;
+  --chart-mint: #12ac7e;
+  --chart-marigold: #805d00;
+  --chart-rose: #cc5496;
+}
+
+:root[data-theme="light"] {
+  --chart-iris: #5643dc;
+  --chart-aqua: #047a9e;
+  --chart-coral: #c8432f;
+  --chart-mint: #0f8158;
+  --chart-marigold: #9c6a00;
+  --chart-rose: #b52a76;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="light"]) {
+    --chart-iris: #5643dc;
+    --chart-aqua: #047a9e;
+    --chart-coral: #c8432f;
+    --chart-mint: #0f8158;
+    --chart-marigold: #9c6a00;
+    --chart-rose: #b52a76;
+  }
+}

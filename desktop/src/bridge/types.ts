@@ -108,7 +108,69 @@ export type NodeEvent =
   | { type: "pairing_failed"; pairing_id: number; reason: PairAbortReason; message: string }
   | { type: "paused"; paused: boolean }
   /** Events were dropped (the UI fell behind); reload the full snapshot. */
-  | { type: "resync" };
+  | { type: "resync" }
+  | { type: "clipboard_received"; from: string; from_name: string; text: string; ts: number }
+  | { type: "ring_requested"; from: string; from_name: string; on: boolean }
+  | { type: "notification_posted"; notification: MirroredNotification; dnd: boolean }
+  | { type: "notification_removed"; from: string; key: string }
+  | { type: "notification_action_requested"; from: string; key: string; action: string; reply: string | null }
+  | { type: "notification_dismiss_requested"; from: string; key: string }
+  | { type: "dnd_changed"; on: boolean; by: string | null }
+  | { type: "low_battery"; id: string; name: string; percent: number }
+  | { type: "transfer"; transfer: TransferRecord; rate_bps: number };
+
+export interface NotifAction {
+  id: string;
+  label: string;
+  reply: boolean;
+}
+
+export interface NotificationInfo {
+  key: string;
+  app_id: string;
+  app_name: string;
+  title: string;
+  text: string;
+  ts: number;
+  actions: NotifAction[];
+  icon_png: number[] | null;
+  dismissable: boolean;
+}
+
+export interface MirroredNotification {
+  from: string;
+  from_name: string;
+  notif: NotificationInfo;
+}
+
+export type TransferState = "queued" | "active" | "paused" | "done" | "failed" | "cancelled";
+
+export interface TransferRecord {
+  id: number;
+  device_id: string;
+  device_name: string;
+  incoming: boolean;
+  name: string;
+  path: string;
+  size: number;
+  done: number;
+  state: TransferState;
+  ts: number;
+}
+
+export interface ClipboardEntry {
+  id: number;
+  ts: number;
+  device_id: string | null;
+  device_name: string | null;
+  text: string;
+}
+
+export interface BatterySample {
+  ts: number;
+  percent: number;
+  charging: boolean;
+}
 
 export interface ActivityEntry {
   id: number;
@@ -125,6 +187,10 @@ export interface Snapshot {
   nearby: DiscoveredDevice[];
   window: PairingWindowInfo | null;
   settings: Record<string, string>;
+  dnd: boolean;
+  low_battery_threshold: number;
+  downloads_dir: string;
+  notifications: MirroredNotification[];
 }
 
 export interface BluetoothDevice {
@@ -176,4 +242,27 @@ export interface Bridge {
   /** Actions requested from outside the window (tray menu), e.g. "pair". */
   onUiAction(cb: (action: string) => void): () => void;
   takeUiAction(): Promise<string | null>;
+  // Phase 2
+  takePendingSend(): Promise<string[]>;
+  clipboardHistory(): Promise<ClipboardEntry[]>;
+  clearClipboardHistory(): Promise<void>;
+  copyToClipboard(text: string): Promise<void>;
+  shareClipboard(text: string): Promise<boolean>;
+  ring(id: string, on: boolean): Promise<void>;
+  notificationAction(id: string, key: string, action: string, reply: string | null): Promise<void>;
+  dismissNotification(id: string, key: string): Promise<void>;
+  setDnd(on: boolean): Promise<void>;
+  pickFiles(): Promise<string[]>;
+  sendFiles(id: string, paths: string[]): Promise<number[]>;
+  transfers(): Promise<TransferRecord[]>;
+  cancelTransfer(id: number): Promise<void>;
+  retryTransfer(id: number): Promise<void>;
+  clearFinishedTransfers(): Promise<void>;
+  openPath(path: string): Promise<void>;
+  revealPath(path: string): Promise<void>;
+  chooseDownloadsDir(): Promise<string | null>;
+  batteryHistory(id: string | null, since: number): Promise<BatterySample[]>;
+  setLowBatteryThreshold(percent: number): Promise<void>;
+  /** Native drag and drop of files onto the window (paths + drop point). */
+  onFileDrop(cb: (paths: string[], x: number, y: number) => void): () => void;
 }

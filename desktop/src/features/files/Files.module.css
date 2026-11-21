@@ -1,0 +1,206 @@
+.drop {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-10) var(--s-6);
+  border-radius: var(--r-sheet);
+  border: 1.5px dashed var(--line-strong);
+  background: var(--surface);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color var(--d-fast),
+    background var(--d-fast);
+}
+
+.drop:hover,
+:global(html[data-dragging="true"]) .drop {
+  border-color: var(--hub);
+  background: var(--surface-2);
+}
+
+.drop:focus-visible {
+  outline: 2px solid var(--focus);
+}
+
+.dropTitle {
+  font-family: var(--font-display);
+  font-size: var(--t-20);
+  font-weight: 620;
+  font-stretch: 88%;
+}
+
+.muted {
+  color: var(--text-dim);
+  font-size: var(--t-13);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+}
+
+.transfers,
+.clips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.transfer {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--s-4);
+  align-items: center;
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.tMain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.tTop {
+  display: flex;
+  gap: var(--s-2);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.tName {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--hub);
+  transition: width var(--d-base) var(--ease-out);
+}
+
+.transfer[data-state="done"] .bar > span {
+  background: var(--ok);
+}
+
+.transfer[data-state="failed"] .bar > span,
+.transfer[data-state="cancelled"] .bar > span {
+  background: var(--text-faint);
+}
+
+.tMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  color: var(--text-dim);
+  font-size: var(--t-13);
+}
+
+.tActions {
+  display: flex;
+  gap: var(--s-2);
+}
+
+.clip {
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.clipText {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.clipMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+/* ---------- Picker ---------- */
+.picker {
+  padding: var(--s-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.pickerTitle {
+  font-size: var(--t-25);
+  font-stretch: 86%;
+  overflow-wrap: anywhere;
+}
+
+.pickerList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.pickerRow {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.pickerRow:hover {
+  border-color: var(--voice);
+}
+
+.pickerRow:focus-visible {
+  outline: 2px solid var(--focus);
+}
+
+.pickerName {
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .transfer {
+    grid-template-columns: auto 1fr;
+  }
+  .tActions {
+    grid-column: 1 / -1;
+  }
+}

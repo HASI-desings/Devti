@@ -7,6 +7,7 @@ import { useBridge } from "../../lib/bridge-context";
 import { kindLabel, latencyLabel, platformLabel, relativeTime } from "../../lib/format";
 import { orderedPeers, useStore } from "../../state/store";
 import { BatteryMeter, Button } from "../../ui";
+import { DeviceActions } from "../device/DeviceActions";
 import { EcosystemMap } from "./EcosystemMap";
 import s from "./EcosystemPage.module.css";
 
@@ -97,6 +98,7 @@ function DeviceList({ peers }: { peers: PeerSnapshot[] }) {
               <li key={p.info.id}>
                 <button
                   type="button"
+                  data-device-id={p.info.id}
                   className={s.row}
                   style={{ "--voice": color } as CSSProperties}
                   data-online={p.online || undefined}
@@ -196,6 +198,7 @@ function DeviceSummary({ peer, voice }: { peer: PeerSnapshot; voice: string }) {
         <Button variant="primary" icon="chevronRight" onPress={() => navigate("device", peer.info.id)}>
           Open device
         </Button>
+        <DeviceActions peer={peer} />
       </div>
     </div>
   );

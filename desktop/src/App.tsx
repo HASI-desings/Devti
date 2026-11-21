@@ -2,15 +2,20 @@ import { MotionConfig } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 import s from "./App.module.css";
 import { Prism } from "./design/Prism";
+import { BatteryPage } from "./features/battery/BatteryPage";
 import { DevicePage } from "./features/device/DevicePage";
 import { EcosystemPage } from "./features/ecosystem/EcosystemPage";
+import { FilesPage } from "./features/files/FilesPage";
+import { SendPicker } from "./features/files/SendPicker";
 import { HelpPage } from "./features/help/HelpPage";
+import { NotificationsPage } from "./features/notifications/NotificationsPage";
 import { Done, Onboarding } from "./features/onboarding/Onboarding";
 import { PairPanel } from "./features/pairing/PairPanel";
 import { SecurityPage } from "./features/security/SecurityPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { PreviewBanner } from "./features/shell/PreviewBanner";
 import { Rail } from "./features/shell/Rail";
+import { RingOverlay } from "./features/shell/RingOverlay";
 import { Tour } from "./features/shell/Tour";
 import { useBridge } from "./lib/bridge-context";
 import { trackIdle } from "./lib/idle";
@@ -56,15 +61,33 @@ export function App() {
         setPairOpen(true);
       }
     });
+    const takeSend = async () => {
+      const paths = await bridge.takePendingSend();
+      if (paths.length) useStore.getState().setSendPaths(paths);
+    };
     const offUi = bridge.onUiAction((action) => {
       if (action === "pair") setPairOpen(true);
+      if (action === "send") void takeSend();
+    });
+    // Files dropped on the window: straight to a device if dropped on one, otherwise ask.
+    const offDrop = bridge.onFileDrop((paths, x, y) => {
+      const target = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-device-id]");
+      const id = target?.dataset.deviceId;
+      if (id) {
+        void bridge.sendFiles(id, paths).catch((e) => useStore.getState().toast(String(e), "danger"));
+      } else {
+        useStore.getState().setSendPaths(paths);
+      }
     });
     void load().then(async () => {
       if ((await bridge.takeUiAction()) === "pair") setPairOpen(true);
+      await takeSend();
+      useStore.getState().setTransfers(await bridge.transfers());
     });
     return () => {
       off();
       offUi();
+      offDrop();
     };
   }, [bridge, load]);
 
@@ -144,6 +167,9 @@ export function App() {
         <main className={s.main} id="main">
           {page === "ecosystem" && <EcosystemPage onPair={() => setPairOpen(true)} />}
           {page === "device" && <DevicePage />}
+          {page === "files" && <FilesPage />}
+          {page === "notifications" && <NotificationsPage />}
+          {page === "battery" && <BatteryPage />}
           {page === "security" && <SecurityPage onPair={() => setPairOpen(true)} />}
           {page === "settings" && <SettingsPage />}
           {page === "help" && (
@@ -178,6 +204,8 @@ export function App() {
         </div>
       </Sheet>
 
+      <SendPicker />
+      <RingOverlay />
       {tour && (
         <Tour
           onDone={() => {

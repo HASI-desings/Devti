@@ -363,6 +363,7 @@ function Orbit({
         <button
           type="button"
           className={s.lens}
+          data-device-id={id}
           onClick={() => onSelect(selected ? null : id)}
           aria-pressed={selected}
           aria-label={label}

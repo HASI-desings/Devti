@@ -215,6 +215,101 @@ impl DevtiMobile {
         Ok(self.node.set_paused(paused)?)
     }
 
+    // ------------------------------------------------------------- Phase 2
+
+    /// Shares clipboard text; returns false when skipped (empty, too big, or just received).
+    pub fn send_clipboard(&self, text: String) -> Result<bool, DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.send_clipboard(&text)?)
+    }
+
+    /// Clipboard history as JSON (`ClipboardEntry[]`).
+    pub fn clipboard_history_json(&self) -> String {
+        serde_json::to_string(&self.node.clipboard_history().unwrap_or_default()).unwrap_or_default()
+    }
+
+    /// Find my device: ring `device_id` (or stop).
+    pub fn ring(&self, device_id: String, on: bool) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.ring(&device_id.parse()?, on)?)
+    }
+
+    /// Publishes a notification from this phone (JSON `NotificationInfo`).
+    pub fn publish_notification(&self, json: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        let info: devti_core::protocol::NotificationInfo =
+            serde_json::from_str(&json).map_err(|e| DevtiError::InvalidInput { reason: e.to_string() })?;
+        self.node.publish_notification(info);
+        Ok(())
+    }
+
+    pub fn remove_notification(&self, key: String) {
+        let _g = self.runtime.enter();
+        self.node.remove_notification(&key);
+    }
+
+    /// Notifications mirrored from other devices (JSON `MirroredNotification[]`).
+    pub fn notifications_json(&self) -> String {
+        serde_json::to_string(&self.node.notifications()).unwrap_or_default()
+    }
+
+    pub fn notification_action(
+        &self,
+        device_id: String,
+        key: String,
+        action: String,
+        reply: Option<String>,
+    ) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.notification_action(&device_id.parse()?, &key, &action, reply)?)
+    }
+
+    pub fn dismiss_notification(&self, device_id: String, key: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.dismiss_notification(&device_id.parse()?, &key)?)
+    }
+
+    pub fn set_dnd(&self, on: bool) {
+        let _g = self.runtime.enter();
+        self.node.set_dnd(on);
+    }
+
+    pub fn dnd(&self) -> bool {
+        self.node.dnd()
+    }
+
+    /// Sends a file (a readable path, e.g. `/proc/self/fd/N` for an Android content URI).
+    pub fn send_file(&self, device_id: String, path: String) -> Result<u64, DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.send_file(&device_id.parse()?, std::path::Path::new(&path))?)
+    }
+
+    pub fn cancel_transfer(&self, id: u64) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.cancel_transfer(id)?)
+    }
+
+    pub fn retry_transfer(&self, id: u64) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.retry_transfer(id)?)
+    }
+
+    /// Recent transfers (JSON `TransferRecord[]`).
+    pub fn transfers_json(&self) -> String {
+        serde_json::to_string(&self.node.transfers().unwrap_or_default()).unwrap_or_default()
+    }
+
+    pub fn set_downloads_dir(&self, path: String) -> Result<(), DevtiError> {
+        Ok(self.node.set_downloads_dir(std::path::Path::new(&path))?)
+    }
+
+    /// Battery samples since `since` (Unix ms) for a device, or this phone when `None`.
+    pub fn battery_history_json(&self, device_id: Option<String>, since: i64) -> Result<String, DevtiError> {
+        let id = device_id.map(|d| d.parse()).transpose()?;
+        let h = self.node.battery_history(id.as_ref(), since)?;
+        Ok(serde_json::to_string(&h).unwrap_or_default())
+    }
+
     /// Call when the network changes or the app returns to the foreground.
     pub fn reconnect_now(&self) {
         self.node.reconnect_now();
@@ -302,6 +397,19 @@ mod tests {
         ));
         m.set_paused(false).unwrap();
         m.reconnect_now();
+        assert!(m.send_clipboard("hi".into()).unwrap());
+        assert!(m.clipboard_history_json().contains("hi"));
+        assert!(m.publish_notification("not json".into()).is_err());
+        m.publish_notification(r#"{"key":"k","app_id":"a","app_name":"A","title":"t","text":"x","ts":1}"#.into())
+            .unwrap();
+        m.remove_notification("k".into());
+        assert_eq!(m.notifications_json(), "[]");
+        m.set_dnd(true);
+        assert!(m.dnd());
+        assert_eq!(m.transfers_json(), "[]");
+        assert!(m.send_file("AAAAAAAAAAAAAAAA".into(), "/nope".into()).is_err());
+        assert!(m.battery_history_json(None, 0).unwrap().starts_with('['));
+        assert!(m.ring("bad".into(), true).is_err());
         std::thread::sleep(std::time::Duration::from_millis(100));
         assert!(events.lock().unwrap().iter().any(|e| e.contains("local_changed")));
         m.shutdown();

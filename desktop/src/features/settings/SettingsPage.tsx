@@ -30,6 +30,8 @@ export function SettingsPage() {
   const toast = useStore((st) => st.toast);
   const [name, setName] = useState(local.info.name);
   const [sys, setSys] = useState<SystemInfo | null>(null);
+  const downloadsDir = useStore((st) => st.downloadsDir);
+  const threshold = useStore((st) => st.lowBatteryThreshold);
 
   useEffect(() => {
     void bridge.systemInfo().then(setSys);
@@ -137,6 +139,52 @@ export function SettingsPage() {
               >
                 <span className="visually-hidden">Keep running in the tray</span>
               </Switch>
+            </div>
+          </div>
+        </section>
+
+        <section className={p.section} aria-labelledby="continuity">
+          <h2 id="continuity" className={p.sectionTitle}>
+            Files and battery
+          </h2>
+          <div className={p.panel}>
+            <div className={p.item}>
+              <div className={p.itemText}>
+                <span className={p.itemTitle}>Save received files in</span>
+                <span className={`${p.itemHint} ${p.mono}`}>{downloadsDir || "Downloads/Devti"}</span>
+              </div>
+              <Button
+                onPress={async () => {
+                  try {
+                    const dir = await bridge.chooseDownloadsDir();
+                    if (dir) useStore.setState({ downloadsDir: dir });
+                  } catch (e) {
+                    toast(String(e instanceof Error ? e.message : e), "danger");
+                  }
+                }}
+              >
+                Change
+              </Button>
+            </div>
+            <div className={p.item}>
+              <div className={p.itemText}>
+                <span className={p.itemTitle}>Warn me when a device's battery drops to</span>
+                <span className={p.itemHint}>Once per discharge, as a notification on this computer.</span>
+              </div>
+              <Segmented
+                label="Low battery alert"
+                value={String(threshold)}
+                onChange={(v) => {
+                  useStore.setState({ lowBatteryThreshold: Number(v) });
+                  void bridge.setLowBatteryThreshold(Number(v));
+                }}
+                options={[
+                  { value: "10", label: "10%" },
+                  { value: "15", label: "15%" },
+                  { value: "20", label: "20%" },
+                  { value: "30", label: "30%" },
+                ]}
+              />
             </div>
           </div>
         </section>

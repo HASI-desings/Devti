@@ -16,6 +16,8 @@ pub struct TrayState {
     pair: MenuItem<Wry>,
     /// A UI action requested from the tray before the window was ready.
     pub pending_action: Mutex<Option<String>>,
+    /// Files handed to Devti by "Send to Devti" that still need a target device.
+    pub pending_send: Mutex<Vec<String>>,
 }
 
 pub fn build(app: &AppHandle, paused: bool) -> tauri::Result<()> {
@@ -54,7 +56,7 @@ pub fn build(app: &AppHandle, paused: bool) -> tauri::Result<()> {
         builder = builder.icon(icon);
     }
     builder.build(app)?;
-    app.manage(TrayState { pause, pair, pending_action: Mutex::new(None) });
+    app.manage(TrayState { pause, pair, pending_action: Mutex::new(None), pending_send: Mutex::new(Vec::new()) });
     Ok(())
 }
 

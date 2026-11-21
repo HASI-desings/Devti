@@ -5,6 +5,9 @@ import s from "./Rail.module.css";
 
 const ITEMS: { page: Page; label: string; icon: IconName }[] = [
   { page: "ecosystem", label: "Ecosystem", icon: "ecosystem" },
+  { page: "files", label: "Files", icon: "folder" },
+  { page: "notifications", label: "Alerts", icon: "bell" },
+  { page: "battery", label: "Battery", icon: "battery" },
   { page: "security", label: "Security", icon: "shield" },
   { page: "settings", label: "Settings", icon: "settings" },
   { page: "help", label: "Help", icon: "help" },
@@ -15,6 +18,8 @@ export function Rail({ onPair }: { onPair: () => void }) {
   const navigate = useStore((st) => st.navigate);
   const paused = useStore((st) => st.local?.paused);
   const mode = useStore((st) => st.mode);
+  const unread = useStore((st) => st.notifications.length);
+  const active_ = useStore((st) => Object.values(st.transfers).filter((t) => t.state === "active").length);
   const active = page === "device" ? "ecosystem" : page;
   return (
     <nav className={s.rail} aria-label="Main">
@@ -33,6 +38,17 @@ export function Rail({ onPair }: { onPair: () => void }) {
             >
               <Icon name={it.icon} size={22} />
               <span>{it.label}</span>
+              {it.page === "notifications" && unread > 0 && (
+                <span className={s.badge}>
+                  {unread > 99 ? "99+" : unread}
+                  <span className="visually-hidden"> notifications</span>
+                </span>
+              )}
+              {it.page === "files" && active_ > 0 && (
+                <span className={s.activity}>
+                  <span className="visually-hidden">Transfers running</span>
+                </span>
+              )}
             </button>
           </li>
         ))}

@@ -10,10 +10,11 @@
 }
 
 .brand {
-  margin-bottom: var(--s-8);
+  margin-bottom: var(--s-6);
 }
 
 .items {
+  overflow-y: auto;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -112,4 +113,38 @@
   border-radius: var(--r-pill);
   border: 1px solid var(--voice-marigold);
   color: var(--voice-marigold);
+}
+
+.badge {
+  position: absolute;
+  top: 2px;
+  right: 12px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  background: var(--voice-coral);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.activity {
+  position: absolute;
+  top: 6px;
+  right: 20px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: blink 1.2s var(--ease-in-out) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.3;
+  }
 }

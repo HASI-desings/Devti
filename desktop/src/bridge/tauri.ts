@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { BluetoothEvent, Bridge, NodeEvent } from "./types";
 
@@ -59,5 +60,44 @@ export function createTauriBridge(): Bridge {
       };
     },
     takeUiAction: () => invoke("take_ui_action"),
+    takePendingSend: () => invoke("take_pending_send"),
+    clipboardHistory: () => invoke("clipboard_history"),
+    clearClipboardHistory: () => invoke("clear_clipboard_history"),
+    copyToClipboard: (text) => invoke("copy_to_clipboard", { text }),
+    shareClipboard: (text) => invoke("share_clipboard", { text }),
+    ring: (id, on) => invoke("ring", { id, on }),
+    notificationAction: (id, key, action, reply) => invoke("notification_action", { id, key, action, reply }),
+    dismissNotification: (id, key) => invoke("dismiss_notification", { id, key }),
+    setDnd: (on) => invoke("set_dnd", { on }),
+    pickFiles: () => invoke("pick_files"),
+    sendFiles: (id, paths) => invoke("send_files", { id, paths }),
+    transfers: () => invoke("transfers"),
+    cancelTransfer: (id) => invoke("cancel_transfer", { id }),
+    retryTransfer: (id) => invoke("retry_transfer", { id }),
+    clearFinishedTransfers: () => invoke("clear_finished_transfers"),
+    openPath: (path) => invoke("open_path", { path }),
+    revealPath: (path) => invoke("reveal_path", { path }),
+    chooseDownloadsDir: () => invoke("choose_downloads_dir"),
+    batteryHistory: (id, since) => invoke("battery_history", { id, since }),
+    setLowBatteryThreshold: (percent) => invoke("set_low_battery_threshold", { percent }),
+    onFileDrop(cb) {
+      let unlisten: (() => void) | undefined;
+      let cancelled = false;
+      getCurrentWebview()
+        .onDragDropEvent((e) => {
+          if (e.payload.type === "drop") {
+            const ratio = window.devicePixelRatio || 1;
+            cb(e.payload.paths, e.payload.position.x / ratio, e.payload.position.y / ratio);
+          }
+        })
+        .then((u) => {
+          if (cancelled) u();
+          else unlisten = u;
+        });
+      return () => {
+        cancelled = true;
+        unlisten?.();
+      };
+    },
   };
 }

@@ -1,15 +1,19 @@
 import type {
   ActivityEntry,
+  BatterySample,
   BluetoothEvent,
   Bridge,
+  ClipboardEntry,
   DeviceInfo,
   DiscoveredDevice,
   LocalSnapshot,
+  MirroredNotification,
   NodeEvent,
   PairingWindowInfo,
   PeerSnapshot,
   Permissions,
   Snapshot,
+  TransferRecord,
 } from "./types";
 
 /**
@@ -51,6 +55,8 @@ export interface PreviewControls {
   remoteAccept(): void;
   /** Toggles a paired device online/offline. */
   setOnline(id: string, online: boolean): void;
+  /** Simulates a paired device asking this computer to ring. */
+  ringMe(on: boolean): void;
   reset(): void;
 }
 
@@ -129,6 +135,12 @@ export function createPreviewBridge(): Bridge {
   };
 
   let window_: PairingWindowInfo | null = null;
+  let dnd = false;
+  let lowBattery = 15;
+  const clipboard: ClipboardEntry[] = [];
+  let clipSeq = 1;
+  const transfers = new Map<number, TransferRecord>();
+  let notifications: MirroredNotification[] = [];
   let pending: { id: number; peer: DeviceInfo; local: boolean; remote: boolean } | null = null;
   let joinTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -154,6 +166,49 @@ export function createPreviewBridge(): Bridge {
     emit({ type: "pairing_window_changed", window: null });
     emit({ type: "pairing_completed", pairing_id: id, peer });
     emit({ type: "peer_changed", peer });
+    // The simulated phone shares a couple of notifications so the Notifications page
+    // has something to show. Preview only.
+    setTimeout(() => {
+      const demo: MirroredNotification[] = [
+        {
+          from: peer.info.id,
+          from_name: peer.info.name,
+          notif: {
+            key: `demo:${peer.info.id}:1`,
+            app_id: "org.example.chat",
+            app_name: "Messages",
+            title: "Ayesha",
+            text: "Are you coming to the studio today?",
+            ts: now(),
+            actions: [
+              { id: "reply", label: "Reply", reply: true },
+              { id: "read", label: "Mark as read", reply: false },
+            ],
+            icon_png: null,
+            dismissable: true,
+          },
+        },
+        {
+          from: peer.info.id,
+          from_name: peer.info.name,
+          notif: {
+            key: `demo:${peer.info.id}:2`,
+            app_id: "org.example.calendar",
+            app_name: "Calendar",
+            title: "Design review",
+            text: "Starts in 15 minutes",
+            ts: now() - 60_000,
+            actions: [],
+            icon_png: null,
+            dismissable: true,
+          },
+        },
+      ];
+      for (const n of demo) {
+        notifications = [n, ...notifications.filter((x) => x.notif.key !== n.notif.key)];
+        emit({ type: "notification_posted", notification: n, dnd });
+      }
+    }, 1200);
   };
 
   const controls: PreviewControls = {
@@ -201,6 +256,15 @@ export function createPreviewBridge(): Bridge {
       addLog(online ? "connected" : "disconnected", p.info);
       emit({ type: "peer_changed", peer: next });
     },
+    ringMe(on) {
+      const p = [...peers.values()][0];
+      emit({
+        type: "ring_requested",
+        from: p?.info.id ?? "demo",
+        from_name: p?.info.name ?? "Demo phone",
+        on,
+      });
+    },
     reset() {
       peers.clear();
       log.length = 0;
@@ -228,7 +292,16 @@ export function createPreviewBridge(): Bridge {
     nearby: [...nearby],
     window: window_,
     settings: { ...settings },
+    dnd,
+    low_battery_threshold: lowBattery,
+    downloads_dir: "~/Downloads/Devti",
+    notifications: [...notifications],
   });
+
+  const pushTransfer = (t: TransferRecord) => {
+    transfers.set(t.id, t);
+    emit({ type: "transfer", transfer: t, rate_bps: t.state === "active" ? 18_000_000 : 0 });
+  };
 
   return {
     mode: "preview",
@@ -362,6 +435,134 @@ export function createPreviewBridge(): Bridge {
       return "Preview mode has no diagnostics to export.";
     },
     onUiAction() {
+      return () => {};
+    },
+    async takePendingSend() {
+      return [];
+    },
+    async clipboardHistory() {
+      return [...clipboard];
+    },
+    async clearClipboardHistory() {
+      clipboard.length = 0;
+    },
+    async copyToClipboard(text) {
+      await navigator.clipboard?.writeText(text).catch(() => {});
+    },
+    async shareClipboard(text) {
+      clipboard.unshift({ id: clipSeq++, ts: now(), device_id: null, device_name: null, text });
+      return true;
+    },
+    async ring(id, on) {
+      const p = peers.get(id);
+      if (!p?.online) throw new Error("That device is offline.");
+      addLog(on ? "ring_sent" : "ring_stop_sent", p.info);
+    },
+    async notificationAction(id, key, action, reply) {
+      const n = notifications.find((x) => x.from === id && x.notif.key === key);
+      if (!n) throw new Error("That notification is gone.");
+      addLog("notification_action", peers.get(id)?.info, reply ? `${action}: ${reply}` : action);
+    },
+    async dismissNotification(id, key) {
+      notifications = notifications.filter((x) => !(x.from === id && x.notif.key === key));
+      emit({ type: "notification_removed", from: id, key });
+    },
+    async setDnd(on) {
+      dnd = on;
+      emit({ type: "dnd_changed", on, by: null });
+    },
+    async pickFiles() {
+      // Browsers don't reveal file paths; preview simulates the transfer by name only.
+      return new Promise<string[]>((resolve) => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.multiple = true;
+        input.onchange = () => resolve([...(input.files ?? [])].map((f) => `preview:${f.name}:${f.size}`));
+        input.click();
+      });
+    },
+    async sendFiles(id, paths) {
+      const p = peers.get(id);
+      if (!p) throw new Error("That device is not paired.");
+      return paths.map((path) => {
+        const [, name = "file", sizeText = "4000000"] = path.split(":");
+        const size = Number(sizeText) || 4_000_000;
+        const t: TransferRecord = {
+          id: Math.floor(Math.random() * 1e12),
+          device_id: id,
+          device_name: p.info.name,
+          incoming: false,
+          name,
+          path,
+          size,
+          done: 0,
+          state: p.online ? "active" : "queued",
+          ts: now(),
+        };
+        pushTransfer(t);
+        if (p.online) {
+          let step = 0;
+          const timer = setInterval(() => {
+            step++;
+            const cur = transfers.get(t.id);
+            if (cur?.state !== "active") return clearInterval(timer);
+            const done = Math.min(size, Math.round((size * step) / 12));
+            pushTransfer({ ...cur, done, state: done >= size ? "done" : "active" });
+            if (done >= size) clearInterval(timer);
+          }, 250);
+        }
+        return t.id;
+      });
+    },
+    async transfers() {
+      return [...transfers.values()].sort((a, b) => b.ts - a.ts);
+    },
+    async cancelTransfer(id) {
+      const t = transfers.get(id);
+      if (t) pushTransfer({ ...t, state: "cancelled" });
+    },
+    async retryTransfer(id) {
+      const t = transfers.get(id);
+      if (t) pushTransfer({ ...t, state: "queued" });
+    },
+    async clearFinishedTransfers() {
+      for (const [id, t] of transfers)
+        if (["done", "failed", "cancelled"].includes(t.state)) transfers.delete(id);
+    },
+    async openPath() {
+      throw new Error("Opening files needs the Devti desktop app.");
+    },
+    async revealPath() {
+      throw new Error("Opening folders needs the Devti desktop app.");
+    },
+    async chooseDownloadsDir() {
+      return null;
+    },
+    async batteryHistory(id, since): Promise<BatterySample[]> {
+      // A plausible, continuous simulation: ~4 %/h discharge, charge at ~45 %/h
+      // when it falls below 25 %, stop at 100 %. Preview only.
+      const out: BatterySample[] = [];
+      const step = 20 * 60_000;
+      const end = now();
+      const start = Math.max(since, end - 7 * 24 * 3600_000);
+      let level = 60 + ((id ?? "self").charCodeAt(0) % 30);
+      let charging = false;
+      for (let t = start; t <= end; t += step) {
+        if (charging) {
+          level = Math.min(100, level + 15);
+          if (level >= 100) charging = false;
+        } else {
+          level = Math.max(3, level - 1.35);
+          if (level < 25) charging = true;
+        }
+        out.push({ ts: t, percent: Math.round(level), charging });
+      }
+      return out;
+    },
+    async setLowBatteryThreshold(p) {
+      lowBattery = p;
+    },
+    onFileDrop() {
       return () => {};
     },
     async takeUiAction() {

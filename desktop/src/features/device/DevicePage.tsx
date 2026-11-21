@@ -8,6 +8,7 @@ import { clockTime, kindLabel, latencyLabel, platformLabel, relativeTime } from 
 import { useStore } from "../../state/store";
 import { BatteryMeter, Button, Segmented, Sheet, Switch } from "../../ui";
 import p from "../shell/page.module.css";
+import { DeviceActions } from "./DeviceActions";
 import s from "./DevicePage.module.css";
 
 export const PERMISSION_COPY: { key: keyof Permissions; title: string; hint: string }[] = [
@@ -110,6 +111,10 @@ export function DevicePage() {
             </p>
           </div>
         </header>
+
+        <div className={p.row}>
+          <DeviceActions peer={peer} />
+        </div>
 
         <section className={p.section} aria-labelledby="conn">
           <h2 id="conn" className={p.sectionTitle}>

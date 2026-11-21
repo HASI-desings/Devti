@@ -9,6 +9,7 @@
 
 mod bluetooth;
 mod commands;
+mod continuity;
 mod system;
 mod tray;
 
@@ -70,7 +71,11 @@ pub fn run() {
     let start_hidden = std::env::args().any(|a| a == "--hidden");
 
     let app = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main_window(app)))
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            show_main_window(app);
+            continuity::request_send(app, continuity::send_args(&args));
+        }))
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -94,11 +99,13 @@ pub fn run() {
             // Forward every core event to the UI.
             let mut events = node.subscribe();
             let emitter = handle.clone();
+            let event_node = node.clone();
             tauri::async_runtime::spawn(async move {
                 loop {
                     match events.recv().await {
                         Ok(ev) => {
                             tray::on_node_event(&emitter, &ev);
+                            continuity::on_node_event(&emitter, &event_node, &ev);
                             let _ = emitter.emit("devti://event", ev);
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
@@ -110,11 +117,14 @@ pub fn run() {
             });
 
             system::spawn_battery_poller(node.clone());
+            continuity::spawn_clipboard_watcher(node.clone());
             app.manage(AppState { node: node.clone(), bluetooth: bluetooth::Scanner::default(), log_dir, data_dir });
             tray::build(&handle, node.is_paused())?;
             if !start_hidden {
                 show_main_window(&handle);
             }
+            let send = continuity::send_args(&std::env::args().collect::<Vec<_>>());
+            continuity::request_send(&handle, send);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -136,6 +146,27 @@ pub fn run() {
             commands::bluetooth_scan_stop,
             commands::export_diagnostics,
             commands::take_ui_action,
+            commands::take_pending_send,
+            commands::clipboard_history,
+            commands::clear_clipboard_history,
+            commands::copy_to_clipboard,
+            commands::share_clipboard,
+            commands::ring,
+            commands::notifications,
+            commands::notification_action,
+            commands::dismiss_notification,
+            commands::set_dnd,
+            commands::pick_files,
+            commands::send_files,
+            commands::transfers,
+            commands::cancel_transfer,
+            commands::retry_transfer,
+            commands::clear_finished_transfers,
+            commands::open_path,
+            commands::reveal_path,
+            commands::choose_downloads_dir,
+            commands::battery_history,
+            commands::set_low_battery_threshold,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Devti");

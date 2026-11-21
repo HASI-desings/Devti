@@ -46,7 +46,20 @@ const local: LocalSnapshot = {
 };
 
 beforeEach(() => {
-  useStore.getState().load({ local, peers: [], nearby: [], window: null, settings: {} }, "preview");
+  useStore.getState().load(
+    {
+      local,
+      peers: [],
+      nearby: [],
+      window: null,
+      settings: {},
+      dnd: false,
+      low_battery_threshold: 15,
+      downloads_dir: "",
+      notifications: [],
+    },
+    "preview",
+  );
   useStore.setState({
     pairing: null,
     toasts: [],
@@ -126,6 +139,53 @@ describe("store", () => {
     expect(useStore.getState().local?.paused).toBe(true);
     st.apply({ type: "local_changed", local: { ...local, info: { ...local.info, name: "New" } } });
     expect(useStore.getState().local?.info.name).toBe("New");
+  });
+
+  it("tracks notifications, DND, ringing and transfers", () => {
+    const st = useStore.getState();
+    const n = {
+      from: "P",
+      from_name: "Phone",
+      notif: {
+        key: "k",
+        app_id: "a",
+        app_name: "A",
+        title: "t",
+        text: "x",
+        ts: 1,
+        actions: [],
+        icon_png: null,
+        dismissable: true,
+      },
+    };
+    st.apply({ type: "notification_posted", notification: n, dnd: false });
+    st.apply({ type: "notification_posted", notification: n, dnd: false });
+    expect(useStore.getState().notifications).toHaveLength(1);
+    st.apply({ type: "notification_removed", from: "P", key: "k" });
+    expect(useStore.getState().notifications).toHaveLength(0);
+    st.apply({ type: "dnd_changed", on: true, by: null });
+    expect(useStore.getState().dnd).toBe(true);
+    st.apply({ type: "ring_requested", from: "P", from_name: "Phone", on: true });
+    expect(useStore.getState().ringing?.name).toBe("Phone");
+    st.apply({ type: "ring_requested", from: "P", from_name: "Phone", on: false });
+    expect(useStore.getState().ringing).toBeNull();
+    const t = {
+      id: 1,
+      device_id: "P",
+      device_name: "Phone",
+      incoming: true,
+      name: "a.jpg",
+      path: "/x",
+      size: 10,
+      done: 10,
+      state: "done" as const,
+      ts: 1,
+    };
+    st.apply({ type: "transfer", transfer: t, rate_bps: 0 });
+    expect(useStore.getState().transfers[1]?.state).toBe("done");
+    expect(useStore.getState().toasts.some((x) => x.text.includes("Received a.jpg"))).toBe(true);
+    st.apply({ type: "low_battery", id: "P", name: "Phone", percent: 9 });
+    expect(useStore.getState().toasts.some((x) => x.text.includes("9%"))).toBe(true);
   });
 
   it("orders online devices first, then by pairing time", () => {

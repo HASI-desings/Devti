@@ -142,3 +142,76 @@ test("browser preview says so and never invents devices", async ({ page }) => {
   await page.getByRole("button", { name: "Simulate a phone" }).click();
   await expect(page.getByText("Does Demo phone show this code?")).toBeVisible();
 });
+
+async function pairedDemo(page: Page) {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Pair" }).click();
+  await page.getByRole("button", { name: "Simulate a phone" }).click();
+  await page.getByRole("button", { name: "The codes match" }).click();
+  await expect(page.getByRole("heading", { name: "Demo phone joined your ecosystem" })).toBeVisible();
+  await page.keyboard.press("Escape");
+}
+
+test("phone notifications: badge, quick reply, dismiss and Do Not Disturb", async ({ page }) => {
+  await pairedDemo(page);
+  await expect(rail(page).getByText("2 notifications")).toBeAttached();
+  await rail(page)
+    .getByRole("button", { name: /Alerts/ })
+    .click();
+  await expect(page.getByText("Are you coming to the studio today?")).toBeVisible();
+  await page.getByRole("button", { name: "Reply", exact: true }).click();
+  await page.getByLabel("Reply").fill("On my way");
+  await page.getByRole("button", { name: "Send reply" }).click();
+  await expect(page.getByText("Reply sent.")).toBeVisible();
+  await page.getByRole("button", { name: "Dismiss" }).first().click();
+  await expect(page.getByText("Are you coming to the studio today?")).toBeHidden();
+  const dnd = page.getByRole("switch", { name: "Do Not Disturb" });
+  await dnd.locator("xpath=ancestor::label").click();
+  await expect(dnd).toBeChecked();
+  await expect(page.getByText(/Notifications still arrive here, silently/)).toBeVisible();
+});
+
+test("files: choose, pick a device, watch it send", async ({ page }) => {
+  await pairedDemo(page);
+  await rail(page).getByRole("button", { name: "Files" }).click();
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: /Drop files here/ }).click();
+  await (await chooser).setFiles({
+    name: "holiday.jpg",
+    mimeType: "image/jpeg",
+    buffer: Buffer.alloc(2_000_000, 1),
+  });
+  await expect(page.getByRole("heading", { name: "Send holiday.jpg to…" })).toBeVisible();
+  await page.getByRole("button", { name: /Demo phone/ }).click();
+  await expect(page.getByText("holiday.jpg")).toBeVisible();
+  await expect(page.getByText("Sent holiday.jpg to Demo phone.")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("progressbar", { name: "holiday.jpg 100%" })).toBeVisible();
+});
+
+test("battery dashboard shows a chart per device with a table view", async ({ page }) => {
+  await pairedDemo(page);
+  await rail(page).getByRole("button", { name: "Battery" }).click();
+  await expect(page.getByRole("img", { name: "Demo phone: battery level over time" })).toBeVisible();
+  await expect(page.getByText("Shaded areas: charging")).toBeVisible();
+  await page
+    .getByRole("region", { name: "Demo phone battery" })
+    .getByRole("button", { name: "Show as table" })
+    .click();
+  await expect(page.getByRole("region", { name: "Demo phone battery" }).getByRole("table")).toBeVisible();
+  await page.getByText("Last 7 days").click();
+  await expect(page.getByRole("img", { name: "Studio Laptop: battery level over time" })).toBeVisible();
+});
+
+test("find my device: being rung shows a full-screen call until found", async ({ page }) => {
+  await pairedDemo(page);
+  await page.evaluate(() => window.__devtiPreview?.ringMe(true));
+  const call = page.getByRole("alertdialog", { name: "Demo phone is looking for this computer" });
+  await expect(call).toBeVisible();
+  await call.getByRole("button", { name: "I found it" }).click();
+  await expect(call).toBeHidden();
+  // Ringing another device from its summary panel.
+  await page.getByRole("button", { name: /Demo phone, connected/ }).click();
+  await page.getByRole("button", { name: "Ring it" }).click();
+  await expect(page.getByText("Demo phone is ringing.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Stop ringing" })).toBeVisible();
+});
