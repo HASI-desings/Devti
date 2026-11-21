@@ -103,6 +103,10 @@ is on, allow UDP port 47810 on your home network (`sudo ufw allow 47810/udp`).
    connection when the screen is off (some brands add their own battery savers; see
    [dontkillmyapp.com](https://dontkillmyapp.com)).
 
+> **Updating a CI build:** until the first tagged release (which uses a permanent signing key),
+> each CI build is signed with a temporary key. Android refuses to update across different keys,
+> so uninstall the old build first (you'll need to pair again).
+
 ### iPhone / iPad
 Arrives in Phase 8 as build-it-yourself instructions.
 

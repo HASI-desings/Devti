@@ -129,6 +129,13 @@ try {
     `PASS: ${peer.info.name} online, battery ${peer.status.battery.percent}%, rtt ${peer.connection.rtt_ms} ms`,
   );
 
+  // Optional pause so performance can be measured on a live, connected dashboard.
+  const hold = Number(process.env.DEVTI_SMOKE_HOLD_MS || 0);
+  if (hold > 0) {
+    console.log(`HOLDING ${hold} ms`);
+    await sleep(hold);
+  }
+
   // Kill switch over the real stack.
   await invoke("set_paused", { paused: true });
   await sleep(1500);
