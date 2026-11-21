@@ -16,3 +16,6 @@ android/app/src/main/jniLibs
 android/app/src/main/java/uniffi
 *.log
 .DS_Store
+**/.gradle
+android/jvm-check/build
+.kotlin

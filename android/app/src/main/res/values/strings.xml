@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Devti</string>
+    <string name="channel_connection">Connection</string>
+    <string name="channel_connection_desc">Shows while Devti keeps your devices connected.</string>
+</resources>

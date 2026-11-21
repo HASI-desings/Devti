@@ -17,10 +17,10 @@ uniffi::setup_scaffolding!();
 /// Errors surfaced to Kotlin/Swift as exceptions.
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum DevtiError {
-    #[error("{message}")]
-    InvalidInput { message: String },
-    #[error("{message}")]
-    Failed { message: String },
+    #[error("{reason}")]
+    InvalidInput { reason: String },
+    #[error("{reason}")]
+    Failed { reason: String },
     #[error("the ecosystem is paused")]
     Paused,
 }
@@ -30,16 +30,16 @@ impl From<devti_core::Error> for DevtiError {
         match e {
             devti_core::Error::Paused => DevtiError::Paused,
             devti_core::Error::InvalidInput(m) | devti_core::Error::InvalidPairingUri(m) => {
-                DevtiError::InvalidInput { message: m }
+                DevtiError::InvalidInput { reason: m }
             }
-            other => DevtiError::Failed { message: other.to_string() },
+            other => DevtiError::Failed { reason: other.to_string() },
         }
     }
 }
 
 impl From<uniffi::UnexpectedUniFFICallbackError> for DevtiError {
     fn from(e: uniffi::UnexpectedUniFFICallbackError) -> Self {
-        DevtiError::Failed { message: e.reason }
+        DevtiError::Failed { reason: e.reason }
     }
 }
 
@@ -114,7 +114,7 @@ impl DevtiMobile {
             .thread_name("devti-core")
             .enable_all()
             .build()
-            .map_err(|e| DevtiError::Failed { message: e.to_string() })?;
+            .map_err(|e| DevtiError::Failed { reason: e.to_string() })?;
 
         let mut cfg =
             NodeConfig::new(PathBuf::from(&config.data_dir), &config.device_name, DeviceKind::parse(&config.kind));
@@ -174,6 +174,18 @@ impl DevtiMobile {
         let _g = self.runtime.enter();
         let id: DeviceId = device_id.parse()?;
         Ok(self.node.pair_with_code(&id, &code)?)
+    }
+
+    /// Lets another computer pair with *this* device using a code shown here (JSON
+    /// `PairingWindowInfo`). Phones normally join a Hub instead; this covers the reverse.
+    pub fn open_pairing_window_json(&self) -> Result<String, DevtiError> {
+        let _g = self.runtime.enter();
+        let w = self.node.open_pairing_window()?;
+        Ok(serde_json::to_string(&w).unwrap_or_default())
+    }
+
+    pub fn close_pairing_window(&self) {
+        self.node.close_pairing_window();
     }
 
     /// Answers "do the codes match?".
