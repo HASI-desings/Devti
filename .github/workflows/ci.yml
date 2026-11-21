@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  core:
+    name: Core · fmt, clippy, test, coverage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy, llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy -p devti-core -p devti-ffi --all-targets -- -D warnings
+      - name: Test with coverage (fails under 80 % lines)
+        run: cargo llvm-cov -p devti-core -p devti-ffi --fail-under-lines 80 --summary-only
+      - name: Coverage report
+        run: cargo llvm-cov report -p devti-core --lcov --output-path lcov.info
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-coverage-lcov
+          path: lcov.info
+
+  core-windows:
+    name: Core · tests on Windows
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p devti-core -p devti-ffi
+
+  fuzz-smoke:
+    name: Fuzz · 60 s per target
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core/fuzz
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - name: Fuzz
+        working-directory: core
+        run: |
+          for t in protocol_messages pairing_uri frame_stream; do
+            cargo +nightly fuzz run "$t" -- -max_total_time=60
+          done
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-crashes
+          path: core/fuzz/artifacts

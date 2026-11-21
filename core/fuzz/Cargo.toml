@@ -1,0 +1,38 @@
+[package]
+name = "devti-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "GPL-3.0-or-later"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+devti-core = { path = ".." }
+tokio = { version = "1", features = ["rt", "io-util"] }
+
+# Not part of the main workspace: needs nightly + libFuzzer.
+[workspace]
+
+[[bin]]
+name = "protocol_messages"
+path = "fuzz_targets/protocol_messages.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pairing_uri"
+path = "fuzz_targets/pairing_uri.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "frame_stream"
+path = "fuzz_targets/frame_stream.rs"
+test = false
+doc = false
+bench = false

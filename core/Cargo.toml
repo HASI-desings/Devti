@@ -1,0 +1,47 @@
+[package]
+name = "devti-core"
+description = "Devti Core: protocol, crypto, pairing, discovery and transport shared by every Devti platform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[features]
+default = []
+# OS keychain support (Windows Credential Manager / Secret Service / macOS Keychain).
+keychain = ["dep:keyring"]
+
+[dependencies]
+tokio.workspace = true
+quinn.workspace = true
+rustls.workspace = true
+rcgen.workspace = true
+ring.workspace = true
+spake2.workspace = true
+sha2.workspace = true
+hmac.workspace = true
+hkdf.workspace = true
+ciborium.workspace = true
+serde.workspace = true
+serde_bytes.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+mdns-sd.workspace = true
+rusqlite.workspace = true
+data-encoding.workspace = true
+getrandom.workspace = true
+if-addrs.workspace = true
+url.workspace = true
+x509-parser.workspace = true
+parking_lot.workspace = true
+futures.workspace = true
+bytes.workspace = true
+keyring = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+tracing-subscriber.workspace = true
