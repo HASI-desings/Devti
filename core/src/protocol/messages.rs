@@ -26,6 +26,8 @@ pub enum StreamOpen {
     Pair,
     /// The long-lived control channel of an authenticated session.
     Control,
+    /// One file transfer (Phase 2): offer → answer → raw bytes → done.
+    File,
     #[serde(other)]
     Unknown,
 }
@@ -137,10 +139,122 @@ pub enum ControlMsg {
     Pong {
         nonce: u64,
     },
+    /// Clipboard text copied on the sender (capped at [`CLIPBOARD_MAX_BYTES`]).
+    Clipboard {
+        text: String,
+        ts: i64,
+    },
+    /// Find my device: start (`on: true`) or stop ringing at full volume.
+    Ring {
+        on: bool,
+    },
+    /// A notification appeared (or changed) on the sender.
+    Notification {
+        notif: NotificationInfo,
+    },
+    /// A notification disappeared on the sender.
+    NotificationRemoved {
+        key: String,
+    },
+    /// Asks the owner of a notification to run one of its actions (with reply text when
+    /// the action takes one).
+    NotificationAction {
+        key: String,
+        action: String,
+        reply: Option<String>,
+    },
+    /// Asks the owner of a notification to dismiss it.
+    NotificationDismiss {
+        key: String,
+    },
+    /// Ecosystem-wide Do Not Disturb changed on the sender.
+    Dnd {
+        on: bool,
+    },
     /// The session is ending on purpose.
     Goodbye {
         reason: GoodbyeReason,
     },
+    #[serde(other)]
+    Unknown,
+}
+
+/// Largest clipboard text sent between devices.
+pub const CLIPBOARD_MAX_BYTES: usize = 256 * 1024;
+/// Largest notification icon (PNG) carried in a notification.
+pub const NOTIFICATION_ICON_MAX_BYTES: usize = 64 * 1024;
+
+/// One action button on a mirrored notification.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NotifAction {
+    pub id: String,
+    pub label: String,
+    /// The action takes typed text (quick reply).
+    #[serde(default)]
+    pub reply: bool,
+}
+
+/// A notification mirrored from another device.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NotificationInfo {
+    /// Stable key on the owning device.
+    pub key: String,
+    pub app_id: String,
+    pub app_name: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub text: String,
+    pub ts: i64,
+    #[serde(default)]
+    pub actions: Vec<NotifAction>,
+    /// App icon as PNG, if the device could provide one.
+    #[serde(default)]
+    pub icon_png: Option<serde_bytes::ByteBuf>,
+    /// Can be dismissed from other devices.
+    #[serde(default = "yes")]
+    pub dismissable: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+impl NotificationInfo {
+    /// Caps every peer-controlled field so a hostile device can't flood the UI.
+    pub fn sanitized(mut self) -> Self {
+        fn cap(s: &str, n: usize) -> String {
+            s.chars().filter(|c| !c.is_control() || *c == '\n').take(n).collect()
+        }
+        self.key = cap(&self.key, 256);
+        self.app_id = cap(&self.app_id, 128);
+        self.app_name = cap(&self.app_name, 64);
+        self.title = cap(&self.title, 256);
+        self.text = cap(&self.text, 4096);
+        self.actions.truncate(5);
+        for a in &mut self.actions {
+            a.id = cap(&a.id, 64);
+            a.label = cap(&a.label, 48);
+        }
+        if self.icon_png.as_ref().is_some_and(|i| i.len() > NOTIFICATION_ICON_MAX_BYTES) {
+            self.icon_png = None;
+        }
+        self
+    }
+}
+
+/// Messages on a `file` stream.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "t", rename_all = "snake_case")]
+pub enum FileMsg {
+    /// Sender → receiver. `id` stays the same across retries so the receiver can resume.
+    Offer { id: u64, name: String, size: u64, mime: Option<String> },
+    /// Receiver → sender: start at `offset` (bytes already received), or decline.
+    Answer { accept: bool, offset: u64, reason: Option<String> },
+    /// Sender → receiver after the raw bytes: SHA-256 of the whole file.
+    Done { sha256: serde_bytes::ByteBuf },
+    /// Receiver → sender: the file was verified and saved.
+    Saved,
     #[serde(other)]
     Unknown,
 }

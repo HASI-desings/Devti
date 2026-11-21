@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 use crate::discovery::DiscoveredDevice;
 use crate::model::{ConnectionKind, DeviceId, DeviceInfo, DeviceStatus, Permissions, TrustRole};
 use crate::protocol::PairAbortReason;
+use crate::store::TransferRecord;
+
+pub use super::continuity::MirroredNotification;
 
 /// Live connection details for an online peer.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -135,5 +138,57 @@ pub enum NodeEvent {
     /// Kill switch toggled.
     Paused {
         paused: bool,
+    },
+    /// Another device shared its clipboard; the host app should put `text` on the OS
+    /// clipboard.
+    ClipboardReceived {
+        from: DeviceId,
+        from_name: String,
+        text: String,
+        ts: i64,
+    },
+    /// Find my device: ring at full volume (`on`) or stop.
+    RingRequested {
+        from: DeviceId,
+        from_name: String,
+        on: bool,
+    },
+    /// A notification from another device appeared or changed. `dnd` says whether the
+    /// ecosystem is in Do Not Disturb (show it silently).
+    NotificationPosted {
+        notification: MirroredNotification,
+        dnd: bool,
+    },
+    NotificationRemoved {
+        from: DeviceId,
+        key: String,
+    },
+    /// Another device asks this one to run an action on one of *its* notifications.
+    NotificationActionRequested {
+        from: DeviceId,
+        key: String,
+        action: String,
+        reply: Option<String>,
+    },
+    /// Another device dismissed one of this device's notifications.
+    NotificationDismissRequested {
+        from: DeviceId,
+        key: String,
+    },
+    /// Ecosystem-wide Do Not Disturb changed (`by` = the device that changed it).
+    DndChanged {
+        on: bool,
+        by: Option<DeviceId>,
+    },
+    /// A device dropped to the low-battery threshold while not charging.
+    LowBattery {
+        id: DeviceId,
+        name: String,
+        percent: u8,
+    },
+    /// A file transfer progressed or changed state.
+    Transfer {
+        transfer: TransferRecord,
+        rate_bps: u64,
     },
 }

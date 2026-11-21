@@ -204,6 +204,13 @@ pub(crate) async fn serve_connection(inner: Arc<Inner>, conn: Connection, peer_f
                 }
                 inner.rt.spawn(accept_control(inner.clone(), conn.clone(), send, recv, peer_id));
             }
+            StreamOpen::File => {
+                if !inner.trust.is_trusted(&peer_fp) {
+                    conn.close(VarInt::from_u32(close_code::UNTRUSTED), b"not paired");
+                    return;
+                }
+                inner.rt.spawn(super::transfer::receive(inner.clone(), peer_id, send, recv));
+            }
             StreamOpen::Unknown => {
                 let mut send = send;
                 let _ = send.reset(VarInt::from_u32(0));
@@ -333,6 +340,9 @@ fn register_session(
         on_session_closed(&watcher_inner, peer_id, session_id, reason);
     });
 
+    super::continuity::on_peer_status(inner, peer_id, &snap.info.name, &snap.status);
+    super::continuity::on_session_up(inner, peer_id);
+    super::transfer::resume_for(inner, peer_id);
     inner.log(Some((&peer_id, &snap.info.name)), "connected", &addr.to_string());
     inner.emit(NodeEvent::PeerChanged { peer: snap });
     Ok(())
@@ -371,6 +381,7 @@ fn handle_control(inner: &Arc<Inner>, peer_id: DeviceId, msg: ControlMsg) {
                 inner.snapshot(p)
             };
             let _ = inner.store.update_peer_status(&peer_id, &status);
+            super::continuity::on_peer_status(inner, peer_id, &snap.info.name, &status);
             inner.emit(NodeEvent::PeerChanged { peer: snap });
         }
         ControlMsg::Info { info } => {
@@ -395,6 +406,13 @@ fn handle_control(inner: &Arc<Inner>, peer_id: DeviceId, msg: ControlMsg) {
         ControlMsg::Goodbye { reason: GoodbyeReason::Revoked } => {
             let _ = inner.remove_peer(&peer_id, super::RemovalReason::RevokedByPeer);
         }
+        ControlMsg::Clipboard { .. }
+        | ControlMsg::Ring { .. }
+        | ControlMsg::Notification { .. }
+        | ControlMsg::NotificationRemoved { .. }
+        | ControlMsg::NotificationAction { .. }
+        | ControlMsg::NotificationDismiss { .. }
+        | ControlMsg::Dnd { .. } => super::continuity::handle(inner, peer_id, msg),
         ControlMsg::Goodbye { .. } | ControlMsg::Pong { .. } | ControlMsg::Hello { .. } => {}
         ControlMsg::Unknown => tracing::trace!(peer = %peer_id, "ignoring unknown control message"),
     }
@@ -423,6 +441,7 @@ fn on_session_closed(inner: &Arc<Inner>, peer_id: DeviceId, session_id: u64, rea
         let _ = inner.remove_peer(&peer_id, super::RemovalReason::RevokedByPeer);
         return;
     }
+    super::continuity::on_session_down(inner, peer_id);
     inner.log(Some((&peer_id, &snap.info.name)), "disconnected", &reason.to_string());
     inner.emit(NodeEvent::PeerChanged { peer: snap });
 }

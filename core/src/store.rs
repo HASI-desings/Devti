@@ -37,7 +37,37 @@ const MIGRATIONS: &[&str] = &[
      );
      CREATE INDEX activity_ts ON activity(ts DESC);
      CREATE INDEX activity_device ON activity(device_id, ts DESC);",
+    // v2 — Phase 2 continuity.
+    "CREATE TABLE clipboard (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts          INTEGER NOT NULL,
+        device_id   TEXT,
+        device_name TEXT,
+        text        TEXT NOT NULL
+     );
+     CREATE TABLE battery (
+        device_id TEXT NOT NULL,
+        ts        INTEGER NOT NULL,
+        percent   INTEGER NOT NULL,
+        charging  INTEGER NOT NULL
+     );
+     CREATE INDEX battery_device ON battery(device_id, ts);
+     CREATE TABLE transfers (
+        id          INTEGER PRIMARY KEY,
+        device_id   TEXT NOT NULL,
+        device_name TEXT NOT NULL,
+        incoming    INTEGER NOT NULL,
+        name        TEXT NOT NULL,
+        path        TEXT NOT NULL,
+        size        INTEGER NOT NULL,
+        done        INTEGER NOT NULL DEFAULT 0,
+        state       TEXT NOT NULL,
+        ts          INTEGER NOT NULL
+     );",
 ];
+
+/// Clipboard entries kept in history.
+pub const CLIPBOARD_HISTORY: u32 = 50;
 
 /// A trusted (paired) device as remembered on disk.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -256,6 +286,187 @@ impl Store {
     }
 }
 
+/// One clipboard history entry.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClipboardEntry {
+    pub id: i64,
+    pub ts: i64,
+    /// `None` = copied on this device.
+    pub device_id: Option<DeviceId>,
+    pub device_name: Option<String>,
+    pub text: String,
+}
+
+/// One battery sample.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BatterySample {
+    pub ts: i64,
+    pub percent: u8,
+    pub charging: bool,
+}
+
+/// A file transfer as remembered on disk (history and resume).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TransferRecord {
+    pub id: u64,
+    pub device_id: DeviceId,
+    pub device_name: String,
+    pub incoming: bool,
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+    pub done: u64,
+    /// `queued`, `active`, `paused`, `done`, `failed`, `cancelled`.
+    pub state: String,
+    pub ts: i64,
+}
+
+impl Store {
+    // ------------------------------------------------------------ clipboard
+
+    pub fn add_clipboard(&self, ts: i64, device: Option<(&DeviceId, &str)>, text: &str) -> Result<i64> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO clipboard (ts, device_id, device_name, text) VALUES (?1, ?2, ?3, ?4)",
+            params![ts, device.map(|d| d.0.to_string()), device.map(|d| d.1.to_string()), text],
+        )?;
+        let id = conn.last_insert_rowid();
+        conn.execute(
+            "DELETE FROM clipboard WHERE id NOT IN (SELECT id FROM clipboard ORDER BY id DESC LIMIT ?1)",
+            [CLIPBOARD_HISTORY],
+        )?;
+        Ok(id)
+    }
+
+    pub fn clipboard_history(&self) -> Result<Vec<ClipboardEntry>> {
+        let conn = self.conn.lock();
+        let mut stmt =
+            conn.prepare("SELECT id, ts, device_id, device_name, text FROM clipboard ORDER BY id DESC LIMIT ?1")?;
+        let rows = stmt.query_map([CLIPBOARD_HISTORY], |r| {
+            let device_id: Option<String> = r.get(2)?;
+            Ok(ClipboardEntry {
+                id: r.get(0)?,
+                ts: r.get(1)?,
+                device_id: device_id.and_then(|s| s.parse().ok()),
+                device_name: r.get(3)?,
+                text: r.get(4)?,
+            })
+        })?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    pub fn clear_clipboard(&self) -> Result<()> {
+        self.conn.lock().execute("DELETE FROM clipboard", [])?;
+        Ok(())
+    }
+
+    // -------------------------------------------------------------- battery
+
+    /// Stores a sample unless it repeats the previous one within 10 minutes.
+    pub fn add_battery(&self, device: &DeviceId, s: BatterySample) -> Result<bool> {
+        let conn = self.conn.lock();
+        let last: Option<(i64, i64, bool)> = conn
+            .query_row(
+                "SELECT ts, percent, charging FROM battery WHERE device_id = ?1 ORDER BY ts DESC LIMIT 1",
+                [device.to_string()],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .optional()?;
+        if let Some((ts, pct, ch)) = last
+            && pct == s.percent as i64
+            && ch == s.charging
+            && s.ts - ts < 10 * 60 * 1000
+        {
+            return Ok(false);
+        }
+        conn.execute(
+            "INSERT INTO battery (device_id, ts, percent, charging) VALUES (?1, ?2, ?3, ?4)",
+            params![device.to_string(), s.ts, s.percent, s.charging],
+        )?;
+        // Keep 30 days.
+        conn.execute("DELETE FROM battery WHERE ts < ?1", [s.ts - 30 * 24 * 3600 * 1000])?;
+        Ok(true)
+    }
+
+    pub fn battery_history(&self, device: &DeviceId, since: i64) -> Result<Vec<BatterySample>> {
+        let conn = self.conn.lock();
+        let mut stmt =
+            conn.prepare("SELECT ts, percent, charging FROM battery WHERE device_id = ?1 AND ts >= ?2 ORDER BY ts")?;
+        let rows = stmt.query_map(params![device.to_string(), since], |r| {
+            Ok(BatterySample { ts: r.get(0)?, percent: r.get::<_, i64>(1)?.clamp(0, 100) as u8, charging: r.get(2)? })
+        })?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    // ------------------------------------------------------------ transfers
+
+    pub fn upsert_transfer(&self, t: &TransferRecord) -> Result<()> {
+        self.conn.lock().execute(
+            "INSERT INTO transfers (id, device_id, device_name, incoming, name, path, size, done, state, ts)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             ON CONFLICT(id) DO UPDATE SET done = excluded.done, state = excluded.state, path = excluded.path",
+            params![
+                t.id as i64,
+                t.device_id.to_string(),
+                t.device_name,
+                t.incoming,
+                t.name,
+                t.path,
+                t.size as i64,
+                t.done as i64,
+                t.state,
+                t.ts
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn transfer(&self, id: u64) -> Result<Option<TransferRecord>> {
+        let conn = self.conn.lock();
+        Ok(conn
+            .query_row(
+                "SELECT id, device_id, device_name, incoming, name, path, size, done, state, ts
+                 FROM transfers WHERE id = ?1",
+                [id as i64],
+                row_to_transfer,
+            )
+            .optional()?
+            .flatten())
+    }
+
+    pub fn transfers(&self, limit: u32) -> Result<Vec<TransferRecord>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, device_id, device_name, incoming, name, path, size, done, state, ts
+             FROM transfers ORDER BY ts DESC LIMIT ?1",
+        )?;
+        let rows = stmt.query_map([limit.min(500)], row_to_transfer)?;
+        Ok(rows.filter_map(|r| r.ok().flatten()).collect())
+    }
+
+    pub fn clear_finished_transfers(&self) -> Result<()> {
+        self.conn.lock().execute("DELETE FROM transfers WHERE state IN ('done', 'failed', 'cancelled')", [])?;
+        Ok(())
+    }
+}
+
+fn row_to_transfer(r: &rusqlite::Row<'_>) -> rusqlite::Result<Option<TransferRecord>> {
+    let device: String = r.get(1)?;
+    let Ok(device_id) = device.parse() else { return Ok(None) };
+    Ok(Some(TransferRecord {
+        id: r.get::<_, i64>(0)? as u64,
+        device_id,
+        device_name: r.get(2)?,
+        incoming: r.get(3)?,
+        name: r.get(4)?,
+        path: r.get(5)?,
+        size: r.get::<_, i64>(6)? as u64,
+        done: r.get::<_, i64>(7)? as u64,
+        state: r.get(8)?,
+        ts: r.get(9)?,
+    }))
+}
+
 struct RawPeer {
     fingerprint: Vec<u8>,
     info: String,
@@ -355,6 +566,60 @@ mod tests {
         assert!(!s.remove_peer(&a.info.id).unwrap());
         assert!(s.peer(&a.info.id).unwrap().is_none());
         assert!(!s.set_peer_access(&a.info.id, TrustRole::Trusted, &perms).unwrap());
+    }
+
+    #[test]
+    fn clipboard_history_is_capped() {
+        let s = Store::open_in_memory().unwrap();
+        let id = record(1).info.id;
+        for i in 0..(CLIPBOARD_HISTORY + 5) {
+            s.add_clipboard(i as i64, if i % 2 == 0 { Some((&id, "Phone")) } else { None }, &format!("t{i}")).unwrap();
+        }
+        let h = s.clipboard_history().unwrap();
+        assert_eq!(h.len(), CLIPBOARD_HISTORY as usize);
+        assert_eq!(h[0].text, format!("t{}", CLIPBOARD_HISTORY + 4));
+        s.clear_clipboard().unwrap();
+        assert!(s.clipboard_history().unwrap().is_empty());
+    }
+
+    #[test]
+    fn battery_history_dedupes_and_ranges() {
+        let s = Store::open_in_memory().unwrap();
+        let id = record(1).info.id;
+        let at = |ts, percent| BatterySample { ts, percent, charging: false };
+        assert!(s.add_battery(&id, at(1_000, 80)).unwrap());
+        assert!(!s.add_battery(&id, at(2_000, 80)).unwrap(), "same value soon after is skipped");
+        assert!(s.add_battery(&id, at(3_000, 79)).unwrap());
+        assert!(s.add_battery(&id, at(3_000 + 11 * 60 * 1000, 79)).unwrap(), "heartbeat after 10 min");
+        assert_eq!(s.battery_history(&id, 0).unwrap().len(), 3);
+        assert_eq!(s.battery_history(&id, 2_500).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn transfers_roundtrip() {
+        let s = Store::open_in_memory().unwrap();
+        let id = record(1).info.id;
+        let mut t = TransferRecord {
+            id: 42,
+            device_id: id,
+            device_name: "Phone".into(),
+            incoming: true,
+            name: "a.txt".into(),
+            path: "/tmp/a.txt".into(),
+            size: 10,
+            done: 0,
+            state: "active".into(),
+            ts: 5,
+        };
+        s.upsert_transfer(&t).unwrap();
+        t.done = 10;
+        t.state = "done".into();
+        s.upsert_transfer(&t).unwrap();
+        assert_eq!(s.transfer(42).unwrap().unwrap(), t);
+        assert_eq!(s.transfers(10).unwrap().len(), 1);
+        assert!(s.transfer(7).unwrap().is_none());
+        s.clear_finished_transfers().unwrap();
+        assert!(s.transfers(10).unwrap().is_empty());
     }
 
     #[test]

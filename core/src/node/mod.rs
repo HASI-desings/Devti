@@ -11,8 +11,10 @@
 //! * [`ceremony`] — the hub and joiner sides of the pairing ceremony.
 
 mod ceremony;
+mod continuity;
 mod events;
 mod session;
+mod transfer;
 mod trust;
 
 use std::collections::HashMap;
@@ -70,6 +72,8 @@ pub struct NodeConfig {
     pub port: u16,
     /// mDNS advertising + browsing.
     pub discovery: bool,
+    /// Where received files are saved (changeable later in settings).
+    pub downloads_dir: PathBuf,
 }
 
 impl NodeConfig {
@@ -87,8 +91,18 @@ impl NodeConfig {
             bind_ip: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             port: DEFAULT_PORT,
             discovery: true,
+            downloads_dir: data_dir_default_downloads(),
         }
     }
+}
+
+fn data_dir_default_downloads() -> PathBuf {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("Downloads")
+        .join("Devti")
 }
 
 /// Runtime state of one paired device.
@@ -137,6 +151,10 @@ pub(crate) struct Inner {
     /// The runtime the node was started on. Every background task is spawned here, so
     /// the public API is safe to call from any thread (UI threads, FFI callbacks).
     pub rt: tokio::runtime::Handle,
+    /// Phase 2 continuity state (clipboard echo guard, mirrored notifications, DND…).
+    pub continuity: continuity::State,
+    /// Active and queued file transfers.
+    pub transfers: transfer::State,
 }
 
 /// Handle to a running node. Cheap to clone.
@@ -154,6 +172,11 @@ impl Node {
         let store = Store::open(&config.data_dir.join("devti.db"))?;
         let records = store.peers()?;
         let paused = store.setting(SETTING_PAUSED)?.as_deref() == Some("true");
+        let store_dnd = store.setting(continuity::SETTING_DND)?.as_deref() == Some("true");
+        let downloads = store
+            .setting(transfer::SETTING_DOWNLOADS)?
+            .map(PathBuf::from)
+            .unwrap_or_else(|| config.downloads_dir.clone());
 
         let trust = Arc::new(TrustView::new(records.iter().map(|r| r.fingerprint)));
         trust.set_paused(paused);
@@ -211,6 +234,8 @@ impl Node {
             session_seq: AtomicU64::new(1),
             shutdown,
             rt: tokio::runtime::Handle::current(),
+            continuity: continuity::State::new(store_dnd),
+            transfers: transfer::State::new(downloads),
         });
 
         if config.discovery && !paused {
@@ -220,7 +245,9 @@ impl Node {
         inner.rt.spawn(session::reconnect_loop(inner.clone()));
         inner.rt.spawn(session::discovery_loop(inner.clone(), discovery_rx));
         tracing::info!(id = %inner.identity.device_id(), addr = %local_addr, "devti node started");
-        Ok(Node { inner })
+        let node = Node { inner };
+        node.load_continuity_settings();
+        Ok(node)
     }
 
     /// Subscribes to node events. Lagging receivers should re-read [`Node::peers`].
@@ -401,6 +428,10 @@ impl Node {
                 return;
             }
             *cur = status.clone();
+        }
+        if let Some(b) = status.battery {
+            let sample = crate::store::BatterySample { ts: now_ms(), percent: b.percent, charging: b.charging };
+            let _ = self.inner.store.add_battery(&self.device_id(), sample);
         }
         self.inner.broadcast(ControlMsg::Status { status });
         self.inner.emit(NodeEvent::LocalChanged { local: self.inner.local_snapshot() });
