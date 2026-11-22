@@ -40,8 +40,15 @@
     "homepage": "https://github.com/hasi-desings/devti",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.png", "icons/icon.ico"],
     "linux": {
-      "deb": { "depends": ["libwebkit2gtk-4.1-0", "libayatana-appindicator3-1"], "section": "net" },
-      "rpm": { "depends": ["webkit2gtk4.1", "libayatana-appindicator-gtk3"] }
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libayatana-appindicator3-1", "libxkbcommon0"],
+        "section": "net",
+        "files": { "/usr/bin/devti": "../../target/release/devti" }
+      },
+      "rpm": {
+        "depends": ["webkit2gtk4.1", "libayatana-appindicator-gtk3", "libxkbcommon"],
+        "files": { "/usr/bin/devti": "../../target/release/devti" }
+      }
     },
     "windows": {
       "nsis": { "installMode": "currentUser" },
