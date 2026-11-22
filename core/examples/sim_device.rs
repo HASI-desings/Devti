@@ -119,6 +119,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let _ = node.send_input(&from, vec![devti_core::protocol::InputEvent::Move { dx: 5.0, dy: 5.0 }]);
                     }
                 }
+                Ok(NodeEvent::RemoteInput { events, .. }) => {
+                    let kinds: Vec<String> = events
+                        .iter()
+                        .map(|e| serde_json::to_value(e).ok().and_then(|v| v["k"].as_str().map(str::to_string)).unwrap_or_default())
+                        .collect();
+                    println!("remote input: {}", kinds.join(","));
+                }
                 Ok(NodeEvent::RunFinished { command, ok, output, .. }) => {
                     println!("run {command} ok={ok} out={output}")
                 }

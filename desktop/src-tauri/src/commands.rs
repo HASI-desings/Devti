@@ -548,3 +548,27 @@ pub fn stop_screen_viewer(app: AppHandle, state: State<'_, AppState>, id: String
     }
     Ok(())
 }
+
+#[derive(Serialize)]
+pub struct ScreenLayoutInfo {
+    layout: crate::edges::Layout,
+    supported: bool,
+    active: bool,
+}
+
+#[tauri::command]
+pub fn screen_layout(edges: State<'_, std::sync::Arc<crate::edges::Edges>>) -> ScreenLayoutInfo {
+    ScreenLayoutInfo {
+        layout: edges.layout(),
+        supported: crate::edges::Edges::supported(),
+        active: crate::edges::is_active(&edges),
+    }
+}
+
+#[tauri::command]
+pub fn set_screen_layout(
+    edges: State<'_, std::sync::Arc<crate::edges::Edges>>,
+    layout: crate::edges::Layout,
+) -> CmdResult<()> {
+    edges.set_layout(layout).map_err(err)
+}

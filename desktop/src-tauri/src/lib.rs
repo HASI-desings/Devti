@@ -10,6 +10,7 @@
 mod bluetooth;
 mod commands;
 mod continuity;
+mod edges;
 mod remote;
 mod screens;
 mod system;
@@ -102,6 +103,9 @@ pub fn run() {
             app.manage(remote.clone());
             let screens = screens::Screens::new(node.clone());
             app.manage(screens.clone());
+            let edges = edges::Edges::new(node.clone());
+            edges.start();
+            app.manage(edges);
 
             // Forward every core event to the UI.
             let mut events = node.subscribe();
@@ -202,6 +206,8 @@ pub fn run() {
             commands::screen_sources,
             commands::set_screen_source,
             commands::stop_screen_viewer,
+            commands::screen_layout,
+            commands::set_screen_layout,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Devti");

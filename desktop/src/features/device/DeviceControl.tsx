@@ -27,6 +27,7 @@ export function DeviceControl({ peer }: { peer: PeerSnapshot }) {
   const [confirm, setConfirm] = useState<{ label: string; detail: string; run: () => void } | null>(null);
   const id = peer.info.id;
   const android = peer.info.platform === "android";
+  const computer = peer.info.kind === "desktop" || peer.info.kind === "laptop";
 
   useEffect(() => {
     if (peer.online) void bridge.requestCatalog(id).catch(() => {});
@@ -47,13 +48,15 @@ export function DeviceControl({ peer }: { peer: PeerSnapshot }) {
         <p className={p.sectionIntro}>Available when {peer.info.name} is connected.</p>
       ) : (
         <>
-          {android && (
+          {(android || computer) && (
             <div className={s.mirrorCard}>
               <Icon name="cast" size={28} />
               <div className={p.itemText}>
                 <span className={p.itemTitle}>See and control {peer.info.name}'s screen</span>
                 <span className={p.itemHint}>
-                  Click to tap, drag to swipe, type with this keyboard. Take screenshots and recordings.
+                  {computer
+                    ? "Use this mouse and keyboard on it, like a remote desktop. Take screenshots and recordings."
+                    : "Click to tap, drag to swipe, type with this keyboard. Take screenshots and recordings."}
                 </span>
               </div>
               <Button variant="primary" icon="cast" onPress={() => navigate("mirror", id)}>

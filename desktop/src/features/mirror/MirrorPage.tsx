@@ -31,7 +31,9 @@ export function MirrorPage() {
   const [recording, setRecording] = useState<MediaRecorder | null>(null);
   const press = useRef<{ x: number; y: number; t: number; long: boolean; timer: number } | null>(null);
   const lastWheel = useRef(0);
+  const lastMove = useRef(0);
   const online = !!peer?.online;
+  const computer = peer?.info.kind === "desktop" || peer?.info.kind === "laptop";
 
   useEffect(() => {
     if (!id || !online) return;
@@ -150,6 +152,65 @@ export function MirrorPage() {
       e.preventDefault();
       send([{ k: "text", text: e.key }]);
     }
+  };
+
+  // A computer: the pointer follows the mouse, buttons and keys go through as they are.
+  const BUTTONS = ["left", "middle", "right"] as const;
+  const pcDown = (e: PointerEvent<HTMLCanvasElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.currentTarget.focus();
+    const { x, y } = at(e);
+    send([
+      { k: "move_to", x, y },
+      { k: "button", button: BUTTONS[e.button] ?? "left", down: true },
+    ]);
+  };
+  const pcMove = (e: PointerEvent<HTMLCanvasElement>) => {
+    const now = performance.now();
+    if (now - lastMove.current < 16) return;
+    lastMove.current = now;
+    send([{ k: "move_to", ...at(e) }]);
+  };
+  const pcUp = (e: PointerEvent<HTMLCanvasElement>) => {
+    send([
+      { k: "move_to", ...at(e) },
+      { k: "button", button: BUTTONS[e.button] ?? "left", down: false },
+    ]);
+  };
+  const pcWheel = (e: WheelEvent<HTMLCanvasElement>) => {
+    const lines = (v: number) => Math.max(-10, Math.min(10, Math.round(v / (e.deltaMode === 1 ? 1 : 40))));
+    const dy = lines(e.deltaY);
+    const dx = lines(e.deltaX);
+    if (dx || dy) send([{ k: "scroll", dx, dy }]);
+  };
+  const pcKey = (e: KeyboardEvent<HTMLCanvasElement>) => {
+    const named: Record<string, string> = {
+      Enter: "enter",
+      Backspace: "backspace",
+      Tab: "tab",
+      Escape: "escape",
+      Delete: "delete",
+      Insert: "insert",
+      ArrowLeft: "left",
+      ArrowRight: "right",
+      ArrowUp: "up",
+      ArrowDown: "down",
+      Home: "home",
+      End: "end",
+      PageUp: "page_up",
+      PageDown: "page_down",
+      " ": "space",
+    };
+    if (/^F\d{1,2}$/.test(e.key)) named[e.key] = e.key.toLowerCase();
+    const mods = [e.ctrlKey && "ctrl", e.altKey && "alt", e.metaKey && "meta", e.shiftKey && "shift"].filter(
+      Boolean,
+    ) as string[];
+    const key = named[e.key];
+    e.preventDefault();
+    if (key) send([{ k: "key", key, mods }]);
+    else if (e.key.length === 1 && (e.ctrlKey || e.altKey || e.metaKey))
+      send([{ k: "key", key: e.key.toLowerCase(), mods }]);
+    else if (e.key.length === 1) send([{ k: "text", text: e.key }]);
   };
 
   const screenshot = async () => {
@@ -275,41 +336,52 @@ export function MirrorPage() {
             ref={canvas}
             className={s.screen}
             tabIndex={0}
-            aria-label={`${peer.info.name}'s screen. Click to tap, drag to swipe, type to enter text.`}
-            onPointerDown={onDown}
-            onPointerMove={onMove}
-            onPointerUp={onUp}
+            aria-label={
+              computer
+                ? `${peer.info.name}'s screen. Your mouse and keyboard control it.`
+                : `${peer.info.name}'s screen. Click to tap, drag to swipe, type to enter text.`
+            }
+            onPointerDown={computer ? pcDown : onDown}
+            onPointerMove={computer ? pcMove : onMove}
+            onPointerUp={computer ? pcUp : onUp}
             onPointerCancel={() => {
               if (press.current) window.clearTimeout(press.current.timer);
               press.current = null;
             }}
-            onWheel={onWheel}
-            onKeyDown={onKey}
+            onWheel={computer ? pcWheel : onWheel}
+            onKeyDown={computer ? pcKey : onKey}
             onContextMenu={(e) => {
               e.preventDefault();
-              send([{ k: "nav", action: "back" }]);
+              if (!computer) send([{ k: "nav", action: "back" }]);
             }}
           />
         </div>
       </div>
 
-      <nav className={s.nav} aria-label="Phone buttons">
-        <Button variant="ghost" icon="back" onPress={() => send([{ k: "nav", action: "back" }])}>
-          Back
-        </Button>
-        <Button variant="ghost" icon="home" onPress={() => send([{ k: "nav", action: "home" }])}>
-          Home
-        </Button>
-        <Button variant="ghost" icon="recents" onPress={() => send([{ k: "nav", action: "recents" }])}>
-          Recent apps
-        </Button>
-        <Button variant="ghost" icon="bell" onPress={() => send([{ k: "nav", action: "notifications" }])}>
-          Notifications
-        </Button>
-        <Button variant="ghost" icon="lock" onPress={() => send([{ k: "nav", action: "lock_screen" }])}>
-          Lock
-        </Button>
-      </nav>
+      {computer ? (
+        <p className={s.footHint}>
+          Click the screen to control {peer.info.name}. Shortcuts like Ctrl+C go to it while the screen has
+          focus.
+        </p>
+      ) : (
+        <nav className={s.nav} aria-label="Phone buttons">
+          <Button variant="ghost" icon="back" onPress={() => send([{ k: "nav", action: "back" }])}>
+            Back
+          </Button>
+          <Button variant="ghost" icon="home" onPress={() => send([{ k: "nav", action: "home" }])}>
+            Home
+          </Button>
+          <Button variant="ghost" icon="recents" onPress={() => send([{ k: "nav", action: "recents" }])}>
+            Recent apps
+          </Button>
+          <Button variant="ghost" icon="bell" onPress={() => send([{ k: "nav", action: "notifications" }])}>
+            Notifications
+          </Button>
+          <Button variant="ghost" icon="lock" onPress={() => send([{ k: "nav", action: "lock_screen" }])}>
+            Lock
+          </Button>
+        </nav>
+      )}
     </div>
   );
 }

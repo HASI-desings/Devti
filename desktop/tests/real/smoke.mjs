@@ -185,6 +185,26 @@ try {
   const m = simOut.match(/screen frames=5 size=(\d+)x(\d+) jpeg=(true|false)/);
   if (!m || m[3] !== "true") throw new Error(`bad frames: ${m?.[0]}`);
   console.log(`PASS: Hub screen streamed to the phone (${m[1]}×${m[2]} JPEG frames)`);
+  // Phase 4: one keyboard and mouse — the phone stands in for a laptop to the right.
+  await invoke("set_screen_layout", {
+    layout: { enabled: true, links: [{ device: peer.info.id, edge: "right" }] },
+  });
+  const xdo = (args) =>
+    new Promise((resolve) => spawn("xdotool", args, { stdio: "ignore" }).on("exit", resolve));
+  await xdo(["mousemove", "700", "450"]);
+  await sleep(300);
+  await xdo(["mousemove", "1439", "450"]);
+  await waitSim("remote input: move_to", 10000);
+  await sleep(300);
+  await xdo(["mousemove_relative", "--", "40", "10"]);
+  await waitSim("remote input: move", 10000);
+  const info = await invoke("screen_layout");
+  if (!info.active) throw new Error("edge switching should be active");
+  await xdo(["mousemove_relative", "--", "-80", "0"]);
+  await sleep(600);
+  if ((await invoke("screen_layout")).active) throw new Error("pointer should be back");
+  await invoke("set_screen_layout", { layout: { enabled: false, links: [] } });
+  console.log("PASS: pointer crossed the screen edge to the other device and came back");
   await click(`//nav//button[contains(., "Control")]`);
   await sleep(900);
   await shot("08b-control");
