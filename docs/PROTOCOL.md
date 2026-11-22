@@ -155,6 +155,25 @@ HandoffItem = { "kind": "url" / "text" / "media", ? "url": tstr, ? "title": tstr
 - A handoff that isn't an http(s) link or plain text is refused on both ends (no `file:`,
   `javascript:` or app schemes).
 
+### Phase 7 — reach and shared folders
+
+```cddl
+Reach     = { "t": "reach", "addrs": [* tstr] }       ; ≤ 16 "ip:port" / "[v6]:port" / "host:port"; [] = remote access off
+FsList    = { "t": "fs_list", "path": tstr }          ; virtual path; "/" lists the shared folders; needs `browse`
+FsListing = { "t": "fs_listing", "path": tstr, "entries": [* FsEntry], ? "truncated": bool, ? "error": tstr }
+FsGet     = { "t": "fs_get", "path": tstr }           ; needs `browse`; the file comes as a normal file stream
+FsError   = { "t": "fs_error", "path": tstr, "error": tstr }
+FsEntry   = { "name": tstr, "dir": bool, ? "size": uint, ? "modified": int }   ; ≤ 2000 per listing, hidden files omitted
+```
+
+- `Reach` is sent right after every handshake (and when the setting changes). Receivers keep
+  valid entries, try them after local addresses when the device is offline, and resolve DNS
+  names at each attempt. Dialling still requires the pinned certificate (§1).
+- Virtual paths are `/<shared folder name>/<part>/…`. The owner refuses `.`, `..`, parts with
+  `\` or `:`, and anything whose canonical path (after following links) leaves the shared folder.
+- Sessions report their path to the UI: `lan`, `vpn` (100.64.0.0/10, `fd7a:115c::/32`) or
+  `internet`.
+
 ### Audio stream (`"stream": "audio"`, opened by the device that has the sound)
 
 ```cddl

@@ -4,8 +4,9 @@ Devti can be extended in two ways:
 
 1. **Device profiles** — declarative YAML files that teach Devti a Bluetooth accessory's vendor
    protocol. No code runs, so they need no sandbox. *(Available now.)*
-2. **Plugins** — sandboxed WebAssembly modules that add features, rule triggers and actions,
-   and dashboard widgets. *(See [Plugins](#plugins) below.)*
+2. **Plugins** — small WebAssembly programs that add commands (on the Hub, your phone's
+   remote and deck, and in rules) and react to events, inside a sealed sandbox.
+   *(See [Plugins](#plugins) below.)*
 
 ---
 
@@ -124,5 +125,144 @@ include or copy their code; it reimplements what they documented:
 
 ## Plugins
 
-The plugin SDK arrives with Phase 7. This section will describe its WebAssembly interface,
-its permissions and a complete example plugin.
+A plugin is a folder with two files:
+
+```
+link-cleaner/
+├── devti-plugin.json   the manifest: who it is and what it may do
+└── plugin.wasm         the program, compiled to WebAssembly
+```
+
+Add it in **Plugins → Add a plugin**. The Hub shows what it asks for in plain words; nothing
+runs until you agree. A working example lives in [`plugins/link-cleaner`](../plugins/link-cleaner):
+it removes tracking parameters (`utm_…`, `fbclid`, `gclid`…) from links you copy.
+
+### The sandbox
+
+Plugins run in [Extism](https://extism.org) (wasmtime), one thread per plugin:
+
+| Limit | Value |
+|---|---|
+| Files, processes, environment | none — WASI is off |
+| Memory | 64 MiB |
+| Time per call | 2 seconds, then the call is stopped |
+| Web requests | only to hosts listed as `http:<host>` permissions |
+| Size of `plugin.wasm` | 32 MB |
+| Events waiting | 64; a plugin that can't keep up misses events, Devti never waits |
+
+Everything else goes through Devti's host functions, and each one checks the plugin's granted
+permissions first. A refused call stops the plugin's call with "this plugin wasn't allowed …",
+which appears in its *Recent activity*.
+
+### Manifest
+
+```json
+{
+  "id": "link-cleaner",
+  "name": "Link cleaner",
+  "version": "1.0.0",
+  "description": "Removes tracking parameters from links you copy.",
+  "author": "You",
+  "permissions": ["clipboard:read", "clipboard:write", "notify", "events:clipboard"],
+  "commands": [{ "id": "clean", "name": "Clean the copied link" }]
+}
+```
+
+- `id`: 1–40 characters of `a-z 0-9 - _`. Installing a plugin with an existing id updates it.
+- `commands`: up to 20, each with a unique `id` and a `name` people see.
+- An update that asks for **more** permissions stops until it's turned on again, which
+  approves the new list. Unknown permissions are refused outright.
+
+### Permissions
+
+| Permission | What the person is told |
+|---|---|
+| `notify` | Show notifications on this computer |
+| `clipboard:read` | Read this computer's clipboard |
+| `clipboard:write` | Change this computer's clipboard (which may then sync to your devices) |
+| `devices` | See your devices' names, kinds, battery and whether they're online |
+| `send` | Put text on your devices' clipboards |
+| `events:device` | Be told when a device connects or disconnects |
+| `events:clipboard` | Be told when text is copied on another device — it receives the text |
+| `events:notification` | Be told about phone notifications — it receives their text |
+| `events:battery` | Be told when a device's battery runs low |
+| `http:<host>` | Make web requests to `<host>` (one exact host per permission) |
+
+### What a plugin exports
+
+| Export | Input | Output |
+|---|---|---|
+| `command` | the command `id` | text shown to the person (Hub, phone remote, rule log) |
+| `on_event` | an event as JSON (below) | ignored |
+
+Both are optional. Commands appear in the Hub's command catalog as
+`plugin:<plugin id>:<command id>`, so a phone can run them from its remote or deck, and a rule
+can run them with *Run a saved command*.
+
+### Events
+
+```json
+{ "type": "device", "device": { "id": "…", "name": "Pixel 8", "kind": "phone", "online": true, "battery": 76 } }
+{ "type": "clipboard", "from": "…", "from_name": "Pixel 8", "text": "https://…" }
+{ "type": "notification", "from": "…", "from_name": "Pixel 8", "app": "Messages", "title": "Ayesha", "text": "…" }
+{ "type": "battery", "id": "…", "name": "Pixel 8", "percent": 14 }
+```
+
+`device` is sent only when a device connects or disconnects, not for every status update.
+
+### Host functions
+
+All take and return strings (Extism's `ExtismHost` namespace):
+
+| Function | Needs | Input → output |
+|---|---|---|
+| `devti_log(line)` | — | adds a line to the plugin's *Recent activity* |
+| `devti_notify(json)` | `notify` | `{"title","body"}` → `""` |
+| `devti_clipboard_get("")` | `clipboard:read` | → the clipboard text |
+| `devti_clipboard_set(text)` | `clipboard:write` | → `""` (≤ 256 KB) |
+| `devti_devices("")` | `devices` | → a JSON array like the `device` event's |
+| `devti_send_text(json)` | `send` | `{"device","text"}` → `""` (lands on that device's clipboard) |
+
+### Writing one in Rust
+
+```toml
+# Cargo.toml
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+extism-pdk = "1.4"
+```
+
+```rust
+use extism_pdk::*;
+
+#[host_fn]
+extern "ExtismHost" {
+    fn devti_clipboard_get(unused: String) -> String;
+    fn devti_clipboard_set(text: String) -> String;
+}
+
+#[plugin_fn]
+pub fn command(id: String) -> FnResult<String> {
+    let text = unsafe { devti_clipboard_get(String::new())? };
+    unsafe { devti_clipboard_set(text.trim().to_string())? };
+    Ok(format!("Ran {id}."))
+}
+```
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo build --release --target wasm32-unknown-unknown
+cp target/wasm32-unknown-unknown/release/your_plugin.wasm plugin.wasm
+```
+
+Any language with an Extism PDK works the same way (JavaScript, Go, Zig, C, AssemblyScript…):
+import the host functions above from `extism:host/user` and export `command` / `on_event`.
+
+### How it's tested
+
+`plugins/link-cleaner` has unit tests for its link logic, and CI builds it to WebAssembly and
+runs it inside the Hub's real sandbox with a stand-in for the computer: the command cleans the
+clipboard, an event from another device is cleaned too, and the same plugin with only
+`clipboard:read` is refused when it tries to write.

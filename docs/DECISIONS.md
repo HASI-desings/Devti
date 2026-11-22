@@ -529,6 +529,43 @@ clipboard. YouTube links carry `t=` so a video resumes at the same second. On Li
 phone" reads the playing media's URL and position over MPRIS; elsewhere it sends the link on the
 clipboard.
 
+## Phase 7 — final decisions
+
+### D-48 · Reaching devices away from home — Decided: **exchange reach addresses; private networks do the routing** (D-28 refined)
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Each device tells its peers its overlay-network and typed addresses; peers dial them with the same pinned TLS** | No server of ours; works with Tailscale/Headscale, ZeroTier, WireGuard and port forwarding; zero new trust | The user needs one of those (Tailscale is free and two taps) |
+| iroh relays + hole punching | Works with no setup | Default relays are a third party's; self-hosting a relay is a server to run |
+| WebRTC + public STUN/TURN | Ubiquitous | A second identity system and a signalling server |
+
+The preliminary note said Tailscale "looks like a LAN" — it doesn't for discovery (mDNS
+doesn't cross it), so devices now *tell* each other their reach addresses once they meet.
+Peers keep them (≤ 16, validated), resolve DNS names at each dial, and try them after local
+ones. Any address can be wrong or hostile without harm: the connection still has to present
+the paired certificate. Off by default; the UI shows which path a session uses.
+
+### D-49 · Plugins — Decided: **Extism on wasmtime, permissioned host functions** (D-30 confirmed)
+
+Extism was the preliminary pick and held up: it gives memory and time limits, an HTTP host
+allow-list and PDKs for many languages. Devti adds the policy: WASI off (no files), 64 MiB,
+2 s per call, one thread per plugin, host functions that check a plain-language permission
+list the person approved, re-approval when an update asks for more, and events only for the
+categories a plugin asked for. Commands join the existing catalog, so phones and rules use them
+with no new protocol. Cost: the Hub carries the wasmtime runtime, which makes the installers larger (measured in QA.md).
+
+### D-50 · Shared folders — Decided: **virtual paths, resolved and re-checked on the owner**
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Owner shares named folders; peers see `/<name>/…`; owner canonicalises and re-checks every request** | No real path ever leaves the device; symlink and `..` escapes fail closed; downloads reuse resumable transfers | Read-only |
+| SMB / SFTP servers | Full file systems | Accounts, ports and services to secure — not $0 to operate safely |
+| Sync engine (Syncthing-like) | Offline copies | A different product |
+
+Browsing needs a new `browse` permission, on for trusted devices; records saved before it
+existed read as off. On Android, sharing the phone's folders needs "All files access"
+(Android 11+), asked only when the person turns sharing on.
+
 ---
 
 ## Deviation log
@@ -548,3 +585,4 @@ clipboard.
 | D-27: Opus audio over datagrams | PCM over a QUIC stream (D-43) | No codec to cross-compile; LAN bandwidth is plentiful; Opus kept for remote access |
 | D-29: Windows virtual camera | Camera shown in the Hub; OBS virtual camera documented (D-44) | A camera driver must be signed to install; no free signed one Devti can ship |
 | Calls on the computer | Call card and controls; audio via Bluetooth Hands-Free (D-42) | Android gives carrier-call audio only to the default dialer |
+| D-28: "Tailscale looks like a LAN" | Devices exchange reach addresses (D-48) | mDNS doesn't cross overlay networks, so peers must be told the addresses |

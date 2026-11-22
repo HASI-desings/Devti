@@ -5,6 +5,45 @@ the results recorded here. A phase is only marked done when all of this passes.
 
 ---
 
+## Phase 7 — Reach and extensibility
+
+**Date:** 2026-11-22
+
+### Automated results
+
+| Suite | Result | Where it runs |
+|---|---|---|
+| Core unit tests | 87 / 87 pass; new: address validation, connection-path classification (IPv4/IPv6, Tailscale ranges), DNS resolution keeping the address family, shared-folder listing (folders first, hidden files out), every path-escape attempt (`..`, `.`, `\`, drive letters, symlinks out of the folder), listing caps; every new protocol message round-trips | local + CI (Linux, Windows) |
+| Core end-to-end | 27 / 27 pass; new `tests/reach_storage.rs`: typed addresses validated and delivered, turning remote access off clears them on the peer; nothing shared by default, unsafe folder names refused, listing and download over real QUIC, `..` refused with a reason, `browse` permission enforced | local + CI |
+| Plugin sandbox | 2 / 2 pass: manifest validation and permission wording; the example plugin, compiled to WebAssembly, runs in the real Extism sandbox — its command cleans the clipboard, a clipboard event from another device is cleaned, and with only `clipboard:read` its write is refused | local + CI |
+| Example plugin | 2 / 2 pass (tracking parameters removed, everything else kept; several links in one text) | local + CI |
+| Mobile bindings (JVM) | 7 / 7 pass; the pairing test adds Phase 7: a shared folder listed into the reducer's state, a `..` refusal, a download, reach addresses delivered, a bad address refused | local + CI |
+| Hub host unit tests | 20 / 20 pass | local + CI |
+| Desktop UI flows (Playwright) | 21 / 21 pass; new: share a folder and browse a device down a level and download; the plugin consent sheet and a command's output, then turning it off; reach addresses and validation | local + CI |
+| Desktop UI unit tests (Vitest) | 18 / 18 pass | local + CI |
+
+### Bugs found and fixed during Phase 7 QA
+- **A wrong assumption in the plan.** D-28 said Tailscale "looks like a LAN", so nothing was
+  needed. It doesn't for discovery: mDNS never crosses it, so devices away from home had no
+  address to dial. Devices now exchange their reach addresses (D-48).
+- **Plugin errors were unreadable.** A refused host call surfaced as "error while executing at
+  wasm backtrace…". The Hub now reports the root cause ("this plugin wasn't allowed
+  “clipboard:write”"); the sandbox test checks that wording.
+- **The `files` permission was described as "Send and browse files"** although it never covered
+  browsing. Browsing is its own permission now, and the copy says what each does.
+
+### Not verifiable in the build environment
+- No second network, Tailscale account or Android device here. Reaching a device through an
+  overlay network uses the same dial path the end-to-end tests exercise with typed addresses,
+  but a real away-from-home reconnection is on the manual checklist:
+  1. Tailscale on the Hub and the phone; *Reach from anywhere* on; meet at home once.
+  2. Phone on mobile data: it reconnects within a minute and the Hub's device page says
+     "Connected through your private network".
+  3. Phone: *Let my computers browse this phone* → All files access → the Hub lists Camera.
+  4. Phone: Browse the Hub's shared folder and download a file into Downloads/Devti.
+
+---
+
 ## Phase 6 — Communication and automation
 
 **Date:** 2026-11-22

@@ -135,6 +135,14 @@ than corrupted, and an unreadable peer row is skipped and logged, never fatal.
 - **`screen` sources** (Phase 6): a viewer can ask for the `camera` instead of the screen. The
   frame path, flow control and adaptation are the same, so the phone's camera inherits
   them.
+- **`reach`** (Phase 7): remote access. With it on, a device sends its peers the addresses
+  found on overlay-network interfaces (Tailscale's 100.64/10, WireGuard, ZeroTier…) plus ones
+  the user typed; peers store them per device and the reconnect loop dials them after local
+  addresses (DNS resolved at each attempt). `ConnectionKind::of` labels each session's path.
+- **`storage`** (Phase 7): shared folders. The owner keeps `{name, path}` pairs; peers use
+  virtual paths. `resolve` splits, rejects unsafe parts, canonicalises and checks the result
+  still starts with the shared folder; listings run on a blocking thread and are capped at
+  2,000 entries; downloads call the ordinary `send_file`.
 - **`api`** (feature `api`, Hub only): the local HTTP + WebSocket API (axum on 127.0.0.1, bearer
   token, loopback-Host check). The `cli/` crate is its client: `devti send|ring|clip|run|watch`.
 
@@ -236,6 +244,13 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
   Wi-Fi watcher (NetworkManager or `netsh`) and a BLE scanner for the phone's beacon. Actions
   reuse the remote and accessory code paths, and every run is logged with its outcome.
 
+- **`plugins.rs`** (Phase 7) hosts WebAssembly plugins with Extism: manifest validation and
+  plain-language permissions, one thread and one sandbox per plugin (no WASI, 64 MiB, 2 s per
+  call, HTTP only to granted hosts), host functions behind a `HostApi` trait (the real one
+  talks to the OS and node; tests use an in-memory one), approval tracking in settings, events
+  routed by category, and plugin commands merged into the catalog that `remote.rs` publishes
+  and runs.
+
 ### React UI (`src/`)
 - **`bridge/`**: one `Bridge` interface with two implementations. `tauri.ts` (the real one) is
   `invoke` plus `listen`. `preview.ts` is a clearly labelled simulation used only in a plain
@@ -270,6 +285,11 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
   - **automation**: the rules with switches and "Try it", a builder for every trigger and
     action, and the recent runs with failures explained.
   - **device page**: "Continue there" and "Use camera" for phones.
+
+  Phase 7 adds **Files → Browse** (share folders here; browse another device with
+  breadcrumbs and download), **Settings → Reach from anywhere** (addresses found, typed ones,
+  the three ways to set it up), the **Plugins** page (consent sheet, switches, commands with
+  their output, permissions, recent activity) and the connection path on a device's page.
 - **`ui/`**: React Aria primitives restyled with Devti tokens.
 
 ---
@@ -337,6 +357,11 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
   - Consent: `ScreenShareActivity` asks before anything leaves the phone. For the camera, Devti
     asks (skipped right after the user offered it), then Android. For the microphone, Android
     asks; for the phone's sound, Android's casting dialog asks too.
+- **Phase 7**: `ui/browse/Browse.kt` browses a computer's shared folders (device chips, a
+  path row, tap a folder to open it or a file to download it into Downloads/Devti; the
+  reducer keeps listings). Home adds *Reach from anywhere* and *Let my computers browse this
+  phone*, which shares the media and document folders read-only via `PhoneFolders` after
+  Android's storage access.
 - **Screen tab and `ScreenViewerActivity`** (Phase 4): a computer's screen shown full screen.
   Frames come through the `FrameListener` callback into a conflated `StateFlow` and are decoded
   off the main thread. Touch maps to mouse: tap is a click, hold is a right-click, one finger
@@ -361,6 +386,7 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
 | Mobile bridge | Kotlin bindings + reducer against real Rust nodes on the JVM; the app's pure decisions (`Pure.kt`) | `android/jvm-check` |
 | UI logic | Vitest (store, voices, formatting, icons) | `desktop/src/**/*.test.ts` |
 | UI flows | Playwright on the built UI (preview mode) | `desktop/tests/e2e` |
+| Plugins | The example plugin, built to WebAssembly, runs in the Hub's real sandbox against a stand-in host | `desktop/src-tauri/src/plugins.rs` + CI |
 | Real app | WebDriver drives the actual WebKitGTK binary to pair with `sim_device` over real QUIC | `desktop/tests/real/smoke.mjs` |
 
 `core/examples/sim_device.rs` is a headless simulated phone for development: it pairs via link

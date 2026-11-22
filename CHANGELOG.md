@@ -5,6 +5,20 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Phase 7 — Reach and extensibility
+#### Added
+- Reach from anywhere: devices exchange the addresses they have on private networks
+  (Tailscale/Headscale, WireGuard, ZeroTier) or typed ones, and reconnect through them;
+  sessions report their path (local, private network, internet).
+- Shared folders: share folders read-only; browse other devices with breadcrumbs and download
+  as ordinary transfers; new *Browse shared folders* permission. Android browses computers and
+  can share its media and document folders.
+- Plugins: WebAssembly plugins on Extism with a consent sheet, permission-checked host
+  functions, events and commands that reach the phone's remote, deck and rules; the example
+  plugin *Link cleaner*; developer guide in docs/PLUGINS.md.
+- Tests: reach and storage unit and end-to-end tests, path-escape tests, the example plugin in
+  the real sandbox, JVM binding round trips and three UI flows.
+
 ### Phase 6 — Communication and automation
 #### Added
 - Core: texts (conversations, messages, send, new-text push), calls (state, answer, decline,

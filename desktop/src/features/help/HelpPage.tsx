@@ -86,6 +86,17 @@ const MATRIX: { feature: string; cells: [Support, Support, Support, Support, Sup
     cells: ["yes", "yes", "yes", "yes", "no"],
     note: "Walk-away needs Bluetooth on this computer.",
   },
+  {
+    feature: "Reach from anywhere",
+    cells: ["yes", "yes", "yes", "yes", "no"],
+    note: "Through Tailscale, WireGuard, ZeroTier or a forwarded port.",
+  },
+  {
+    feature: "Browse and download shared folders",
+    cells: ["yes", "yes", "yes", "yes", "no"],
+    note: "Read-only. Android can share its media and document folders.",
+  },
+  { feature: "WebAssembly plugins", cells: ["yes", "yes", "yes", "no", "no"], note: "Run on the computer." },
 ];
 const COLUMNS = ["Windows", "Linux X11", "Linux Wayland", "Android", "iPhone and iPad"];
 

@@ -15,7 +15,7 @@ Free, open-source, local-first. Your laptops, phones, tablets and Bluetooth acce
 
 ## Where Devti is today
 
-Devti is being built in eight phases. **Phases 1–6 are complete**: the secure core, pairing,
+Devti is being built in eight phases. **Phases 1–7 are complete**: the secure core, pairing,
 automatic reconnection, the desktop Hub with its first-run wizard and ecosystem map, the Android
 companion app, continuity (clipboard, files, notifications, find my device, battery history) and
 control (phone as touchpad, keyboard, remote and shortcuts deck; mirror and control an Android
@@ -25,7 +25,9 @@ mouse across computers) and Bluetooth accessories (recognised automatically, wit
 built from community device profiles) and communication and automation (texts and calls from an
 Android phone on the computer, continue-where-you-left-off, the phone as the computer's
 microphone, speaker source and webcam, and rules that react to your devices — including locking
-the computer when you walk away). Everything listed under "What works now" is real and tested; everything
+the computer when you walk away) and reach and extensibility (reconnect from anywhere through a
+private network you control, browse and download from another device's shared folders, and
+sandboxed WebAssembly plugins). Everything listed under "What works now" is real and tested; everything
 else is shown as planned, never faked.
 
 | Phase | Scope | Status |
@@ -36,8 +38,8 @@ else is shown as planned, never faked.
 | 4. Screens | Mirror, single-window cast, extended displays, multi-screen layout, one keyboard and mouse | **Done** |
 | 5. Bluetooth | Accessory manager, automatic feature detection, device profiles, audio relay | **Done** (audio relay ships with Phase 6's audio streams) |
 | 6. Communication + automation | SMS, calls, rules engine, proximity, handoff, webcam and mic sharing, audio relay | **Done** |
-| 7. Reach + extensibility | Remote access, plugin SDK, shared storage browser | Next |
-| 8. iOS + release | iPhone and iPad app, final polish, v1.0.0 | Planned |
+| 7. Reach + extensibility | Remote access, plugin SDK, shared storage browser | **Done** |
+| 8. iOS + release | iPhone and iPad app, final polish, v1.0.0 | Next |
 
 ## What works now
 
@@ -68,6 +70,14 @@ else is shown as planned, never faked.
   you open, the network you join, and your phone walking away or coming back. They can notify,
   lock, set Do Not Disturb, run commands, open apps, switch audio output, change accessory
   settings or ring a device. Locking on walk-away is off until you turn it on.
+- **Reach from anywhere.** Turn it on and your devices tell each other the addresses they have on
+  a private network such as Tailscale (free) — or one you set up — so they reconnect at work or on
+  mobile data. Still end-to-end encrypted and pinned to the devices you paired; no Devti server.
+- **Browse another device.** Share folders from a computer (or your phone's photos and
+  documents) and browse and download from them on your other devices. Read-only, and nothing
+  outside a shared folder can be reached.
+- **Plugins.** Add small WebAssembly programs that run sealed off from your computer and can only
+  do what you approved. Their commands show up on your phone's remote and deck, and in rules.
 - **Clipboard everywhere.** Copy on one device, paste on another. The Hub keeps a history of 50
   clips. On Android, text copied on the computer arrives instantly. Going the other way, Android
   only lets apps read the clipboard while they're open, so Devti sends it when you open the app,
@@ -155,6 +165,9 @@ else is shown as planned, never faked.
 | Phone camera as a webcam | — ¹¹ | ✅ | ✅ | ✅ sends | — |
 | Rules (automation) | ✅ | ✅ | ✅ | via Hub | via Hub |
 | Lock when the phone walks away | ✅ | ✅ | ✅ | ✅ beacon | — |
+| Reach from anywhere (Tailscale, WireGuard, port forward) | ✅ | ✅ | ✅ | ✅ | Phase 8 |
+| Browse and download shared folders | ✅ | ✅ | ✅ | ✅ (browse + share) | — |
+| WebAssembly plugins | ✅ | ✅ | ✅ | via Hub | via Hub |
 
 ¹ Uses the Wayland data-control protocol where the compositor offers it (KDE, wlroots-based),
 otherwise the XWayland clipboard bridge. ² Android 10+ allows reading the
@@ -367,6 +380,29 @@ alert (on), earbuds taking over the computer's sound (off) and locking when your
 sense when you walk away** on the phone: it sends a tiny Bluetooth signal only your paired
 computers recognise, and it changes every 15 minutes so nobody can follow you by it.
 
+### Reach from anywhere
+**Settings → Reach from anywhere** lists the addresses this computer has. The easiest road is
+[Tailscale](https://tailscale.com) (free; or the self-hosted Headscale): install it on the computer
+and the phone and sign in to the same account. Then turn on *Reach from anywhere* on the computer
+(and on the phone, under Home). While the devices are together they swap addresses; apart, they
+reconnect through Tailscale by themselves. A device's page says whether it's connected over your
+local network, your private network or the internet. Prefer your own setup? Forward UDP port
+47810 to the computer and type your address (for example `home.example.org:47810`).
+
+### Browse another device
+On a computer, **Files → Browse → Share a folder**. Your other devices can then open **Files →
+Browse** (computer) or **Browse … shared folders** (phone) and download anything inside it; the
+file arrives like any other transfer. To share your phone's Camera, Pictures, Downloads,
+Documents, Music and Movies folders, turn on **Let my computers browse this phone** (Android asks
+for storage access). Sharing is read-only, hidden files are never listed, and a device needs the
+*Browse shared folders* permission.
+
+### Plugins
+**Plugins → Add a plugin** and choose the plugin's folder. Devti shows what it will be able to do
+before anything runs. Try the example in `plugins/link-cleaner` (build steps in
+[docs/PLUGINS.md](docs/PLUGINS.md#plugins)); its *Clean the copied link* command then also appears
+on your phone's remote. Write your own in Rust, JavaScript, Go and more — see the same guide.
+
 ### Command line and API
 `devti` comes with the Linux packages (`/usr/bin/devti`) and sits next to the Windows installers.
 It finds the API token by itself:
@@ -402,6 +438,8 @@ to open Devti, pair, pause or quit. Turn this off in **Settings → Startup and 
 | Texts or calls don't show on the computer | On the phone: Home → *Allow texts and calls*, and check that the computer still has *Notifications* permission on the phone. |
 | No "Devti Camera" in video apps (Linux) | Load the module: `sudo modprobe v4l2loopback card_label="Devti Camera" exclusive_caps=1`. |
 | Walk-away never triggers | The computer needs Bluetooth on, and the phone the *Nearby devices* permission. Move a few metres further: Devti waits for a clearly weak signal before saying "away". |
+| Devices don't reconnect away from home | Turn on *Reach from anywhere* on both, let them meet once at home, and check both are signed in to Tailscale (or your VPN is up). |
+| A plugin says "wasn't allowed" | It tried something it didn't ask for. Update the plugin, or ask its author to list that permission. |
 | Need logs for a bug report | **Settings → Diagnostics → Export** saves a redacted report to Downloads. |
 
 ## Privacy and security model
