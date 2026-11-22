@@ -391,10 +391,9 @@ test("browse: share a folder here, browse a device's folders and download a file
   await expect(page.getByRole("tab", { name: "Pixel 8" })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "Documents", exact: true }).click();
   await expect(page.getByText("Thesis draft.pdf", { exact: true })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Folder" }).getByRole("button", { name: "Documents" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expect(
+    page.getByRole("navigation", { name: "Folder" }).getByRole("button", { name: "Documents" }),
+  ).toHaveAttribute("aria-current", "page");
   await page.getByRole("button", { name: "Download Thesis draft.pdf" }).click();
   await expect(page.getByText("Downloading Thesis draft.pdf", { exact: false })).toBeVisible();
   await page.getByRole("radio", { name: "Transfers" }).click({ force: true });
