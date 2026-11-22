@@ -15,7 +15,7 @@ Free, open-source, local-first. Your laptops, phones, tablets and Bluetooth acce
 
 ## Where Devti is today
 
-Devti is being built in eight phases. **Phases 1–7 are complete**: the secure core, pairing,
+Devti was built in eight phases, **all complete**: the secure core, pairing,
 automatic reconnection, the desktop Hub with its first-run wizard and ecosystem map, the Android
 companion app, continuity (clipboard, files, notifications, find my device, battery history) and
 control (phone as touchpad, keyboard, remote and shortcuts deck; mirror and control an Android
@@ -39,7 +39,7 @@ else is shown as planned, never faked.
 | 5. Bluetooth | Accessory manager, automatic feature detection, device profiles, audio relay | **Done** (audio relay ships with Phase 6's audio streams) |
 | 6. Communication + automation | SMS, calls, rules engine, proximity, handoff, webcam and mic sharing, audio relay | **Done** |
 | 7. Reach + extensibility | Remote access, plugin SDK, shared storage browser | **Done** |
-| 8. iOS + release | iPhone and iPad app, final polish, v1.0.0 | Next |
+| 8. iOS + release | iPhone and iPad app, final polish, v1.0.0 | **Done** |
 
 ## What works now
 
@@ -136,37 +136,37 @@ else is shown as planned, never faked.
 
 | | Windows 10/11 | Linux X11 | Linux Wayland | Android 8+ | iPhone / iPad |
 |---|:-:|:-:|:-:|:-:|:-:|
-| Pair with QR code or 6-digit code | ✅ | ✅ | ✅ | ✅ | Phase 8 |
-| Encrypted automatic reconnection | ✅ | ✅ | ✅ | ✅ | Phase 8 |
-| Live battery level | ✅ (laptops) | ✅ (laptops) | ✅ (laptops) | ✅ | Phase 8 |
-| Per-device permissions, pause, remove | ✅ | ✅ | ✅ | ✅ | Phase 8 |
-| Activity log | ✅ | ✅ | ✅ | via Hub | Phase 8 |
+| Pair with QR code or 6-digit code | ✅ | ✅ | ✅ | ✅ | ✅ (QR) |
+| Encrypted automatic reconnection | ✅ | ✅ | ✅ | ✅ | ✅ while open ¹² |
+| Live battery level | ✅ (laptops) | ✅ (laptops) | ✅ (laptops) | ✅ | ✅ |
+| Per-device permissions, pause, remove | ✅ | ✅ | ✅ | ✅ | pause, remove |
+| Activity log | ✅ | ✅ | ✅ | via Hub | via Hub |
 | Bluetooth accessory detection | ✅ | ✅ (BlueZ) | ✅ (BlueZ) | — | — |
-| Clipboard sync (text) | ✅ | ✅ | ✅ ¹ | ✅ ² | Phase 8 |
-| File transfer, resumable | ✅ | ✅ | ✅ | ✅ (share sheet) | Phase 8 |
+| Clipboard sync (text) | ✅ | ✅ | ✅ ¹ | ✅ ² | ✅ ¹³ |
+| File transfer, resumable | ✅ | ✅ | ✅ | ✅ (share sheet) | ✅ (Files app) |
 | Phone notifications + actions + reply | shows | shows | shows | ✅ sends | — ³ |
-| Do Not Disturb everywhere | ✅ | ✅ | ✅ | ✅ | Phase 8 |
-| Find my device | ✅ | ✅ | ✅ | ✅ | Phase 8 |
-| Battery history + low-battery alert | ✅ | ✅ | ✅ | ✅ (alerts) | Phase 8 |
-| Controlled by a phone (touchpad, keys, media, power, apps, commands) | ✅ | ✅ | ✅ ⁴ | — | Phase 8 (as remote) |
-| Shortcuts deck (designed on the Hub) | ✅ | ✅ | ✅ | ✅ (deck) | Phase 8 |
+| Do Not Disturb everywhere | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Find my device | ✅ | ✅ | ✅ | ✅ | ✅ while open |
+| Battery history + low-battery alert | ✅ | ✅ | ✅ | ✅ (alerts) | ✅ (alerts) |
+| Controlled by a phone (touchpad, keys, media, power, apps, commands) | ✅ | ✅ | ✅ ⁴ | — | ✅ (as remote) |
+| Shortcuts deck (designed on the Hub) | ✅ | ✅ | ✅ | ✅ (deck) | ✅ (deck) |
 | Mirror + control an Android phone | ✅ | ✅ | ✅ | ✅ shares ⁵ | — ³ |
 | Local API + `devti` CLI | ✅ | ✅ | ✅ | — | — |
-| Show this screen / a window on other devices | ✅ | ✅ | ✅ ⁶ | ✅ (views) | Phase 8 (views) |
+| Show this screen / a window on other devices | ✅ | ✅ | ✅ ⁶ | ✅ (views) | ✅ (views, tap to click) |
 | Mirror and control another computer | ✅ | ✅ | ✅ | — | — |
 | One keyboard and mouse across computers | ✅ | ✅ | — ⁷ | — | — |
 | Accessories: battery, signal, health | ✅ (BLE) | ✅ | ✅ | — | — |
 | Accessories: vendor controls (ANC, EQ…) | — ⁸ | ✅ | ✅ | — | — |
 | Texts: read, reply, new | ✅ shows | ✅ shows | ✅ shows | ✅ sends | — ³ |
 | Calls: who's calling, answer, decline, mute, end | ✅ shows | ✅ shows | ✅ shows | ✅ ⁹ | — ³ |
-| Continue on another device (links, media time) | ✅ | ✅ (+ what's playing) | ✅ (+ what's playing) | ✅ | Phase 8 |
+| Continue on another device (links, media time) | ✅ | ✅ (+ what's playing) | ✅ (+ what's playing) | ✅ | ✅ (receives) |
 | Phone sound out of the computer | ✅ | ✅ | ✅ | ✅ sends (Android 10+) | — |
 | Phone as the computer's microphone | ✅ ¹⁰ | ✅ | ✅ | ✅ sends | — |
 | Phone camera as a webcam | — ¹¹ | ✅ | ✅ | ✅ sends | — |
 | Rules (automation) | ✅ | ✅ | ✅ | via Hub | via Hub |
 | Lock when the phone walks away | ✅ | ✅ | ✅ | ✅ beacon | — |
-| Reach from anywhere (Tailscale, WireGuard, port forward) | ✅ | ✅ | ✅ | ✅ | Phase 8 |
-| Browse and download shared folders | ✅ | ✅ | ✅ | ✅ (browse + share) | — |
+| Reach from anywhere (Tailscale, WireGuard, port forward) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Browse and download shared folders | ✅ | ✅ | ✅ | ✅ (browse + share) | ✅ (browse) |
 | WebAssembly plugins | ✅ | ✅ | ✅ | via Hub | via Hub |
 
 ¹ Uses the Wayland data-control protocol where the compositor offers it (KDE, wlroots-based),
@@ -184,13 +184,17 @@ computer, also pair the phone with it as a Bluetooth headset in the system's Blu
 ¹⁰ Windows has no free virtual-microphone driver: install VB-Audio's free Virtual Cable and pick
 "CABLE Output" as the microphone; otherwise the phone's mic plays on the speakers. ¹¹ Windows has
 no free virtual-camera driver Devti can ship; the camera shows in the Hub, and OBS's free
-virtual camera can pass it on (Window Capture → Start Virtual Camera).
+virtual camera can pass it on (Window Capture → Start Virtual Camera). ¹² iOS suspends apps soon
+after they leave the screen, so the iPhone is connected while Devti is open and reconnects the
+moment you return. ¹³ Send with the paste button (iOS asks every time an app reads the clipboard
+itself); text copied on the computer lands on the iPhone.
 
-**iPhone and iPad honesty box:** Apple doesn't allow any app to remote-control an iPhone, read SMS
-or calls, or mirror other apps' notifications. When the iOS app arrives it will do everything Apple
-allows: act as a screen, remote and shortcuts deck, share files and the clipboard while open, and
-receive notifications from your Hub. Building it needs a Mac with Xcode; App Store distribution
-needs a paid Apple account, so it will be a build-it-yourself app.
+**iPhone and iPad honesty box:** Apple doesn't allow any app to remote-control an iPhone, read
+texts or calls, mirror other apps' notifications, share the screen without a recording extension,
+or stay connected in the background. The iPhone app does everything Apple allows — remote, deck,
+screen viewer, files, clipboard, browsing, find my iPhone — while it's open. Building it needs a Mac
+with Xcode; App Store distribution needs a paid Apple account, so it's build-it-yourself
+([ios/README.md](ios/README.md)).
 
 ---
 
