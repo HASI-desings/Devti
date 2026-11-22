@@ -5,6 +5,50 @@ the results recorded here. A phase is only marked done when all of this passes.
 
 ---
 
+## Phase 8 — iPhone, polish and release
+
+**Date:** 2026-11-22
+
+### Automated results
+
+| Suite | Result | Where it runs |
+|---|---|---|
+| iPhone app (simulator) | builds with Xcode 16.4; 4 / 4 tests pass — two real cores pair through the Swift bindings (same code on both screens), a clipboard and a shared-folder listing decode into the app's models; input JSON, 64-bit ids, colour parity with Android | CI (macOS) |
+| Everything from Phases 1–7 | green on Linux, Windows and Android (core 116, JVM 7, Hub host 20, Vitest 18, Playwright 21, real-app smoke, fuzzing, example plugin) | local + CI |
+
+### Performance (release build, CI, virtual display, simulated phone over real QUIC)
+
+| Target | Result | Status |
+|---|---|---|
+| Screen latency < 50 ms (capture → encode → send → received and acknowledged) | median **17 ms**, p95 21 ms, 1280×800 at up to 30 fps | met |
+| Idle CPU < 2 % of one core (phone connected, dashboard open, 60 s) | **0.1 %** | met |
+| Hub memory < 250 MB (app + WebKit processes, PSS) | **305 MB** | **not met** |
+
+Where the memory goes (PSS): about 136 MB is WebKitGTK itself — its libraries in three
+processes (UI, page, network) and the Mesa graphics stack it loads (≈ 18 MB of llvmpipe per
+process on a machine without a GPU driver). The rest is Devti: the Hub process (code and
+heap) and the page's JavaScript, DOM and rendering (~60 MB). Loading pages on demand and
+WebKit's document-viewer cache model were tried and measured; neither moved the number.
+Closing the window to the tray destroys the web view, leaving only the Hub process. A future
+release can move the window to a lighter renderer; until then the CI step reports memory as
+a warning with this breakdown, while CPU and latency stay hard gates.
+
+### Bugs found and fixed during Phase 8 QA
+- **Idle CPU looked like 12 %.** Two measurement artifacts: the test's own on-screen clock
+  kept its frame loop after removal, and the simulated phone changed its battery every 5 s (a
+  resting phone changes it every few minutes, and the core only sends changes). Fixed in the
+  test; per-process, per-thread and per-animation diagnostics now print with every run.
+- **Latency didn't include capture and encoding.** Frames are now stamped when the screen is
+  captured.
+- **iOS build:** an overlapping access to `URLComponents` (Swift exclusivity); the core build
+  script tripped `pipefail` looking for a Linux library name on macOS.
+
+### Not verifiable in the build environment
+- A physical iPhone and real networks away from home; the iPhone app is tested on the
+  simulator against the real core.
+
+---
+
 ## Phase 7 — Reach and extensibility
 
 **Date:** 2026-11-22

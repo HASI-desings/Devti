@@ -552,7 +552,7 @@ allow-list and PDKs for many languages. Devti adds the policy: WASI off (no file
 2 s per call, one thread per plugin, host functions that check a plain-language permission
 list the person approved, re-approval when an update asks for more, and events only for the
 categories a plugin asked for. Commands join the existing catalog, so phones and rules use them
-with no new protocol. Cost: the Hub carries the wasmtime runtime, which makes the installers larger (measured in QA.md).
+with no new protocol. Cost: the Hub carries the wasmtime runtime, which makes the installers larger.
 
 ### D-50 · Shared folders — Decided: **virtual paths, resolved and re-checked on the owner**
 
@@ -591,7 +591,8 @@ watches the real screen (1280 px, 30 fps, a constantly changing clock on screen)
 capture-to-acknowledged latency; then, connected but idle, the Hub's CPU is sampled for 60 s
 and its memory summed as PSS across the app and its WebKit processes. Frames are stamped
 when the screen is captured, so capture and JPEG encoding count towards latency. CI fails
-when a budget is exceeded, and uploads the numbers (QA.md records them).
+when CPU or latency exceeds its budget. Memory is reported as a warning with a per-mapping
+breakdown, because most of the overage is WebKitGTK itself (QA.md has the numbers).
 
 ### D-53 · Releases — Decided: **tag-triggered GitHub Actions builds, checksums, optional signing key**
 
