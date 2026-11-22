@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.update
 import uniffi.devti_ffi.DevtiException
 import uniffi.devti_ffi.DevtiMobile
 import uniffi.devti_ffi.EventListener
+import uniffi.devti_ffi.FrameListener
 import uniffi.devti_ffi.MobileConfig
 
 /**
@@ -67,6 +68,9 @@ import uniffi.devti_ffi.MobileConfig
  * - continuity: [platform] turns core events into Android actions (clipboard, ringing,
  *   notification actions, Do Not Disturb, moving received files to Downloads).
  */
+/** One frame of a computer's screen this phone is showing (Phase 4). */
+class ScreenFrame(val seq: Long, val width: Int, val height: Int, val latencyMs: Int, val fps: Int, val jpeg: ByteArray)
+
 class DevtiCore(private val context: Context) : EventListener {
     private val _state = MutableStateFlow(CoreState())
     val state: StateFlow<CoreState> = _state.asStateFlow()
@@ -93,6 +97,15 @@ class DevtiCore(private val context: Context) : EventListener {
         private set
 
     @Volatile private var lastSentClip: String? = null
+
+    // Only the newest frame matters: a StateFlow conflates, so a slow decoder skips frames.
+    private val _frames = MutableStateFlow<ScreenFrame?>(null)
+    val frames: StateFlow<ScreenFrame?> = _frames.asStateFlow()
+    private val frameListener = object : FrameListener {
+        override fun onFrame(deviceId: String, seq: ULong, width: UInt, height: UInt, latencyMs: UInt, fps: UByte, jpeg: ByteArray) {
+            _frames.value = ScreenFrame(seq.toLong(), width.toInt(), height.toInt(), latencyMs.toInt(), fps.toInt(), jpeg)
+        }
+    }
 
     @Synchronized
     fun start(): DevtiMobile? {
@@ -366,6 +379,20 @@ class DevtiCore(private val context: Context) : EventListener {
 
     fun requestCatalog(deviceId: String) {
         runCatching { node?.requestCatalog(deviceId) }
+    }
+
+    // ---- Phase 4: this phone shows a computer's screen
+
+    fun watchScreen(deviceId: String): String? = act {
+        _frames.value = null
+        val m = context.resources.displayMetrics
+        val width = maxOf(m.widthPixels, m.heightPixels).coerceIn(640, 1920)
+        node?.screenStart(deviceId, width.toUInt(), 30.toUByte(), frameListener)
+    }
+
+    fun stopWatching(deviceId: String) {
+        runCatching { node?.screenStop(deviceId) }
+        _frames.value = null
     }
 
     fun cancelTransfer(id: Long): String? = act { node?.cancelTransfer(id.toULong()) }

@@ -75,7 +75,7 @@ fun DevtiRoot(core: DevtiCore) {
     }
 }
 
-private enum class Tab(val label: String) { Home("Home"), Remote("Remote"), Deck("Deck") }
+private enum class Tab(val label: String) { Home("Home"), Remote("Remote"), Screen("Screen"), Deck("Deck") }
 
 /** Home, the remote for the computer, and its shortcuts deck. */
 @Composable
@@ -87,6 +87,7 @@ private fun Shell(core: DevtiCore, state: app.devti.android.core.state.CoreState
             when (tab) {
                 Tab.Home -> Home(core, state, onPairAnother)
                 Tab.Remote -> app.devti.android.ui.remote.Remote(core, state)
+                Tab.Screen -> app.devti.android.ui.screen.ScreenTab(state)
                 Tab.Deck -> app.devti.android.ui.remote.Deck(core, state)
             }
         }

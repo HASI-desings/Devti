@@ -290,6 +290,11 @@ impl super::Node {
         stop_sharing(&self.inner, peer);
     }
 
+    /// Whether this device asked to view `peer`'s screen and hasn't stopped.
+    pub fn is_viewing(&self, peer: &DeviceId) -> bool {
+        self.inner.screen.viewing.lock().contains(peer)
+    }
+
     /// Frames from devices this one is viewing.
     pub fn subscribe_frames(&self) -> broadcast::Receiver<ViewerFrame> {
         self.inner.screen.frames.subscribe()

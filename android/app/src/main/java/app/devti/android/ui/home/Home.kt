@@ -69,6 +69,7 @@ private val WORKS_NOW = listOf(
     "Touchpad, keyboard, media, power, apps, commands and presenter for your computer (Remote tab)",
     "Your computer's shortcuts deck (Deck tab)",
     "Your computer sees and controls this phone (screen sharing + Devti control)",
+    "This phone or tablet as a touch screen for your computer (Screen tab)",
 )
 
 @Composable
@@ -160,7 +161,7 @@ fun Home(core: DevtiCore, state: CoreState, onPairAnother: () -> Unit) {
         Card {
             WORKS_NOW.forEach { Text("• $it", style = Devti.type.small, color = c.textDim) }
             Text(
-                "Using this phone as a second screen, calls and SMS arrive in the next Devti updates.",
+                "Calls, SMS and Bluetooth accessories arrive in the next Devti updates.",
                 style = Devti.type.small,
                 color = c.textFaint,
             )

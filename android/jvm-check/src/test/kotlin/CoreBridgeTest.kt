@@ -22,6 +22,7 @@ import kotlin.test.assertTrue
 import uniffi.devti_ffi.DevtiException
 import uniffi.devti_ffi.DevtiMobile
 import uniffi.devti_ffi.EventListener
+import uniffi.devti_ffi.FrameListener
 import uniffi.devti_ffi.MobileConfig
 import uniffi.devti_ffi.PlatformSecretStore
 import uniffi.devti_ffi.coreVersion
@@ -171,6 +172,27 @@ class CoreBridgeTest {
         hub.core.reportRun(phoneId, "hello", true, "hi there")
         val result = phone.waitFor("run result") { it.runResults.isNotEmpty() }.runResults.first()
         assertEquals("hi there", result.output)
+
+        // Phase 4 through the bindings: the phone shows the hub's screen.
+        val shown = java.util.concurrent.LinkedBlockingQueue<Pair<Long, Int>>()
+        phone.core.screenStart(hubId, 1280u, 30.toUByte(), object : FrameListener {
+            override fun onFrame(deviceId: String, seq: ULong, width: UInt, height: UInt, latencyMs: UInt, fps: UByte, jpeg: ByteArray) {
+                shown.add(seq.toLong() to jpeg.size)
+            }
+        })
+        waitRaw("screen requested") { it.contains("\"screen_requested\"") && it.contains("\"on\":true") }
+        val pusher = Thread {
+            repeat(40) { i ->
+                hub.core.pushScreenFrame(1280u, 800u, byteArrayOf(0xFF.toByte(), 0xD8.toByte(), i.toByte(), 0xFF.toByte(), 0xD9.toByte()))
+                Thread.sleep(15)
+            }
+        }.apply { start() }
+        val first = shown.poll(10, java.util.concurrent.TimeUnit.SECONDS)
+        assertNotNull(first)
+        assertEquals(5, first.second)
+        pusher.join()
+        phone.core.screenStop(hubId)
+        waitRaw("screen stopped") { it.contains("\"screen_requested\"") && it.contains("\"on\":false") }
 
         // Errors arrive as typed exceptions with a readable reason.
         val bad = assertFailsWith<DevtiException.InvalidInput> { phone.core.pairWithUri("nope") }

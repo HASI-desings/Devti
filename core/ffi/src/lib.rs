@@ -49,6 +49,12 @@ pub trait EventListener: Send + Sync {
     fn on_event(&self, event_json: String);
 }
 
+/// Receives frames of a screen this phone is viewing (Phase 4), on a background thread.
+#[uniffi::export(callback_interface)]
+pub trait FrameListener: Send + Sync {
+    fn on_frame(&self, device_id: String, seq: u64, width: u32, height: u32, latency_ms: u32, fps: u8, jpeg: Vec<u8>);
+}
+
 /// Platform secure storage: Android Keystore-wrapped values / iOS Keychain items.
 #[uniffi::export(callback_interface)]
 pub trait PlatformSecretStore: Send + Sync {
@@ -411,6 +417,48 @@ impl DevtiMobile {
     /// Device ids watching this phone's screen.
     pub fn screen_viewers(&self) -> Vec<String> {
         self.node.screen_viewers().into_iter().map(|d| d.to_string()).collect()
+    }
+
+    /// Starts viewing a device's screen; frames go to `listener` until `screen_stop`.
+    pub fn screen_start(
+        &self,
+        device_id: String,
+        max_width: u32,
+        fps: u8,
+        listener: Box<dyn FrameListener>,
+    ) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        let id: DeviceId = device_id.parse()?;
+        let mut rx = self.node.subscribe_frames();
+        self.node.screen_start(&id, max_width, fps)?;
+        let node = self.node.clone();
+        self.runtime.spawn(async move {
+            loop {
+                match rx.recv().await {
+                    Ok(f) if f.from == id => listener.on_frame(
+                        f.from.to_string(),
+                        f.seq,
+                        f.w,
+                        f.h,
+                        f.latency_ms,
+                        f.fps,
+                        f.jpeg.as_ref().clone(),
+                    ),
+                    Ok(_) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(_) => break,
+                }
+                // Stop forwarding once nobody is viewing this device any more.
+                if !node.is_viewing(&id) {
+                    break;
+                }
+            }
+        });
+        Ok(())
+    }
+
+    pub fn screen_stop(&self, device_id: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.screen_stop(&device_id.parse()?)?)
     }
 
     /// Stops sharing this phone's screen with one viewer.

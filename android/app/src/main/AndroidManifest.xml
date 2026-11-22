@@ -126,6 +126,14 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
+        <!-- Phase 4: this phone or tablet as a screen for a computer. -->
+        <activity
+            android:name=".ui.screen.ScreenViewerActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard"
+            android:screenOrientation="fullUser"
+            android:theme="@style/Theme.Devti" />
+
         <activity
             android:name=".control.ScreenShareActivity"
             android:exported="false"

@@ -79,7 +79,7 @@ object PresenterKeys {
 private enum class Panel(val label: String) { Keys("Keyboard"), Media("Media"), Present("Present"), Apps("Apps"), Commands("Commands"), Power("Power") }
 
 /** The computers this phone can control, online ones first. */
-private fun computers(state: CoreState): List<PeerSnapshot> =
+internal fun computers(state: CoreState): List<PeerSnapshot> =
     state.peers.filter { it.info.kind == "desktop" || it.info.kind == "laptop" }.ifEmpty { state.peers }
 
 @Composable
@@ -248,7 +248,7 @@ private fun Touchpad(modifier: Modifier, accent: Color, enabled: Boolean, send: 
 }
 
 @Composable
-private fun KeysPanel(send: (List<JsonObject>) -> Unit) {
+internal fun KeysPanel(send: (List<JsonObject>) -> Unit) {
     val c = Devti.colors
     var buffer by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
