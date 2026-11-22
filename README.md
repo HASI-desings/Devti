@@ -15,18 +15,19 @@ Free, open-source, local-first. Your laptops, phones, tablets and Bluetooth acce
 
 ## Where Devti is today
 
-Devti is being built in eight phases. **Phases 1 and 2 are complete**: the secure core, pairing,
+Devti is being built in eight phases. **Phases 1–3 are complete**: the secure core, pairing,
 automatic reconnection, the desktop Hub with its first-run wizard and ecosystem map, the Android
-companion app, and continuity — clipboard, files, notifications, find my device and battery
-history. Everything listed under "What works now" is real and tested; everything
+companion app, continuity (clipboard, files, notifications, find my device, battery history) and
+control (phone as touchpad, keyboard, remote and shortcuts deck; mirror and control an Android
+phone from the Hub; a local API and the `devti` CLI). Everything listed under "What works now" is real and tested; everything
 else is shown as planned, never faked.
 
 | Phase | Scope | Status |
 |---|---|---|
 | 1. Foundation | Core protocol, encryption, discovery, pairing, desktop Hub, onboarding, dashboard, Android pairing | **Done** |
 | 2. Continuity | Clipboard, file transfer, drag and drop, notifications, find my device, battery dashboard | **Done** |
-| 3. Control | Phone → laptop remote, laptop → Android mirror and control, shortcuts deck, local API + CLI | Next |
-| 4. Screens | Mirror, single-window cast, extended displays, multi-screen layout, one keyboard and mouse | Planned |
+| 3. Control | Phone → laptop remote, laptop → Android mirror and control, shortcuts deck, local API + CLI | **Done** |
+| 4. Screens | Mirror, single-window cast, extended displays, multi-screen layout, one keyboard and mouse | Next |
 | 5. Bluetooth | Accessory manager, automatic feature detection, device profiles, audio relay | Planned |
 | 6. Communication + automation | SMS, calls, rules engine, proximity, handoff, webcam and mic sharing | Planned |
 | 7. Reach + extensibility | Remote access, plugin SDK, shared storage browser | Planned |
@@ -64,6 +65,24 @@ else is shown as planned, never faked.
   the computer chime.
 - **Battery dashboard.** Get a 24-hour or 7-day chart for every device, with charging periods
   marked, plus an alert when a device runs low.
+- **Your phone is a remote.** The Android app's **Remote** tab gives you:
+  - a touchpad (tap, two-finger scroll and right-click, double-tap to drag)
+  - a keyboard that works with any keyboard app, plus shortcut keys
+  - media keys, volume and brightness
+  - lock, sleep and shut down (shutting down asks you to confirm)
+  - the computer's apps and saved commands
+  - a presenter whose volume buttons turn slides
+- **Shortcuts deck.** Design pages of buttons on the Hub (**Control → Shortcuts deck**): key
+  combinations, media keys, apps, scripts, text, web links and OBS scenes. Then press them in the
+  phone's **Deck** tab.
+- **See and control your Android phone from the computer.** Open the phone in the Hub and choose
+  **Mirror and control**:
+  - click to tap, drag to swipe and type with your keyboard
+  - back, home, recent apps, notifications and lock
+  - screenshots and screen recordings, saved to Downloads/Devti
+  - live fps and latency
+- **Script everything.** A local API (127.0.0.1 only, token-protected) and the `devti` command:
+  `devti send`, `devti ring`, `devti clip`, `devti run`, `devti watch`.
 
 <p align="center">
   <img src="docs/media/pair-qr.png" width="49%" alt="Pairing sheet showing a QR code and three steps">
@@ -86,11 +105,18 @@ else is shown as planned, never faked.
 | Do Not Disturb everywhere | ✅ | ✅ | ✅ | ✅ | Phase 8 |
 | Find my device | ✅ | ✅ | ✅ | ✅ | Phase 8 |
 | Battery history + low-battery alert | ✅ | ✅ | ✅ | ✅ (alerts) | Phase 8 |
+| Controlled by a phone (touchpad, keys, media, power, apps, commands) | ✅ | ✅ | ✅ ⁴ | — | Phase 8 (as remote) |
+| Shortcuts deck (designed on the Hub) | ✅ | ✅ | ✅ | ✅ (deck) | Phase 8 |
+| Mirror + control an Android phone | ✅ | ✅ | ✅ | ✅ shares ⁵ | — ³ |
+| Local API + `devti` CLI | ✅ | ✅ | ✅ | — | — |
 
 ¹ Uses the Wayland data-control protocol where the compositor offers it (KDE, wlroots-based),
 otherwise the XWayland clipboard bridge. ² Android 10+ allows reading the
 clipboard only while Devti is open; writing works any time. ³ iOS doesn't let apps read other
-apps' notifications.
+apps' notifications. ⁴ Through libei (GNOME asks once for remote-desktop permission) or the
+Wayland virtual-keyboard/pointer protocols. Compositors with neither can't be controlled, and the
+Hub tells you. ⁵ Android asks you to allow screen sharing each time. Tapping and typing also need
+**Devti control** turned on in Settings → Accessibility, which Android requires to be done by you.
 
 **iPhone and iPad honesty box:** Apple doesn't allow any app to remote-control an iPhone, read SMS
 or calls, or mirror other apps' notifications. When the iOS app arrives it will do everything Apple
@@ -204,6 +230,49 @@ until you click *I found it*.
 **Battery** shows each device's level over 24 hours or 7 days, with charging periods shaded.
 Hover over the chart for exact values, or switch to the table view. Set the low-battery alert
 level in **Settings**.
+
+### Remote control (phone → computer)
+Open the **Remote** tab in the Android app. The computer must allow the phone to *Control this
+computer* (touchpad, keys, media, volume, brightness). Power actions, apps, saved commands and
+deck buttons need *Run saved commands* as well. You choose both on the Hub, on the phone's device
+page.
+
+### Shortcuts deck and saved commands
+**Control → Shortcuts deck** shows a live grid of buttons. Select one to change its label,
+colour, icon and action, then press *Try it here*. **Control → Saved commands** holds scripts with
+a name. Other devices see only the name, never the command line. Each run is limited to
+60 seconds, sends its output back, and is written to the activity log. For OBS scenes, turn on
+OBS's WebSocket server (OBS → Tools → WebSocket Server Settings) and enter its password in the
+button's settings.
+
+### Mirror and control an Android phone
+On the Hub, open the phone and choose **Mirror and control**. Then, on the phone:
+
+1. Tap **Start now** when Android asks to share the screen. The phone shows its own "sharing"
+   indicator, and the notification has a **Stop** button.
+2. To control the phone, turn on **Devti control** in Settings → Accessibility (once).
+
+On the Hub:
+
+- Click to tap, hold to long-press, drag to swipe, and use the mouse wheel to scroll. Right-click
+  goes back, and typing goes into the phone's focused text field.
+- The buttons below the screen are Back, Home, Recent apps, Notifications and Lock.
+- **Screenshot** and **Record** save to Downloads/Devti.
+
+### Command line and API
+`devti` comes with the Linux packages (`/usr/bin/devti`) and sits next to the Windows installers.
+It finds the API token by itself:
+
+```bash
+devti devices
+devti send "Pixel 8" ~/Pictures/holiday.jpg
+devti run backup --on "Studio Laptop"
+devti watch | jq .type
+```
+
+The token and the port live in Devti's data folder (`api-token`, `api-port`). **Control → Local
+API** shows the token, resets it, or turns the API off. Endpoints are listed in
+[docs/PROTOCOL.md](docs/PROTOCOL.md#7-local-api-hub-only).
 
 ### Tray
 Closing the window keeps Devti running in the tray (it frees the window's memory). Use the tray

@@ -109,6 +109,18 @@ than corrupted, and an unreadable peer row is skipped and logged, never fatal.
   sender resumes automatically. A small retry scheduler fixes a race in which the device
   reconnected before the interrupted attempt had finished unwinding. Received names are made
   safe and never overwrite existing files.
+- **`control`** (Phase 3): checks the local permission for every remote request, writes the
+  activity log, and turns each request into an event for the host (`RemoteInput`,
+  `SystemRequested`, `LaunchRequested`, `RunRequested`, `DeckPressed`). The core never touches
+  the OS itself. It keeps the **catalog** the host publishes (apps, commands, deck, system
+  actions) and answers catalog requests, trimmed to what the asker may use.
+- **`screen`** (Phases 3–4): live screens as JPEG frames on a `screen` stream. The sharer keeps
+  only the latest frame (a `watch` channel) and at most two in flight, measures latency from
+  acks, and adapts the target quality and width the host encoder reads (`screen_target`).
+  Viewers receive frames on their own broadcast channel (`subscribe_frames`), kept separate from
+  the JSON event bus.
+- **`api`** (feature `api`, Hub only): the local HTTP + WebSocket API (axum on 127.0.0.1, bearer
+  token, loopback-Host check). The `cli/` crate is its client: `devti send|ring|clip|run|watch`.
 
 ---
 
@@ -147,6 +159,18 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
   `--send <paths>` for "Send to Devti" (forwarded by the single-instance plugin).
 - **Files commands** open or reveal only paths inside the received-files folder, so the UI
   can't be used to open arbitrary files.
+- **`remote.rs`** (Phase 3) carries out what remotes ask:
+  - Input: an `enigo` injector on its own thread (SendInput, XTest, libei/virtual input on
+    Wayland).
+  - Power, volume and brightness through each OS's own tools, with fallbacks.
+  - Installed apps (`.desktop` files or Start-menu shortcuts).
+  - Saved commands (`sh -c` / `cmd /C`, 60-second limit, output returned).
+  - Deck actions: hotkeys, media keys, text, apps, commands, links and OBS scenes (a minimal
+    OBS WebSocket v5 client).
+  - The local API, which starts with the Hub and can be turned off.
+
+  Live frames reach the web view through a Tauri `Channel` as raw bytes (12-byte header +
+  JPEG), never as JSON.
 
 ### React UI (`src/`)
 - **`bridge/`**: one `Bridge` interface with two implementations. `tauri.ts` (the real one) is
@@ -160,7 +184,13 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
   Phase 2 adds **files** (drop anywhere or on a device, live progress, clipboard history),
   **notifications** (grouped by device, inline quick reply, DND), **battery** (one chart per
   device, palette validated for colour blindness, table view) and the full-screen **ring**
-  overlay with a WebAudio chime.
+  overlay with a WebAudio chime. Phase 3 adds:
+  - **control**: the deck editor with an action inspector, saved commands with test runs, and the
+    local API panel.
+  - **device control**: media keys, power with confirmation, the device's commands and apps.
+  - **mirror**: a canvas fed by `createImageBitmap`. Click, hold, drag, wheel and right-click map
+    to tap, long press, swipe, scroll and back; keys type; screenshots and MediaRecorder
+    recordings are saved through `save_capture`.
 - **`ui/`**: React Aria primitives restyled with Devti tokens.
 
 ---
@@ -200,6 +230,21 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
     and text goes to the clipboard.
   - `Pure` holds platform-free decisions (notification filter, safe names, sizes), unit-tested
     on the JVM.
+- **`control/`** (Phase 3):
+  - `ControlAccessibility` ("Devti control", which the user turns on) performs gestures
+    (`dispatchGesture`), typing into the focused field (`ACTION_SET_TEXT`) and global actions.
+  - `ScreenShareActivity` asks for MediaProjection consent. `ScreenCaptureService` (a
+    `mediaProjection` foreground service) mirrors the display into an `ImageReader` at the
+    core's target width, then compresses JPEGs at the target quality and rate.
+  - `PhoneCommands` builds the phone's catalog (launchable apps, flashlight, screenshot, camera)
+    and runs it.
+- **UI tabs**: Home, **Remote** and **Deck**.
+  - The remote's touchpad turns raw pointer events into accelerated, batched moves (12 ms),
+    clicks, right-clicks, scrolls and drags.
+  - Its keyboard is an invisible text field that diffs what the IME typed into text and
+    backspace events, so any keyboard app and language works.
+  - In the presenter, the volume keys turn slides. `core/state/Input.kt` builds the
+    `InputEvent` JSON and is unit-tested.
 
 ---
 

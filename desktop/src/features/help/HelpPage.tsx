@@ -16,6 +16,30 @@ const MATRIX: { feature: string; cells: [Support, Support, Support, Support, Sup
     cells: ["yes", "yes", "yes", "partial", "no"],
     note: "Phones keep their own log.",
   },
+  {
+    feature: "Clipboard sync",
+    cells: ["yes", "yes", "yes", "partial", "no"],
+    note: "Android only lets Devti read the clipboard while it's open; text from the computer arrives any time.",
+  },
+  { feature: "Files of any size, resumable", cells: ["yes", "yes", "yes", "yes", "no"] },
+  {
+    feature: "Phone notifications with actions and replies",
+    cells: ["yes", "yes", "yes", "yes", "no"],
+    note: "iOS doesn't let apps read other apps' notifications.",
+  },
+  { feature: "Do Not Disturb everywhere, find my device", cells: ["yes", "yes", "yes", "yes", "no"] },
+  {
+    feature: "Controlled from a phone (touchpad, keys, media, power)",
+    cells: ["yes", "yes", "partial", "no", "no"],
+    note: "Wayland needs libei or virtual-input support in the desktop; GNOME asks once.",
+  },
+  { feature: "Shortcuts deck", cells: ["yes", "yes", "yes", "yes", "no"] },
+  {
+    feature: "Mirror and control an Android phone",
+    cells: ["yes", "yes", "yes", "yes", "no"],
+    note: "On the phone: allow screen sharing each time, and turn on Devti control in Accessibility.",
+  },
+  { feature: "Local API and devti command", cells: ["yes", "yes", "yes", "no", "no"] },
 ];
 const COLUMNS = ["Windows", "Linux X11", "Linux Wayland", "Android", "iPhone and iPad"];
 

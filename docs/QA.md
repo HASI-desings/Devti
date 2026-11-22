@@ -5,6 +5,54 @@ the results recorded here. A phase is only marked done when all of this passes.
 
 ---
 
+## Phase 3 — Control
+
+**Date:** 2026-11-22
+
+### Automated results
+
+| Suite | Result | Where it runs |
+|---|---|---|
+| Core end-to-end, control | 3 / 3 pass — input sanitized (NaN dropped), volume needs `control` and power needs `commands`, catalog trimmed for control-only remotes, launch limited to catalog apps, unknown commands refused with a readable result, command output round trip, deck presses, activity logged, 10+ live screen frames in order with stats, stop, `screen_view` refusal | local + CI |
+| CLI against a real node + API | 1 / 1 pass — wrong token refused, token file 0600, devices, ring, clipboard, a file delivered, local and remote saved commands with output, event stream, **DNS-rebinding Host header refused (403)** | local + CI |
+| Hub host unit tests | 8 / 8 pass (adds hotkey parsing, `.desktop` parsing, **OBS auth against the spec's worked example**, command runner) | local + CI |
+| Desktop UI flows (Playwright) | 14 / 14 pass (adds the deck editor, saved commands, the API token, and mirror-and-control with tap and typing on the simulated phone) | local + CI |
+| **Real-app smoke test, Phase 3** | **pass** — the simulated phone fetches the real Hub's catalog, runs a saved command (`echo`) through the Hub's shell, and receives its output | local + CI (Linux) |
+| Android: Kotlin bindings vs real core | 3 / 3 pass — adds the catalog, input built by the app's `Input` helper, volume clamped to 100, and a command round trip | local + CI |
+| Android: app unit tests | reducer (6), pure helpers + Input JSON (4) | CI |
+
+### Bugs found and fixed during Phase 3 QA
+- **Mirror view overflowed the window** with tall phone frames: the canvas's intrinsic size
+  stretched the grid. It's now a size container, and the frame is sized from the frame's aspect
+  ratio with container units. Checked in screenshots.
+- **Device page froze** (React #185): a store selector returned a new filtered array on every
+  render. It now selects the stable list and filters while rendering. This is the same class of
+  bug as in Phase 1, now covered by a UI flow.
+- **Committed a test lint error** (unused field) once; CI's clippy step caught it and it was fixed
+  in the next commit.
+
+### Manual checklist (Phase 3)
+- [x] Deck editor: add/rename/delete pages and buttons, colours, icons, every action type, "Try it
+  here" (preview + real binary for commands).
+- [x] Saved commands: test output, confirmation flag, save; run from a phone with the output
+  back (real binary).
+- [x] Local API: on/off, token show/copy/reset; `devti` against a real node.
+- [x] Device page: media keys, power with confirmation, the device's commands and apps.
+- [x] Mirror view: frames, fps/latency/bitrate overlay, tap, drag, wheel, right-click back,
+  typing, phone buttons, screenshot (preview).
+- [ ] On real hardware: phone touchpad on Windows/X11/Wayland, MediaProjection consent flow,
+  Devti control gestures and typing, presenter volume keys, recordings in WebKitGTK.
+
+### Not verifiable in the build environment
+- Pointer/keyboard injection on a real desktop session (enigo under Xvfb moves Xvfb's pointer,
+  but nobody sees it). Wayland libei permission prompts need GNOME/KDE.
+- Android MediaProjection, the accessibility service and the touchpad. Compiled in CI; the
+  platform-free logic (input JSON, reducer, acceleration) is unit-tested.
+- MediaRecorder support in WebKitGTK varies by distribution. The Hub tells the user when
+  recording isn't available rather than failing silently.
+
+---
+
 ## Phase 2 — Continuity
 
 **Date:** 2026-11-22

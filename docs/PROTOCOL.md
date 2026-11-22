@@ -41,7 +41,7 @@ frame = length:u32be  body:CBOR(message)
 Every bidirectional stream starts with a `StreamOpen` frame:
 
 ```cddl
-StreamOpen = { "stream": "pair" / "control" / "file" / tstr }   ; unknown → stream reset
+StreamOpen = { "stream": "pair" / "control" / "file" / "screen" / tstr }   ; unknown → stream reset
 ```
 
 ### Control stream (one per session, opened by the dialler)
@@ -50,6 +50,8 @@ StreamOpen = { "stream": "pair" / "control" / "file" / tstr }   ; unknown → st
 ControlMsg = Hello / Status / Info / Ping / Pong / Goodbye
            / Clipboard / Ring / Notification / NotificationRemoved
            / NotificationAction / NotificationDismiss / Dnd            ; Phase 2
+           / Input / System / Launch / Run / RunResult / DeckPress
+           / CatalogRequest / Catalog / ScreenStart / ScreenStop       ; Phase 3
 Hello   = { "t": "hello",   "proto": 1, "info": DeviceInfo, "status": DeviceStatus }
 Status  = { "t": "status",  "status": DeviceStatus }
 Info    = { "t": "info",    "info": DeviceInfo }
@@ -87,6 +89,53 @@ Phase 2 rules:
   session starts; receivers drop a peer's notifications when its session ends. Receivers cap
   every field (text 4096 chars, at most 3 actions, icon 64 KiB).
 - Clipboard echo suppression: a device never re-sends text it just applied from another device.
+
+### Phase 3 — control
+
+```cddl
+Input   = { "t": "input", "events": [* InputEvent] }            ; ≤ 64 per message, needs `control`
+InputEvent = { "k": "move", "dx": float, "dy": float }           ; relative, touchpad
+           / { "k": "move_to", "x": 0..1, "y": 0..1 }           ; absolute fractions of the screen
+           / { "k": "button", "button": Btn, "down": bool }
+           / { "k": "click", "button": Btn, "count": 1..3 }
+           / { "k": "scroll", "dx": float, "dy": float }        ; lines
+           / { "k": "text", "text": tstr .size (0..4096) }
+           / { "k": "key", "key": tstr, "mods": [* "ctrl" / "alt" / "shift" / "meta"] }
+           / { "k": "media", "action": "play_pause" / "next" / "previous" / "stop" / "volume_up" / "volume_down" / "mute" }
+           / { "k": "tap" / "long_press", "x": 0..1, "y": 0..1 }   ; touch screens
+           / { "k": "swipe", "x1", "y1", "x2", "y2": 0..1, "ms": 0..10000 }
+           / { "k": "nav", "action": "back" / "home" / "recents" / "notifications" / "quick_settings" / "lock_screen" / "screenshot" }
+Btn     = "left" / "right" / "middle"
+System  = { "t": "system", "action": { "a": "lock" / "sleep" / "shutdown" / "restart" / "sign_out" }    ; needs `commands`
+                                   / { "a": "set_volume" / "set_brightness", "percent": 0..100 } }        ; needs `control`
+Launch  = { "t": "launch", "app": tstr }                         ; an id from the receiver's catalog, needs `commands`
+Run     = { "t": "run", "command": tstr }                        ; a saved-command id, needs `commands`
+RunResult = { "t": "run_result", "command": tstr, "ok": bool, "output": tstr .size (0..4000) }
+DeckPress = { "t": "deck_press", "button": tstr }                ; needs `commands`
+CatalogRequest = { "t": "catalog_request" }                      ; needs `control` or `commands`
+Catalog = { "t": "catalog", "catalog": {
+  "apps": [* { "id", "name" }], "commands": [* { "id", "name", "confirm": bool }],
+  "deck": [* { "name", "buttons": [* { "id", "label", "icon", "voice" }] }], "system": [* tstr] } }
+ScreenStart = { "t": "screen_start", "max_width": 320..3840, "fps": 1..60 }   ; needs `screen_view`
+ScreenStop  = { "t": "screen_stop" }
+```
+
+- Inputs are sanitized: non-finite numbers, huge motions and out-of-range fractions are dropped.
+- A remote with only `control` gets a catalog without apps, commands or deck, and only the
+  volume and brightness system actions.
+- Command lines and deck actions never leave the device that defines them: remotes only see ids,
+  names and labels.
+
+### Screen stream (`"stream": "screen"`, opened by the sharer after `ScreenStart`)
+
+```cddl
+Frame = { "t": "frame", "seq": uint, "w": uint, "h": uint, "jpeg": bstr, "latency_ms": uint, "fps": uint }   ; sharer → viewer
+Ack   = { "t": "ack", "seq": uint }                                                                         ; viewer → sharer
+```
+
+The viewer rejects (resets) screen streams it didn't ask for. The sharer sends only its newest
+frame and keeps at most two unacknowledged. `latency_ms` is the sharer's latest capture-to-ack
+measurement, so both sides can show it. Frames are limited to 8 MiB.
 
 ### File stream (`"stream": "file"`, opened by the sender)
 
@@ -190,7 +239,18 @@ Desktop (Tauri events `devti://event`) and mobile (UniFFI `EventListener`) recei
 `pairing_window_changed`, `pairing_started`, `pairing_verify`, `pairing_completed`,
 `pairing_failed`, `paused`, and for Phase 2 `clipboard_received`, `ring_requested`,
 `notification_posted`, `notification_removed`, `notification_action_requested`,
-`notification_dismiss_requested`, `dnd_changed`, `low_battery`, `transfer` (and `resync` when a
-listener fell behind). Shapes:
+`notification_dismiss_requested`, `dnd_changed`, `low_battery`, `transfer`, and for Phase 3
+`remote_input`, `system_requested`, `launch_requested`, `run_requested`, `run_finished`,
+`deck_pressed`, `catalog_received`, `screen_requested`, `screen_stats`, `screen_ended` (and
+`resync` when a listener fell behind).
+
+## 7. Local API (Hub only)
+
+See `core/src/api.rs`. Loopback only, `Authorization: Bearer <token>` (the token is in
+`<data dir>/api-token`, the port in `<data dir>/api-port`, default 47811). Endpoints:
+`GET /v1/status`, `GET /v1/devices`, `POST /v1/send {device, paths}`, `POST /v1/ring {device, on?}`,
+`GET|POST /v1/clip`, `GET /v1/commands`, `POST /v1/run {command, device?}` (waits up to 60 s for the
+output), `POST /v1/input {device, events}`, and `GET /v1/events` (WebSocket of the JSON above).
+`device` takes a device id or its exact name. Shapes:
 `core/src/node/events.rs`, mirrored in `desktop/src/bridge/types.ts` and
 `android/.../core/state/Models.kt`. Pairing IDs are below 2⁵³ so they survive JavaScript numbers.

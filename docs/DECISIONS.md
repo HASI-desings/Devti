@@ -348,6 +348,60 @@ Device profiles stay **declarative data** (YAML), so they need no sandbox at all
 
 ---
 
+## Phase 3 — final decisions
+
+### D-31 · Screen frames (Phases 3–4) — Decided: **adaptive JPEG frames on a QUIC stream**, H.264 later
+
+| Option | Pros | Cons |
+|---|---|---|
+| **JPEG per frame** (Android `Bitmap.compress`, desktop encoder later) | Decodes everywhere with `createImageBitmap`, including WebKitGTK; no FFmpeg DLLs; no codec licensing; every frame stands alone, so dropping one costs nothing | 3–10× the bandwidth of H.264 (about 2–8 Mbit/s at 720p, fine on a home network) |
+| H.264 via MediaCodec → WebCodecs | Hardware encode on the phone, low bandwidth | WebKitGTK's WebCodecs H.264 support varies by distro, so Linux needs a software decoder anyway; keyframe and loss handling to build |
+| H.264 → openh264 in Rust → raw RGBA to the web view | Works on every OS | ~110 MB/s of pixels through IPC at 720p 30 fps |
+
+**Flow control** is the part that matters for latency. The sharer sends only the *newest* frame
+and never has more than two unacknowledged ones in flight. A slow network therefore lowers the
+frame rate instead of building a queue. Capture-to-ack latency drives a quality ladder (JPEG
+quality first, then width) that the encoder follows. The frame message is typed (`ScreenMsg`), so
+an `h264` variant can be added later without breaking older peers.
+
+### D-32 · Input injection (Phase 3) — Decided: **`enigo` 0.6** (revises D-24)
+
+0.6 now ships a libei backend and Wayland virtual-keyboard/pointer protocols next to XTest (X11)
+and SendInput (Windows). Writing three backends ourselves would add risk and no capability, so
+Devti adopts it, on a dedicated thread. On Wayland, GNOME asks once for remote-desktop
+permission. Compositors with neither libei nor the virtual-input protocols can't be controlled,
+and the Hub says so in a notice instead of failing silently.
+
+### D-33 · Controlling Android (Phase 3) — Decided: **wireless companion mode** (D-25a); ADB mode deferred
+
+MediaProjection captures the frames. The user confirms every session, because Android allows no
+"remember". An accessibility service ("Devti control", which the user turns on) performs the
+gestures. Typing uses `ACTION_SET_TEXT` on the focused field. The service subscribes to no
+events and stores nothing. The scrcpy-style ADB mode (D-25b) is deferred: it needs developer
+options and a USB or `adb tcpip` setup that most users won't do. The wireless mode covers mirror,
+tap, swipe, type, navigation, screenshots and recordings.
+
+### D-34 · Local API (Phase 3) — Decided: **axum 0.8 on 127.0.0.1 with a bearer token**
+
+| Option | Pros | Cons |
+|---|---|---|
+| **HTTP + WebSocket on loopback (axum)** | `curl`-friendly on every OS; WebSocket for events | Must defend against browsers: Host-header check (DNS rebinding), no CORS, Origin refused on the socket |
+| Unix socket / named pipe | OS file permissions do the auth | Two transports; awkward from scripts on Windows |
+| gRPC | Typed clients | Heavy for a handful of calls |
+
+The token is 32 random bytes in `<data dir>/api-token`, mode 0600 on Unix. It can be reset from
+Settings. The `devti` CLI is a separate small crate (`ureq` + `tungstenite`, both blocking) that
+reads the same files.
+
+### D-35 · OBS scene switching — Decided: **own minimal OBS WebSocket v5 client**
+
+The protocol needs three messages: Hello, Identify with SHA-256 challenge auth, and one Request.
+The `obws` crate would add a large dependency tree for that. Our implementation is checked
+against the worked example in the obs-websocket spec, and only `ws://127.0.0.1` / `localhost`
+URLs are accepted.
+
+---
+
 ## Deviation log
 
 | Brief said | We did | Why |
@@ -356,3 +410,6 @@ Device profiles stay **declarative data** (YAML), so they need no sandbox at all
 | "Radix UI or shadcn/ui" | React Aria Components | Stronger a11y and i18n; shadcn is a visual style the brief rejects |
 | "GSAP" as a candidate | Not used | Proprietary license with a competing-products clause, not GPL-compatible |
 | Repository `HASI-desings/Devti` via `gh repo create` | Existing repo `hasi-desings/devti` (GitHub names are case-insensitive) | The repository already exists; this build session may only push to its working branch |
+| D-21/D-22: H.264 for screens | Adaptive JPEG frames (D-31) | Decodes in every web view without FFmpeg; latest-frame flow control keeps latency low; H.264 stays an upgrade path |
+| D-24: own input backends | `enigo` 0.6 (D-32) | It now covers libei/Wayland, XTest and SendInput |
+| D-25b: ADB mode for Android control | Deferred (D-33) | Needs developer options; the wireless mode covers the features |

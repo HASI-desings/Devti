@@ -5,6 +5,35 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Phase 3 — Control
+#### Added
+- Protocol: input events (pointer, keys, text, media, touch gestures, navigation), system
+  actions, app launch, saved commands with results, shortcuts-deck presses, catalog exchange,
+  and live screens (adaptive JPEG frames with acks, latency and fps both ways). Every request is
+  checked against the receiver's permissions.
+- Hub:
+  - input injection with `enigo`
+  - lock, sleep, shut down, restart, sign out, volume and brightness
+  - installed apps
+  - saved commands with a 60-second limit and output
+  - shortcuts deck with hotkeys, media keys, apps, commands, text, links and OBS scenes
+  - **Control** page with the deck editor, saved commands and the local API
+  - device control panel, and **Mirror and control** for Android phones with screenshots and
+    recordings
+- Local API on 127.0.0.1 with a bearer token, plus the `devti` CLI (`send`, `ring`, `clip`,
+  `run`, `watch`), packaged in deb/rpm and shipped beside the Windows installers.
+- Android:
+  - **Remote** tab: touchpad, keyboard, keys, media, sliders, power, apps, commands and a
+    presenter
+  - **Deck** tab
+  - screen sharing with MediaProjection, and the **Devti control** accessibility service for
+    taps, swipes, typing and navigation
+  - flashlight, screenshot and camera commands
+- Tests: control and screen end-to-end tests with every permission boundary; a CLI test against
+  a real node (auth, DNS-rebinding guard, files, commands, events); host unit tests (hotkeys,
+  desktop entries, OBS auth vector, commands); 2 new UI flows; Kotlin binding test for the
+  catalog, input and commands; the real-app smoke test runs a saved command from the phone.
+
 ### Phase 2 — Continuity
 #### Added
 - Protocol: clipboard, ring, notification post/remove/action/dismiss, and Do Not Disturb
