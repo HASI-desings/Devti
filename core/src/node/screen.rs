@@ -74,6 +74,8 @@ pub(crate) struct State {
     sharing: Mutex<HashMap<DeviceId, watch::Sender<bool>>>,
     /// Devices this device asked to share with it (viewer side).
     viewing: Mutex<HashSet<DeviceId>>,
+    /// What each viewer asked for: "screen" or "camera".
+    sources: Mutex<HashMap<DeviceId, String>>,
     target: RwLock<ScreenTarget>,
     frames: broadcast::Sender<ViewerFrame>,
 }
@@ -84,6 +86,7 @@ impl State {
             latest: watch::channel(None).0,
             sharing: Mutex::new(HashMap::new()),
             viewing: Mutex::new(HashSet::new()),
+            sources: Mutex::new(HashMap::new()),
             target: RwLock::new(ScreenTarget::default()),
             frames: broadcast::channel(4).0,
         }
@@ -95,10 +98,11 @@ pub(crate) fn handle(inner: &Arc<Inner>, peer: DeviceId, msg: ControlMsg) {
     let Some(perms) = inner.permissions_of(&peer) else { return };
     let name = inner.peer_name(&peer);
     match msg {
-        ControlMsg::ScreenStart { max_width, fps } => {
+        ControlMsg::ScreenStart { max_width, fps, source } => {
             if !perms.screen_view {
                 return;
             }
+            let source = if source == "camera" { "camera".to_string() } else { "screen".to_string() };
             {
                 let mut t = inner.screen.target.write();
                 t.max_width = max_width.clamp(320, 3840);
@@ -110,8 +114,9 @@ pub(crate) fn handle(inner: &Arc<Inner>, peer: DeviceId, msg: ControlMsg) {
             if let Some(old) = inner.screen.sharing.lock().insert(peer, stop_tx) {
                 let _ = old.send(true);
             }
-            inner.log(Some((&peer, &name)), "screen_shared", "");
-            inner.emit(NodeEvent::ScreenRequested { from: peer, from_name: name, on: true });
+            inner.log(Some((&peer, &name)), if source == "camera" { "camera_shared" } else { "screen_shared" }, "");
+            inner.screen.sources.lock().insert(peer, source.clone());
+            inner.emit(NodeEvent::ScreenRequested { from: peer, from_name: name, on: true, source });
             let task_inner = inner.clone();
             inner.rt.spawn(async move {
                 if let Err(e) = share(&task_inner, peer, conn, stop_rx).await {
@@ -121,6 +126,7 @@ pub(crate) fn handle(inner: &Arc<Inner>, peer: DeviceId, msg: ControlMsg) {
             });
         }
         ControlMsg::ScreenStop => stop_sharing(inner, &peer),
+        ControlMsg::CameraOffer => inner.emit(NodeEvent::CameraOffered { from: peer, from_name: name }),
         _ => {}
     }
 }
@@ -129,7 +135,8 @@ fn stop_sharing(inner: &Arc<Inner>, peer: &DeviceId) {
     if let Some(stop) = inner.screen.sharing.lock().remove(peer) {
         let _ = stop.send(true);
         let name = inner.peer_name(peer);
-        inner.emit(NodeEvent::ScreenRequested { from: *peer, from_name: name, on: false });
+        let source = inner.screen.sources.lock().remove(peer).unwrap_or_else(|| "screen".into());
+        inner.emit(NodeEvent::ScreenRequested { from: *peer, from_name: name, on: false, source });
     }
 }
 
@@ -273,10 +280,31 @@ pub(crate) async fn receive(inner: Arc<Inner>, peer: DeviceId, mut send: SendStr
 impl super::Node {
     /// Asks `peer` to share its screen with this device (needs `screen_view` there).
     pub fn screen_start(&self, peer: &DeviceId, max_width: u32, fps: u8) -> Result<()> {
+        self.view(peer, max_width, fps, "screen")
+    }
+
+    /// Accepts `peer`'s camera as a webcam (after a `CameraOffered` event).
+    pub fn camera_start(&self, peer: &DeviceId, max_width: u32, fps: u8) -> Result<()> {
+        self.view(peer, max_width, fps, "camera")
+    }
+
+    fn view(&self, peer: &DeviceId, max_width: u32, fps: u8, source: &str) -> Result<()> {
         self.inner.screen.viewing.lock().insert(*peer);
-        self.inner.send_to(peer, ControlMsg::ScreenStart { max_width, fps }).inspect_err(|_| {
-            self.inner.screen.viewing.lock().remove(peer);
-        })
+        self.inner.send_to(peer, ControlMsg::ScreenStart { max_width, fps, source: source.to_string() }).inspect_err(
+            |_| {
+                self.inner.screen.viewing.lock().remove(peer);
+            },
+        )
+    }
+
+    /// Offers this device's camera to `peer` as a webcam.
+    pub fn camera_offer(&self, peer: &DeviceId) -> Result<()> {
+        self.inner.send_to(peer, ControlMsg::CameraOffer)
+    }
+
+    /// What each current viewer asked for ("screen" or "camera").
+    pub fn screen_sources(&self) -> Vec<(DeviceId, String)> {
+        self.inner.screen.sources.lock().iter().map(|(k, v)| (*k, v.clone())).collect()
     }
 
     /// Stops viewing `peer`'s screen.

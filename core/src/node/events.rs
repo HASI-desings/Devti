@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::discovery::DiscoveredDevice;
 use crate::model::{ConnectionKind, DeviceId, DeviceInfo, DeviceStatus, Permissions, TrustRole};
-use crate::protocol::{Catalog, InputEvent, PairAbortReason, SystemAction};
+use crate::protocol::{
+    CallInfo, Catalog, HandoffItem, InputEvent, PairAbortReason, SmsMessage, SmsThread, SystemAction,
+};
 use crate::store::TransferRecord;
 
 pub use super::continuity::MirroredNotification;
@@ -232,11 +234,19 @@ pub enum NodeEvent {
         from: DeviceId,
         catalog: Catalog,
     },
-    /// A device started (`on`) or stopped watching this device's screen.
+    /// A device started (`on`) or stopped watching this device's screen or camera.
     ScreenRequested {
         from: DeviceId,
         from_name: String,
         on: bool,
+        /// "screen" or "camera".
+        #[serde(default)]
+        source: String,
+    },
+    /// A device offers its camera as a webcam for this one (Phase 6).
+    CameraOffered {
+        from: DeviceId,
+        from_name: String,
     },
     /// About once a second while a screen is shared or viewed.
     ScreenStats {
@@ -249,5 +259,70 @@ pub enum NodeEvent {
     /// A screen this device was viewing stopped.
     ScreenEnded {
         peer: DeviceId,
+    },
+    // ---- Phase 6: communication
+    /// The phone's conversations (answer to `request_sms_threads`).
+    SmsThreads {
+        from: DeviceId,
+        threads: Vec<SmsThread>,
+    },
+    SmsMessages {
+        from: DeviceId,
+        thread: String,
+        messages: Vec<SmsMessage>,
+    },
+    /// A text arrived on (or was sent from) a phone.
+    Sms {
+        from: DeviceId,
+        from_name: String,
+        message: SmsMessage,
+    },
+    SmsResult {
+        from: DeviceId,
+        ok: bool,
+        error: Option<String>,
+    },
+    /// Phone side: a computer asked for conversations / messages, or to send a text.
+    SmsThreadsRequested {
+        from: DeviceId,
+    },
+    SmsMessagesRequested {
+        from: DeviceId,
+        thread: String,
+    },
+    SmsSendRequested {
+        from: DeviceId,
+        to: Vec<String>,
+        text: String,
+    },
+    /// A phone's call state changed.
+    Call {
+        from: DeviceId,
+        from_name: String,
+        call: CallInfo,
+    },
+    /// Phone side: a computer asked to answer, decline or end a call.
+    CallActionRequested {
+        from: DeviceId,
+        id: String,
+        action: String,
+    },
+    /// Something to continue here: a link (maybe at a media position) or text.
+    Handoff {
+        from: DeviceId,
+        from_name: String,
+        item: HandoffItem,
+    },
+    /// A device started streaming audio here ("relay" or "mic").
+    AudioStarted {
+        from: DeviceId,
+        from_name: String,
+        kind: String,
+        sample_rate: u32,
+        channels: u8,
+    },
+    AudioEnded {
+        from: DeviceId,
+        kind: String,
     },
 }

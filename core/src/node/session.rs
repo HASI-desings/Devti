@@ -211,6 +211,13 @@ pub(crate) async fn serve_connection(inner: Arc<Inner>, conn: Connection, peer_f
                 }
                 inner.rt.spawn(super::transfer::receive(inner.clone(), peer_id, send, recv));
             }
+            StreamOpen::Audio { kind, sample_rate, channels } => {
+                if !inner.trust.is_trusted(&peer_fp) {
+                    conn.close(VarInt::from_u32(close_code::UNTRUSTED), b"not paired");
+                    return;
+                }
+                inner.rt.spawn(super::audio::receive(inner.clone(), peer_id, kind, sample_rate, channels, send, recv));
+            }
             StreamOpen::Screen => {
                 if !inner.trust.is_trusted(&peer_fp) {
                     conn.close(VarInt::from_u32(close_code::UNTRUSTED), b"not paired");
@@ -428,7 +435,19 @@ fn handle_control(inner: &Arc<Inner>, peer_id: DeviceId, msg: ControlMsg) {
         | ControlMsg::DeckPress { .. }
         | ControlMsg::CatalogRequest
         | ControlMsg::Catalog { .. } => super::control::handle(inner, peer_id, msg),
-        ControlMsg::ScreenStart { .. } | ControlMsg::ScreenStop => super::screen::handle(inner, peer_id, msg),
+        ControlMsg::ScreenStart { .. } | ControlMsg::ScreenStop | ControlMsg::CameraOffer => {
+            super::screen::handle(inner, peer_id, msg)
+        }
+        ControlMsg::SmsThreadsRequest
+        | ControlMsg::SmsThreads { .. }
+        | ControlMsg::SmsMessagesRequest { .. }
+        | ControlMsg::SmsMessages { .. }
+        | ControlMsg::SmsSend { .. }
+        | ControlMsg::Sms { .. }
+        | ControlMsg::SmsResult { .. }
+        | ControlMsg::Call { .. }
+        | ControlMsg::CallAction { .. }
+        | ControlMsg::Handoff { .. } => super::comms::handle(inner, peer_id, msg),
         ControlMsg::Goodbye { .. } | ControlMsg::Pong { .. } | ControlMsg::Hello { .. } => {}
         ControlMsg::Unknown => tracing::trace!(peer = %peer_id, "ignoring unknown control message"),
     }

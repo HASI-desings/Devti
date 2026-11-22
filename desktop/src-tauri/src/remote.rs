@@ -515,6 +515,12 @@ fn try_cmds(cands: &[&[&str]]) -> anyhow::Result<()> {
     anyhow::bail!(last)
 }
 
+/// Performs a power action on this computer right away (used by automation rules).
+pub fn system_action_now(action: &SystemAction) -> Result<(), String> {
+    let (tx, _rx) = mpsc::channel();
+    system_action(action, &tx).map_err(|e| e.to_string())
+}
+
 fn system_action(action: &SystemAction, input: &mpsc::Sender<Vec<InputEvent>>) -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     {

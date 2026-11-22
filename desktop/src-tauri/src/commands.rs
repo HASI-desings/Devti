@@ -623,3 +623,84 @@ pub async fn help_support_accessory(app: AppHandle, address: String) -> CmdResul
     let a = accessories_of(&app)?;
     crate::accessories::help_support(&a, &address).await
 }
+
+// ------------------------------------------------------------- Phase 6
+
+#[tauri::command]
+pub fn request_sms_threads(state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    state.node.request_sms_threads(&parse_id(&id)?).map_err(err)
+}
+
+#[tauri::command]
+pub fn request_sms_messages(state: State<'_, AppState>, id: String, thread: String) -> CmdResult<()> {
+    state.node.request_sms_messages(&parse_id(&id)?, &thread).map_err(err)
+}
+
+#[tauri::command]
+pub fn send_sms(state: State<'_, AppState>, id: String, to: Vec<String>, text: String) -> CmdResult<()> {
+    state.node.send_sms(&parse_id(&id)?, to, &text).map_err(err)
+}
+
+#[tauri::command]
+pub fn call_action(state: State<'_, AppState>, id: String, call: String, action: String) -> CmdResult<()> {
+    state.node.call_action(&parse_id(&id)?, &call, &action).map_err(err)
+}
+
+#[tauri::command]
+pub fn handoff(state: State<'_, AppState>, id: String, item: devti_core::protocol::HandoffItem) -> CmdResult<()> {
+    state.node.handoff(&parse_id(&id)?, item).map_err(err)
+}
+
+/// "Continue on <device>": what's playing (Linux), or the link/text on the clipboard.
+#[tauri::command]
+pub fn handoff_current(state: State<'_, AppState>, id: String) -> CmdResult<String> {
+    let item = crate::comms_host::current_item().ok_or("Nothing to continue: play something, or copy a link first.")?;
+    let what = if item.kind == "media" {
+        format!("“{}”", item.title)
+    } else if item.kind == "url" {
+        "the link".into()
+    } else {
+        "the text".into()
+    };
+    state.node.handoff(&parse_id(&id)?, item).map_err(err)?;
+    Ok(what)
+}
+
+#[tauri::command]
+pub fn media_status(app: AppHandle) -> CmdResult<crate::media::MediaStatus> {
+    Ok(crate::media::app_state(&app).ok_or("media isn't ready")?.status())
+}
+
+#[tauri::command]
+pub fn use_phone_camera(app: AppHandle, id: String) -> CmdResult<()> {
+    crate::media::app_state(&app).ok_or("media isn't ready")?.use_camera(&parse_id(&id)?)
+}
+
+#[tauri::command]
+pub fn stop_phone_camera(app: AppHandle, id: String) -> CmdResult<()> {
+    crate::media::app_state(&app).ok_or("media isn't ready")?.stop_camera(&parse_id(&id)?);
+    Ok(())
+}
+
+#[derive(Serialize)]
+pub struct AutomationInfo {
+    rules: Vec<devti_core::rules::Rule>,
+    log: Vec<crate::automation::RunLog>,
+    proximity: std::collections::HashMap<String, bool>,
+}
+
+#[tauri::command]
+pub fn automation(app: AppHandle) -> CmdResult<AutomationInfo> {
+    let a = crate::automation::app_state(&app).ok_or("automation isn't ready")?;
+    Ok(AutomationInfo { rules: a.rules(), log: a.log(), proximity: a.proximity_state() })
+}
+
+#[tauri::command]
+pub fn save_rules(app: AppHandle, rules: Vec<devti_core::rules::Rule>) -> CmdResult<()> {
+    crate::automation::app_state(&app).ok_or("automation isn't ready")?.save(rules).map_err(err)
+}
+
+#[tauri::command]
+pub fn run_rule_now(app: AppHandle, id: String) -> CmdResult<()> {
+    crate::automation::app_state(&app).ok_or("automation isn't ready")?.run_now(&id)
+}

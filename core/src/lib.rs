@@ -23,6 +23,7 @@ pub mod tls;
 pub mod accessory;
 #[cfg(feature = "api")]
 pub mod api;
+pub mod rules;
 pub use error::{Error, Result};
 pub use node::{Node, NodeConfig, NodeEvent};
 

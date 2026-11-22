@@ -10,7 +10,9 @@
 //! * [`session`] — accepting/dialling connections, sessions, reconnect with backoff,
 //! * [`ceremony`] — the hub and joiner sides of the pairing ceremony.
 
+pub mod audio;
 mod ceremony;
+mod comms;
 mod continuity;
 mod control;
 mod events;
@@ -162,6 +164,8 @@ pub(crate) struct Inner {
     pub control: control::State,
     /// Live screens being shared or viewed.
     pub screen: screen::State,
+    /// Live audio streams received.
+    pub audio: audio::State,
 }
 
 /// Handle to a running node. Cheap to clone.
@@ -245,6 +249,7 @@ impl Node {
             transfers: transfer::State::new(downloads),
             control: control::State::new(),
             screen: screen::State::new(),
+            audio: audio::State::new(),
         });
 
         if config.discovery && !paused {
@@ -463,6 +468,19 @@ impl Node {
         before_id: Option<i64>,
     ) -> Result<Vec<ActivityEntry>> {
         self.inner.store.activity(device, limit, before_id)
+    }
+
+    /// This device's current BLE proximity token (Phase 6).
+    pub fn proximity_token(&self) -> [u8; 8] {
+        crate::rules::proximity_token(&self.inner.identity.fingerprint().0, crate::rules::proximity_epoch(now_ms()))
+    }
+
+    /// The tokens a paired device may be advertising right now (this and the previous
+    /// epoch, to tolerate clock drift).
+    pub fn proximity_tokens_of(&self, peer: &DeviceId) -> Vec<[u8; 8]> {
+        let Some(fp) = self.inner.peers.read().get(peer).map(|p| p.record.fingerprint) else { return Vec::new() };
+        let e = crate::rules::proximity_epoch(now_ms());
+        vec![crate::rules::proximity_token(&fp.0, e), crate::rules::proximity_token(&fp.0, e.saturating_sub(1))]
     }
 
     pub fn setting(&self, key: &str) -> Result<Option<String>> {

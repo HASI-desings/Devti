@@ -25,6 +25,8 @@ devti-core.workspace = true
 uniffi = "0.32"
 tokio.workspace = true
 serde_json.workspace = true
+serde.workspace = true
+parking_lot.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 

@@ -101,6 +101,28 @@ pub struct MobileConfig {
     pub discovery: bool,
 }
 
+fn parse_json<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, DevtiError> {
+    serde_json::from_str(s).map_err(|e| DevtiError::InvalidInput { reason: e.to_string() })
+}
+
+/// Live audio to another device (Phase 6): push PCM chunks; `stop` (or dropping) ends it.
+#[derive(uniffi::Object)]
+pub struct AudioStream {
+    inner: parking_lot::Mutex<Option<devti_core::node::audio::AudioSender>>,
+}
+
+#[uniffi::export]
+impl AudioStream {
+    /// Interleaved s16le PCM; returns false when the chunk was dropped (network behind).
+    pub fn push(&self, pcm: Vec<u8>) -> bool {
+        self.inner.lock().as_ref().is_some_and(|s| s.push(pcm))
+    }
+
+    pub fn stop(&self) {
+        self.inner.lock().take();
+    }
+}
+
 /// A running Devti node inside the mobile app.
 #[derive(uniffi::Object)]
 pub struct DevtiMobile {
@@ -461,6 +483,79 @@ impl DevtiMobile {
     pub fn screen_stop(&self, device_id: String) -> Result<(), DevtiError> {
         let _g = self.runtime.enter();
         Ok(self.node.screen_stop(&device_id.parse()?)?)
+    }
+
+    // ------------------------------------------------------------- Phase 6
+
+    /// Answers `sms_threads_requested` (JSON `SmsThread[]`).
+    pub fn answer_sms_threads(&self, device_id: String, threads_json: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.answer_sms_threads(&device_id.parse()?, parse_json(&threads_json)?)?)
+    }
+
+    /// Answers `sms_messages_requested` (JSON `SmsMessage[]`).
+    pub fn answer_sms_messages(
+        &self,
+        device_id: String,
+        thread: String,
+        messages_json: String,
+    ) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.answer_sms_messages(&device_id.parse()?, &thread, parse_json(&messages_json)?)?)
+    }
+
+    pub fn report_sms_result(&self, device_id: String, ok: bool, error: Option<String>) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.report_sms_result(&device_id.parse()?, ok, error)?)
+    }
+
+    /// A text arrived or was sent on this phone (JSON `SmsMessage`).
+    pub fn publish_sms(&self, message_json: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        self.node.publish_sms(parse_json(&message_json)?);
+        Ok(())
+    }
+
+    /// The call state changed (JSON `CallInfo`).
+    pub fn publish_call(&self, call_json: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        self.node.publish_call(parse_json(&call_json)?);
+        Ok(())
+    }
+
+    /// Continue a link/media/text on another device (JSON `HandoffItem`).
+    pub fn handoff(&self, device_id: String, item_json: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.handoff(&device_id.parse()?, parse_json(&item_json)?)?)
+    }
+
+    /// Offers this phone's camera as a webcam for `device_id`.
+    pub fn camera_offer(&self, device_id: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.camera_offer(&device_id.parse()?)?)
+    }
+
+    /// Which viewers asked for "camera" (the rest want the screen).
+    pub fn camera_viewers(&self) -> Vec<String> {
+        self.node.screen_sources().into_iter().filter(|(_, s)| s == "camera").map(|(d, _)| d.to_string()).collect()
+    }
+
+    /// The bytes to advertise in the BLE proximity beacon right now (rotates every 15 min).
+    pub fn proximity_token(&self) -> Vec<u8> {
+        self.node.proximity_token().to_vec()
+    }
+
+    /// Starts streaming audio to `device_id` ("relay" or "mic").
+    pub fn start_audio(
+        &self,
+        device_id: String,
+        kind: String,
+        sample_rate: u32,
+        channels: u8,
+    ) -> Result<std::sync::Arc<AudioStream>, DevtiError> {
+        let _g = self.runtime.enter();
+        let s = self.node.start_audio(&device_id.parse()?, &kind, sample_rate, channels)?;
+        Ok(std::sync::Arc::new(AudioStream { inner: parking_lot::Mutex::new(Some(s)) }))
     }
 
     /// Stops sharing this phone's screen with one viewer.

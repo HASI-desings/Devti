@@ -8,10 +8,13 @@
 //! * [`system`] — battery polling, OS details, diagnostics export.
 
 mod accessories;
+mod automation;
 mod bluetooth;
 mod commands;
+mod comms_host;
 mod continuity;
 mod edges;
+mod media;
 mod remote;
 mod screens;
 mod system;
@@ -108,6 +111,10 @@ pub fn run() {
             edges.start();
             app.manage(edges);
             app.manage(accessories::Accessories::start(&handle, node.clone()));
+            let media = media::Media::start(&handle, node.clone());
+            app.manage(media.clone());
+            let automation = automation::Automation::start(&handle, node.clone());
+            app.manage(automation.clone());
 
             // Forward every core event to the UI.
             let mut events = node.subscribe();
@@ -120,6 +127,9 @@ pub fn run() {
                             tray::on_node_event(&emitter, &ev);
                             continuity::on_node_event(&emitter, &event_node, &ev);
                             remote::on_node_event(&emitter, &remote, &ev);
+                            comms_host::on_node_event(&emitter, &event_node, &ev);
+                            media.on_node_event(&ev);
+                            automation.on_node_event(&ev);
                             if matches!(ev, devti_core::NodeEvent::ScreenRequested { .. }) {
                                 screens.ensure_running(Some(&emitter));
                             }
@@ -216,6 +226,18 @@ pub fn run() {
             commands::connect_accessory,
             commands::accessory_battery_history,
             commands::help_support_accessory,
+            commands::request_sms_threads,
+            commands::request_sms_messages,
+            commands::send_sms,
+            commands::call_action,
+            commands::handoff,
+            commands::handoff_current,
+            commands::media_status,
+            commands::use_phone_camera,
+            commands::stop_phone_camera,
+            commands::automation,
+            commands::save_rules,
+            commands::run_rule_now,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Devti");

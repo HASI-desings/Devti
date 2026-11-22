@@ -31,6 +31,9 @@ pub enum StreamOpen {
     /// A live screen (Phase 3): the sharing device opens it to the viewer; frames one
     /// way, acknowledgements back.
     Screen,
+    /// Live audio (Phase 6): PCM chunks from the sender (`kind`: "relay" = what the
+    /// sender is playing, "mic" = its microphone).
+    Audio { kind: String, sample_rate: u32, channels: u8 },
     #[serde(other)]
     Unknown,
 }
@@ -208,9 +211,54 @@ pub enum ControlMsg {
         catalog: Catalog,
     },
     /// Asks the receiver to share its screen with the sender (`screen_view`).
+    /// `source`: "screen" (default) or "camera" (the phone's camera as a webcam).
     ScreenStart {
         max_width: u32,
         fps: u8,
+        #[serde(default = "screen_source")]
+        source: String,
+    },
+    /// The sender offers its camera to the receiver as a webcam; the receiver answers
+    /// with `ScreenStart { source: "camera" }` (Phase 6).
+    CameraOffer,
+    // ---- Phase 6: communication (needs `notifications` on the phone; sending and
+    // answering also need `commands`)
+    SmsThreadsRequest,
+    SmsThreads {
+        threads: Vec<SmsThread>,
+    },
+    SmsMessagesRequest {
+        thread: String,
+    },
+    SmsMessages {
+        thread: String,
+        messages: Vec<SmsMessage>,
+    },
+    SmsSend {
+        to: Vec<String>,
+        text: String,
+    },
+    /// A message arrived on (or was sent from) the phone.
+    Sms {
+        message: SmsMessage,
+    },
+    SmsResult {
+        ok: bool,
+        error: Option<String>,
+    },
+    /// The phone's call state changed.
+    Call {
+        call: CallInfo,
+    },
+    /// answer, decline, end, mute, unmute.
+    CallAction {
+        id: String,
+        action: String,
+    },
+    /// Continue something on the receiver: open a link (at a media position) or show text
+    /// (`clipboard` permission).
+    Handoff {
+        item: HandoffItem,
     },
     ScreenStop,
     /// The session is ending on purpose.
@@ -220,6 +268,83 @@ pub enum ControlMsg {
     #[serde(other)]
     Unknown,
 }
+
+fn screen_source() -> String {
+    "screen".into()
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SmsThread {
+    pub id: String,
+    /// Phone numbers or addresses in the conversation.
+    pub addresses: Vec<String>,
+    /// Contact names when the phone knows them.
+    #[serde(default)]
+    pub names: Vec<String>,
+    pub snippet: String,
+    pub ts: i64,
+    #[serde(default)]
+    pub unread: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SmsMessage {
+    pub id: String,
+    pub thread: String,
+    pub address: String,
+    #[serde(default)]
+    pub name: String,
+    pub body: String,
+    pub ts: i64,
+    /// Sent from the phone (true) or received (false).
+    pub outgoing: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallInfo {
+    pub id: String,
+    /// ringing, active, ended, missed.
+    pub state: String,
+    pub number: String,
+    #[serde(default)]
+    pub name: String,
+    pub incoming: bool,
+    pub ts: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HandoffItem {
+    /// url, text, media.
+    pub kind: String,
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub text: String,
+    /// Media position to continue from.
+    #[serde(default)]
+    pub position_ms: Option<u64>,
+}
+
+impl HandoffItem {
+    /// Only web links and plain text travel; anything else (file:, javascript:, intent:)
+    /// is refused so a handoff can't be used to run something on the receiver.
+    pub fn is_safe(&self) -> bool {
+        let url_ok = self.url.is_empty() || self.url.starts_with("https://") || self.url.starts_with("http://");
+        url_ok && self.url.len() <= 4096 && self.title.len() <= 512 && self.text.len() <= 64 * 1024
+    }
+}
+
+/// One chunk on an audio stream: interleaved signed 16-bit little-endian PCM.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudioChunk {
+    pub seq: u64,
+    pub pcm: ByteBuf,
+}
+
+/// Audio chunks are small (≤ 100 ms of 48 kHz stereo).
+pub const AUDIO_CHUNK_LIMIT: usize = 64 * 1024;
 
 /// Mouse buttons.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
