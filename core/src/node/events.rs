@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::discovery::DiscoveredDevice;
 use crate::model::{ConnectionKind, DeviceId, DeviceInfo, DeviceStatus, Permissions, TrustRole};
-use crate::protocol::PairAbortReason;
+use crate::protocol::{Catalog, InputEvent, PairAbortReason, SystemAction};
 use crate::store::TransferRecord;
 
 pub use super::continuity::MirroredNotification;
@@ -190,5 +190,64 @@ pub enum NodeEvent {
     Transfer {
         transfer: TransferRecord,
         rate_bps: u64,
+    },
+    /// A remote sent input for this device to perform (Phase 3).
+    RemoteInput {
+        from: DeviceId,
+        events: Vec<InputEvent>,
+    },
+    /// A remote asked for a power, volume or brightness action.
+    SystemRequested {
+        from: DeviceId,
+        from_name: String,
+        action: SystemAction,
+    },
+    /// A remote asked to open an app from this device's catalog.
+    LaunchRequested {
+        from: DeviceId,
+        from_name: String,
+        app: String,
+    },
+    /// A remote asked to run a saved command; answer with `Node::report_run`.
+    RunRequested {
+        from: DeviceId,
+        from_name: String,
+        command: String,
+    },
+    /// A command this device asked another to run has finished.
+    RunFinished {
+        from: DeviceId,
+        command: String,
+        ok: bool,
+        output: String,
+    },
+    /// A remote pressed one of this device's deck buttons.
+    DeckPressed {
+        from: DeviceId,
+        from_name: String,
+        button: String,
+    },
+    /// Another device's apps, commands and deck.
+    CatalogReceived {
+        from: DeviceId,
+        catalog: Catalog,
+    },
+    /// A device started (`on`) or stopped watching this device's screen.
+    ScreenRequested {
+        from: DeviceId,
+        from_name: String,
+        on: bool,
+    },
+    /// About once a second while a screen is shared or viewed.
+    ScreenStats {
+        peer: DeviceId,
+        sharing: bool,
+        fps: u8,
+        latency_ms: u32,
+        kbps: u32,
+    },
+    /// A screen this device was viewing stopped.
+    ScreenEnded {
+        peer: DeviceId,
     },
 }

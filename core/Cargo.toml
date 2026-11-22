@@ -12,6 +12,8 @@ authors.workspace = true
 default = []
 # OS keychain support (Windows Credential Manager / Secret Service / macOS Keychain).
 keychain = ["dep:keyring"]
+# Local HTTP + WebSocket API for scripts and the `devti` CLI (127.0.0.1 only, token auth).
+api = ["dep:axum"]
 
 [dependencies]
 tokio.workspace = true
@@ -26,6 +28,7 @@ hkdf.workspace = true
 ciborium.workspace = true
 serde.workspace = true
 serde_bytes.workspace = true
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio", "ws"], optional = true }
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

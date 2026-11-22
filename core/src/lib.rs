@@ -20,6 +20,8 @@ pub mod secret;
 pub mod store;
 pub mod tls;
 
+#[cfg(feature = "api")]
+pub mod api;
 pub use error::{Error, Result};
 pub use node::{Node, NodeConfig, NodeEvent};
 

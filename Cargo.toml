@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
-members = ["core", "core/ffi", "desktop/src-tauri"]
-default-members = ["core", "core/ffi"]
+members = ["core", "core/ffi", "desktop/src-tauri", "cli"]
+default-members = ["core", "core/ffi", "cli"]
 
 [workspace.package]
 version = "0.1.0"

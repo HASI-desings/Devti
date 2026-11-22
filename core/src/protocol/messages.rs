@@ -28,6 +28,9 @@ pub enum StreamOpen {
     Control,
     /// One file transfer (Phase 2): offer → answer → raw bytes → done.
     File,
+    /// A live screen (Phase 3): the sharing device opens it to the viewer; frames one
+    /// way, acknowledgements back.
+    Screen,
     #[serde(other)]
     Unknown,
 }
@@ -116,7 +119,7 @@ pub enum GoodbyeReason {
 }
 
 /// Messages on the control stream.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "t", rename_all = "snake_case")]
 pub enum ControlMsg {
     /// First message from each side after the stream opens.
@@ -171,6 +174,45 @@ pub enum ControlMsg {
     Dnd {
         on: bool,
     },
+    /// Pointer, keyboard, touch and media input for the receiver to perform (Phase 3).
+    /// Needs the `control` permission.
+    Input {
+        events: Vec<InputEvent>,
+    },
+    /// Power, volume or brightness on the receiver. Power actions need `commands`,
+    /// volume and brightness need `control`.
+    System {
+        action: SystemAction,
+    },
+    /// Open an app from the receiver's catalog (`commands`).
+    Launch {
+        app: String,
+    },
+    /// Run one of the receiver's saved commands by id (`commands`).
+    Run {
+        command: String,
+    },
+    /// Outcome of a `Run` (sent back to whoever asked).
+    RunResult {
+        command: String,
+        ok: bool,
+        output: String,
+    },
+    /// Press a shortcuts-deck button defined on the receiver (`commands`).
+    DeckPress {
+        button: String,
+    },
+    /// Asks for the receiver's apps, saved commands and shortcuts deck.
+    CatalogRequest,
+    Catalog {
+        catalog: Catalog,
+    },
+    /// Asks the receiver to share its screen with the sender (`screen_view`).
+    ScreenStart {
+        max_width: u32,
+        fps: u8,
+    },
+    ScreenStop,
     /// The session is ending on purpose.
     Goodbye {
         reason: GoodbyeReason,
@@ -178,6 +220,247 @@ pub enum ControlMsg {
     #[serde(other)]
     Unknown,
 }
+
+/// Mouse buttons.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MouseButton {
+    Left,
+    Right,
+    Middle,
+}
+
+/// One input action. Coordinates in `MoveTo`/`Tap`/`Swipe` are fractions (0..1) of the
+/// receiver's screen, so the sender never needs its resolution.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "k", rename_all = "snake_case")]
+pub enum InputEvent {
+    /// Relative pointer motion in device-independent pixels (touchpad).
+    Move {
+        dx: f32,
+        dy: f32,
+    },
+    /// Absolute pointer position (mirror window).
+    MoveTo {
+        x: f32,
+        y: f32,
+    },
+    Button {
+        button: MouseButton,
+        down: bool,
+    },
+    Click {
+        button: MouseButton,
+        count: u8,
+    },
+    /// Scroll in lines (positive `dy` = down).
+    Scroll {
+        dx: f32,
+        dy: f32,
+    },
+    /// Text to type as-is.
+    Text {
+        text: String,
+    },
+    /// A named key with modifiers, e.g. `{"key":"tab","mods":["alt"]}`.
+    Key {
+        key: String,
+        mods: Vec<String>,
+    },
+    /// play_pause, next, previous, stop, volume_up, volume_down, mute.
+    Media {
+        action: String,
+    },
+    /// Touch screens (Android): tap, long press and swipe at fractions of the screen.
+    Tap {
+        x: f32,
+        y: f32,
+    },
+    LongPress {
+        x: f32,
+        y: f32,
+    },
+    Swipe {
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        ms: u32,
+    },
+    /// back, home, recents, notifications, quick_settings, lock_screen, screenshot.
+    Nav {
+        action: String,
+    },
+    #[serde(other)]
+    Unknown,
+}
+
+impl InputEvent {
+    /// Drops values that make no sense (NaN, huge moves, very long text).
+    pub fn sanitized(self) -> Option<Self> {
+        fn ok(v: f32, max: f32) -> bool {
+            v.is_finite() && v.abs() <= max
+        }
+        fn frac(v: f32) -> bool {
+            v.is_finite() && (-0.01..=1.01).contains(&v)
+        }
+        let keep = match &self {
+            InputEvent::Move { dx, dy } => ok(*dx, 4000.0) && ok(*dy, 4000.0),
+            InputEvent::MoveTo { x, y } | InputEvent::Tap { x, y } | InputEvent::LongPress { x, y } => {
+                frac(*x) && frac(*y)
+            }
+            InputEvent::Swipe { x1, y1, x2, y2, ms } => {
+                frac(*x1) && frac(*y1) && frac(*x2) && frac(*y2) && *ms <= 10_000
+            }
+            InputEvent::Scroll { dx, dy } => ok(*dx, 200.0) && ok(*dy, 200.0),
+            InputEvent::Click { count, .. } => *count <= 3,
+            InputEvent::Text { text } => text.len() <= 4096,
+            InputEvent::Key { key, mods } => key.len() <= 32 && mods.len() <= 4,
+            InputEvent::Media { action } | InputEvent::Nav { action } => action.len() <= 32,
+            InputEvent::Button { .. } => true,
+            InputEvent::Unknown => false,
+        };
+        keep.then_some(self)
+    }
+}
+
+/// System actions a remote can ask for.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "a", rename_all = "snake_case")]
+pub enum SystemAction {
+    Lock,
+    Sleep,
+    Shutdown,
+    Restart,
+    SignOut,
+    SetVolume {
+        percent: u8,
+    },
+    SetBrightness {
+        percent: u8,
+    },
+    #[serde(other)]
+    Unknown,
+}
+
+impl SystemAction {
+    /// Power actions need `commands`; volume and brightness only `control`.
+    pub fn is_power(&self) -> bool {
+        matches!(
+            self,
+            SystemAction::Lock
+                | SystemAction::Sleep
+                | SystemAction::Shutdown
+                | SystemAction::Restart
+                | SystemAction::SignOut
+        )
+    }
+}
+
+/// What a device offers to remotes and decks.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Catalog {
+    #[serde(default)]
+    pub apps: Vec<CatalogApp>,
+    #[serde(default)]
+    pub commands: Vec<CatalogCommand>,
+    #[serde(default)]
+    pub deck: Vec<DeckPage>,
+    /// Which `SystemAction`s work on this device (e.g. no brightness on a desktop monitor).
+    #[serde(default)]
+    pub system: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CatalogApp {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CatalogCommand {
+    pub id: String,
+    pub name: String,
+    /// Ask "are you sure?" on the remote before running.
+    #[serde(default)]
+    pub confirm: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeckPage {
+    pub name: String,
+    pub buttons: Vec<DeckButton>,
+}
+
+/// One shortcuts-deck button. The action stays on the device that defined it; remotes
+/// only see the label, icon and colour and send `DeckPress { button: id }`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeckButton {
+    pub id: String,
+    pub label: String,
+    /// One of the built-in icon names (the UI falls back to the label's first letter).
+    #[serde(default)]
+    pub icon: String,
+    /// One of the six voices.
+    #[serde(default)]
+    pub voice: String,
+}
+
+impl Catalog {
+    /// Caps sizes so a hostile peer can't flood a remote's UI.
+    pub fn sanitized(mut self) -> Self {
+        fn cap(s: &str, n: usize) -> String {
+            s.chars().filter(|c| !c.is_control()).take(n).collect()
+        }
+        self.apps.truncate(500);
+        for a in &mut self.apps {
+            a.id = cap(&a.id, 512);
+            a.name = cap(&a.name, 80);
+        }
+        self.commands.truncate(100);
+        for c in &mut self.commands {
+            c.id = cap(&c.id, 64);
+            c.name = cap(&c.name, 80);
+        }
+        self.deck.truncate(12);
+        for p in &mut self.deck {
+            p.name = cap(&p.name, 40);
+            p.buttons.truncate(48);
+            for b in &mut p.buttons {
+                b.id = cap(&b.id, 64);
+                b.label = cap(&b.label, 40);
+                b.icon = cap(&b.icon, 32);
+                b.voice = cap(&b.voice, 16);
+            }
+        }
+        self.system.truncate(16);
+        self
+    }
+}
+
+/// Messages on a screen stream. Frames go sharer → viewer, acks viewer → sharer.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "t", rename_all = "snake_case")]
+pub enum ScreenMsg {
+    /// One JPEG frame. `latency_ms` and `fps` are the sharer's latest measurements, so
+    /// the viewer can show them.
+    Frame {
+        seq: u64,
+        w: u32,
+        h: u32,
+        jpeg: ByteBuf,
+        latency_ms: u32,
+        fps: u8,
+    },
+    Ack {
+        seq: u64,
+    },
+    #[serde(other)]
+    Unknown,
+}
+
+/// Screen frames can be large (a 1080p JPEG at high quality).
+pub const SCREEN_FRAME_LIMIT: usize = 8 * 1024 * 1024;
 
 /// Largest clipboard text sent between devices.
 pub const CLIPBOARD_MAX_BYTES: usize = 256 * 1024;

@@ -1,0 +1,24 @@
+[package]
+name = "devti-cli"
+description = "devti — script your Devti ecosystem from a terminal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "devti"
+path = "src/main.rs"
+
+[dependencies]
+ureq = { version = "3", default-features = false, features = ["json"] }
+tungstenite = { version = "0.27", default-features = false, features = ["handshake"] }
+serde_json.workspace = true
+dirs = "6"
+
+[dev-dependencies]
+devti-core = { workspace = true, features = ["api"] }
+tokio.workspace = true
+tempfile.workspace = true

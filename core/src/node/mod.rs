@@ -12,7 +12,9 @@
 
 mod ceremony;
 mod continuity;
+mod control;
 mod events;
+pub mod screen;
 mod session;
 mod transfer;
 mod trust;
@@ -155,6 +157,10 @@ pub(crate) struct Inner {
     pub continuity: continuity::State,
     /// Active and queued file transfers.
     pub transfers: transfer::State,
+    /// Phase 3 remote-control catalog.
+    pub control: control::State,
+    /// Live screens being shared or viewed.
+    pub screen: screen::State,
 }
 
 /// Handle to a running node. Cheap to clone.
@@ -236,6 +242,8 @@ impl Node {
             rt: tokio::runtime::Handle::current(),
             continuity: continuity::State::new(store_dnd),
             transfers: transfer::State::new(downloads),
+            control: control::State::new(),
+            screen: screen::State::new(),
         });
 
         if config.discovery && !paused {

@@ -211,6 +211,13 @@ pub(crate) async fn serve_connection(inner: Arc<Inner>, conn: Connection, peer_f
                 }
                 inner.rt.spawn(super::transfer::receive(inner.clone(), peer_id, send, recv));
             }
+            StreamOpen::Screen => {
+                if !inner.trust.is_trusted(&peer_fp) {
+                    conn.close(VarInt::from_u32(close_code::UNTRUSTED), b"not paired");
+                    return;
+                }
+                inner.rt.spawn(super::screen::receive(inner.clone(), peer_id, send, recv));
+            }
             StreamOpen::Unknown => {
                 let mut send = send;
                 let _ = send.reset(VarInt::from_u32(0));
@@ -413,6 +420,15 @@ fn handle_control(inner: &Arc<Inner>, peer_id: DeviceId, msg: ControlMsg) {
         | ControlMsg::NotificationAction { .. }
         | ControlMsg::NotificationDismiss { .. }
         | ControlMsg::Dnd { .. } => super::continuity::handle(inner, peer_id, msg),
+        ControlMsg::Input { .. }
+        | ControlMsg::System { .. }
+        | ControlMsg::Launch { .. }
+        | ControlMsg::Run { .. }
+        | ControlMsg::RunResult { .. }
+        | ControlMsg::DeckPress { .. }
+        | ControlMsg::CatalogRequest
+        | ControlMsg::Catalog { .. } => super::control::handle(inner, peer_id, msg),
+        ControlMsg::ScreenStart { .. } | ControlMsg::ScreenStop => super::screen::handle(inner, peer_id, msg),
         ControlMsg::Goodbye { .. } | ControlMsg::Pong { .. } | ControlMsg::Hello { .. } => {}
         ControlMsg::Unknown => tracing::trace!(peer = %peer_id, "ignoring unknown control message"),
     }
@@ -442,6 +458,7 @@ fn on_session_closed(inner: &Arc<Inner>, peer_id: DeviceId, session_id: u64, rea
         return;
     }
     super::continuity::on_session_down(inner, peer_id);
+    super::screen::on_session_down(inner, peer_id);
     inner.log(Some((&peer_id, &snap.info.name)), "disconnected", &reason.to_string());
     inner.emit(NodeEvent::PeerChanged { peer: snap });
 }

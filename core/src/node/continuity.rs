@@ -63,7 +63,7 @@ impl Inner {
         self.peers.read().get(peer).map(|p| p.record.permissions)
     }
 
-    fn peer_name(&self, peer: &DeviceId) -> String {
+    pub(crate) fn peer_name(&self, peer: &DeviceId) -> String {
         self.peers.read().get(peer).map(|p| p.record.info.name.clone()).unwrap_or_default()
     }
 
