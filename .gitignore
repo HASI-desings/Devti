@@ -20,3 +20,9 @@ android/app/src/main/java/uniffi
 android/jvm-check/build
 .kotlin
 plugins/*/target
+ios/Generated
+ios/Frameworks
+ios/build
+ios/Devti.xcodeproj
+ios/DerivedData
+ios/Devti/Info.plist
