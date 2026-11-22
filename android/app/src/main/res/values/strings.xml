@@ -19,4 +19,11 @@
     <string name="ring_body">%1$s is looking for this phone.</string>
     <string name="ring_found">I found it</string>
     <string name="share_label">Send with Devti</string>
+    <string name="screen_sharing_title">Sharing your screen</string>
+    <string name="screen_sharing_body">A computer in your Devti ecosystem can see this screen.</string>
+    <string name="screen_sharing_stop">Stop sharing</string>
+    <string name="screen_request_title">%1$s wants to see your screen</string>
+    <string name="screen_request_body">Tap to allow. Android will ask you to confirm.</string>
+    <string name="accessibility_label">Devti control</string>
+    <string name="accessibility_description">Lets a computer you paired with Devti tap, swipe and type on this phone while you mirror it. Devti doesn\'t read or store what is on your screen; it only finds the text field you are typing into. Turn this off at any time.</string>
 </resources>

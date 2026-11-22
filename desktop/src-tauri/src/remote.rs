@@ -94,10 +94,7 @@ impl Remote {
     pub fn start(app: &AppHandle, node: Node, data_dir: PathBuf) -> Arc<Self> {
         let (tx, rx) = mpsc::channel::<Vec<InputEvent>>();
         let warn_app = app.clone();
-        std::thread::Builder::new()
-            .name("devti-input".into())
-            .spawn(move || input_thread(rx, warn_app))
-            .ok();
+        std::thread::Builder::new().name("devti-input".into()).spawn(move || input_thread(rx, warn_app)).ok();
         let remote = Arc::new(Self { node, input: tx, apps: Mutex::new(Vec::new()), api: Mutex::new(None), data_dir });
         let r = remote.clone();
         std::thread::Builder::new()
@@ -125,11 +122,8 @@ impl Remote {
     }
 
     pub fn save_commands(&self, list: Vec<SavedCommand>) -> anyhow::Result<()> {
-        let list: Vec<SavedCommand> = list
-            .into_iter()
-            .filter(|c| !c.name.trim().is_empty() && !c.command.trim().is_empty())
-            .take(100)
-            .collect();
+        let list: Vec<SavedCommand> =
+            list.into_iter().filter(|c| !c.name.trim().is_empty() && !c.command.trim().is_empty()).take(100).collect();
         self.node.set_setting(SETTING_COMMANDS, &serde_json::to_string(&list)?)?;
         self.publish_catalog();
         Ok(())
@@ -240,7 +234,8 @@ impl Remote {
         let app = app.clone();
         tauri::async_runtime::spawn(async move {
             if let Err(e) = me.do_action(&b.action).await {
-                let _ = app.notification().builder().title(format!("“{}” didn't work", b.label)).body(e.to_string()).show();
+                let _ =
+                    app.notification().builder().title(format!("“{}” didn't work", b.label)).body(e.to_string()).show();
             }
         });
     }
@@ -319,7 +314,12 @@ pub fn on_node_event(app: &AppHandle, remote: &Arc<Remote>, ev: &NodeEvent) {
             let input = remote.input.clone();
             std::thread::spawn(move || {
                 if let Err(e) = system_action(&action, &input) {
-                    let _ = app.notification().builder().title(format!("{who} couldn't do that")).body(e.to_string()).show();
+                    let _ = app
+                        .notification()
+                        .builder()
+                        .title(format!("{who} couldn't do that"))
+                        .body(e.to_string())
+                        .show();
                 }
             });
         }
@@ -552,14 +552,23 @@ fn system_action(action: &SystemAction, input: &mpsc::Sender<Vec<InputEvent>>) -
             SystemAction::Lock => try_cmds(&[
                 &["loginctl", "lock-session"],
                 &["xdg-screensaver", "lock"],
-                &["dbus-send", "--type=method_call", "--dest=org.freedesktop.ScreenSaver", "/ScreenSaver", "org.freedesktop.ScreenSaver.Lock"],
+                &[
+                    "dbus-send",
+                    "--type=method_call",
+                    "--dest=org.freedesktop.ScreenSaver",
+                    "/ScreenSaver",
+                    "org.freedesktop.ScreenSaver.Lock",
+                ],
             ]),
             SystemAction::Sleep => try_cmds(&[&["systemctl", "suspend"], &["loginctl", "suspend"]]),
             SystemAction::Shutdown => try_cmds(&[&["systemctl", "poweroff"], &["loginctl", "poweroff"]]),
             SystemAction::Restart => try_cmds(&[&["systemctl", "reboot"], &["loginctl", "reboot"]]),
             SystemAction::SignOut => {
                 let session = std::env::var("XDG_SESSION_ID").unwrap_or_default();
-                try_cmds(&[&["loginctl", "terminate-session", &session], &["gnome-session-quit", "--logout", "--no-prompt"]])
+                try_cmds(&[
+                    &["loginctl", "terminate-session", &session],
+                    &["gnome-session-quit", "--logout", "--no-prompt"],
+                ])
             }
             SystemAction::SetVolume { percent } => {
                 let p = format!("{}%", percent.min(&100));
@@ -583,7 +592,8 @@ fn system_action(action: &SystemAction, input: &mpsc::Sender<Vec<InputEvent>>) -
 /// systemd-logind lets the active session set its own backlight without root.
 #[cfg(not(target_os = "windows"))]
 fn logind_brightness(percent: u8) -> anyhow::Result<()> {
-    let dir = std::fs::read_dir("/sys/class/backlight")?.flatten().next().ok_or_else(|| anyhow::anyhow!("no backlight"))?;
+    let dir =
+        std::fs::read_dir("/sys/class/backlight")?.flatten().next().ok_or_else(|| anyhow::anyhow!("no backlight"))?;
     let name = dir.file_name().to_string_lossy().to_string();
     let max: u32 = std::fs::read_to_string(dir.path().join("max_brightness"))?.trim().parse()?;
     let value = (max as u64 * percent.clamp(1, 100) as u64 / 100) as u32;
@@ -640,9 +650,10 @@ fn platform_apps() -> Vec<AppEntry> {
 #[cfg(not(target_os = "windows"))]
 fn platform_apps() -> Vec<AppEntry> {
     let mut dirs: Vec<PathBuf> = Vec::new();
-    if let Some(home) = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).or_else(|| {
-        std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share"))
-    }) {
+    if let Some(home) = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
+    {
         dirs.push(home.join("applications"));
     }
     let data_dirs = std::env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share:/usr/share".into());
@@ -819,7 +830,9 @@ pub mod obs {
         if res["d"]["requestStatus"]["result"].as_bool() == Some(true) {
             Ok(())
         } else {
-            anyhow::bail!(res["d"]["requestStatus"]["comment"].as_str().unwrap_or("OBS couldn't switch scene").to_string())
+            anyhow::bail!(
+                res["d"]["requestStatus"]["comment"].as_str().unwrap_or("OBS couldn't switch scene").to_string()
+            )
         }
     }
 
@@ -894,7 +907,11 @@ mod tests {
     fn obs_auth_matches_the_spec_example() {
         // Worked example from the obs-websocket v5 protocol documentation.
         assert_eq!(
-            obs::auth_string("supersecretpassword", "lM1GncleQOaCu9lT1yeUZhFYnqhsLLP1G5lAGo3ixaI=", "+IxH4CnCiqpX1rM9scsNynZzbOe4KhDeYcTNS3PDaeY="),
+            obs::auth_string(
+                "supersecretpassword",
+                "lM1GncleQOaCu9lT1yeUZhFYnqhsLLP1G5lAGo3ixaI=",
+                "+IxH4CnCiqpX1rM9scsNynZzbOe4KhDeYcTNS3PDaeY="
+            ),
             "1Ct943GAT+6YQUUX47Ia/ncufilbe6+oD6lY+5kaCu4="
         );
     }

@@ -3,6 +3,8 @@ package app.devti.android
 import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
+import app.devti.android.ui.remote.PresenterKeys
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -48,6 +50,16 @@ class MainActivity : ComponentActivity() {
         super.onWindowFocusChanged(hasFocus)
         // The first moment Android allows reading what was copied in another app.
         if (hasFocus) core.captureClipboard()
+    }
+
+    /** In the presenter, the volume buttons turn slides instead of changing the volume. */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        val presenter = PresenterKeys.onVolume
+        if (presenter != null && (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            presenter(keyCode == KeyEvent.KEYCODE_VOLUME_UP)
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     /** A devti://pair link (from the system camera app) starts pairing directly. */

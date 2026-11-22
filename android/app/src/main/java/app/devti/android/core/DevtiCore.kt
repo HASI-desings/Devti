@@ -20,6 +20,15 @@ import app.devti.android.continuity.ClipboardBridge
 import app.devti.android.continuity.Files
 import app.devti.android.continuity.NotificationMirror
 import app.devti.android.continuity.Ringer
+import app.devti.android.control.ControlAccessibility
+import app.devti.android.control.PhoneCommands
+import app.devti.android.control.ScreenCaptureService
+import app.devti.android.control.ScreenShareActivity
+import app.devti.android.control.screenTargetOf
+import app.devti.android.core.state.Catalog
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.floatOrNull
+import org.json.JSONObject
 import app.devti.android.core.state.CoreState
 import app.devti.android.core.state.MirroredNotification
 import app.devti.android.core.state.PairingStage
@@ -37,6 +46,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -71,6 +81,8 @@ class DevtiCore(private val context: Context) : EventListener {
     val files = Files(context)
     val clipboard = ClipboardBridge(context)
     private val ringer = Ringer(context)
+    private val phone = PhoneCommands(context)
+    @Volatile private var warnedAccessibility = false
 
     /** Mirror this phone's notifications to the computer (needs notification access too). */
     @Volatile var mirrorNotifications: Boolean = true
@@ -107,6 +119,7 @@ class DevtiCore(private val context: Context) : EventListener {
             refresh()
             watchDevice()
             io.launch { files.cleanStale() }
+            io.launch { runCatching { created.setCatalog(Reducer.json.encodeToString(Catalog.serializer(), phone.catalog())) } }
             created
         } catch (e: DevtiException) {
             _state.update { it.copy(error = e.readable()) }
@@ -165,7 +178,78 @@ class DevtiCore(private val context: Context) : EventListener {
                 Alerts.mirrored(context, "${m.from}/${m.notif.key}", title, "${m.notif.text}\n— ${m.fromName}", ev["dnd"]?.jsonPrimitive?.booleanOrNull == true)
             }
             "notification_removed" -> Alerts.cancelMirrored(context, "${str("from")}/${str("key")}")
+            // ---- Phase 3: a computer controls this phone
+            "remote_input" -> (ev["events"] as? JsonArray)?.forEach { e -> perform(e as? JsonObject ?: return@forEach) }
+            "system_requested" -> {
+                val a = (ev["action"] as? JsonObject) ?: return
+                when (a["a"]?.jsonPrimitive?.contentOrNull) {
+                    "lock" -> if (ControlAccessibility.running()?.nav("lock_screen") != true) needAccessibility()
+                    "set_volume" -> phone.setVolume(a["percent"]?.jsonPrimitive?.intOrNull ?: return)
+                }
+            }
+            "launch_requested" -> str("app")?.let { phone.launch(it) }
+            "run_requested" -> {
+                val from = str("from") ?: return
+                val command = str("command") ?: return
+                io.launch {
+                    val (ok, out) = phone.run(command)
+                    runCatching { node?.reportRun(from, command, ok, out) }
+                }
+            }
+            "screen_requested" -> {
+                if (ev["on"]?.jsonPrimitive?.booleanOrNull == true) requestScreenShare(str("from_name") ?: "Your computer")
+                else if (node?.screenViewers().isNullOrEmpty()) ScreenCaptureService.stop(context)
+            }
         }
+    }
+
+    /** One input event from a computer, performed through the accessibility service. */
+    private fun perform(e: JsonObject) {
+        fun f(k: String) = e[k]?.jsonPrimitive?.floatOrNull ?: 0f
+        val k = e["k"]?.jsonPrimitive?.contentOrNull ?: return
+        if (k == "media") {
+            phone.media(e["action"]?.jsonPrimitive?.contentOrNull ?: return)
+            return
+        }
+        val a = ControlAccessibility.running() ?: return needAccessibility()
+        when (k) {
+            "tap" -> a.tap(f("x"), f("y"))
+            "long_press" -> a.longPress(f("x"), f("y"))
+            "swipe" -> a.gesture(f("x1"), f("y1"), f("x2"), f("y2"), (e["ms"]?.jsonPrimitive?.longOrNull ?: 200L))
+            "text" -> a.type(e["text"]?.jsonPrimitive?.contentOrNull ?: return)
+            "key" -> a.key(e["key"]?.jsonPrimitive?.contentOrNull ?: return)
+            "nav" -> a.nav(e["action"]?.jsonPrimitive?.contentOrNull ?: return)
+        }
+    }
+
+    private fun needAccessibility() {
+        if (warnedAccessibility) return
+        warnedAccessibility = true
+        toast(PhoneCommands.NEEDS_ACCESSIBILITY)
+    }
+
+    /** A computer wants to see this screen: Android requires the user to say yes each time. */
+    private fun requestScreenShare(fromName: String) {
+        if (ScreenCaptureService.running) return
+        val intent = android.content.Intent(context, ScreenShareActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        // Works when Devti is open; otherwise the notification below lets the user say yes.
+        runCatching { context.startActivity(intent) }
+        Alerts.screenRequest(context, fromName, intent)
+    }
+
+    fun declineScreenShare() {
+        node?.screenViewers()?.forEach { runCatching { node?.screenStopSharing(it) } }
+    }
+
+    fun stopSharingScreen() {
+        declineScreenShare()
+        ScreenCaptureService.stop(context)
+    }
+
+    fun screenTarget(): JSONObject = screenTargetOf(node?.screenTargetJson())
+
+    fun pushScreenFrame(width: Int, height: Int, jpeg: ByteArray) {
+        runCatching { node?.pushScreenFrame(width.toUInt(), height.toUInt(), jpeg) }
     }
 
     private fun onTransfer(t: TransferRecord) {
@@ -263,6 +347,25 @@ class DevtiCore(private val context: Context) : EventListener {
             }
             if (failed > 0) toast(if (failed == 1) "One file couldn't be read" else "$failed files couldn't be read")
         }
+    }
+
+    // ---- Phase 3: this phone controls a computer
+
+    fun sendInput(deviceId: String, events: List<JsonObject>) {
+        runCatching { node?.sendInput(deviceId, app.devti.android.core.state.Input.encode(events)) }
+    }
+
+    fun systemAction(deviceId: String, action: String, percent: Int? = null): String? =
+        act { node?.systemAction(deviceId, app.devti.android.core.state.Input.system(action, percent)) }
+
+    fun launchApp(deviceId: String, app: String): String? = act { node?.launchApp(deviceId, app) }
+
+    fun runCommand(deviceId: String, command: String): String? = act { node?.runCommand(deviceId, command) }
+
+    fun deckPress(deviceId: String, button: String): String? = act { node?.deckPress(deviceId, button) }
+
+    fun requestCatalog(deviceId: String) {
+        runCatching { node?.requestCatalog(deviceId) }
     }
 
     fun cancelTransfer(id: Long): String? = act { node?.cancelTransfer(id.toULong()) }

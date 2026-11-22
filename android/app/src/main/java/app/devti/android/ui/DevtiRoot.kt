@@ -8,6 +8,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,9 +68,51 @@ fun DevtiRoot(core: DevtiCore) {
             pairing = false
             DevtiService.start(context)
         })
-        else -> Home(core, state, onPairAnother = {
+        else -> Shell(core, state, onPairAnother = {
             core.clearPairing()
             pairing = true
         })
+    }
+}
+
+private enum class Tab(val label: String) { Home("Home"), Remote("Remote"), Deck("Deck") }
+
+/** Home, the remote for the computer, and its shortcuts deck. */
+@Composable
+private fun Shell(core: DevtiCore, state: app.devti.android.core.state.CoreState, onPairAnother: () -> Unit) {
+    val c = Devti.colors
+    var tab by remember { mutableStateOf(Tab.Home) }
+    Column(Modifier.fillMaxSize().background(c.bg)) {
+        Box(Modifier.weight(1f).statusBarsPadding().consumeWindowInsets(WindowInsets.navigationBars)) {
+            when (tab) {
+                Tab.Home -> Home(core, state, onPairAnother)
+                Tab.Remote -> app.devti.android.ui.remote.Remote(core, state)
+                Tab.Deck -> app.devti.android.ui.remote.Deck(core, state)
+            }
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(c.surface)
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            Tab.entries.forEach { t ->
+                val sel = t == tab
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (sel) c.surface2 else androidx.compose.ui.graphics.Color.Transparent)
+                        .clickable { tab = t }
+                        .padding(vertical = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(Modifier.size(if (sel) 8.dp else 6.dp).clip(CircleShape).background(if (sel) c.text else c.textFaint))
+                    Text(t.label, style = Devti.type.label, color = if (sel) c.text else c.textDim, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
     }
 }

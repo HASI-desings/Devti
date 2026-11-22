@@ -126,6 +126,35 @@ data class MirroredNotification(
     val notif: NotificationInfo,
 )
 
+// ------------------------------------------------------------------ Phase 3
+
+@Serializable
+data class CatalogApp(val id: String, val name: String)
+
+@Serializable
+data class CatalogCommand(val id: String, val name: String, val confirm: Boolean = false)
+
+@Serializable
+data class DeckButton(val id: String, val label: String, val icon: String = "", val voice: String = "")
+
+@Serializable
+data class DeckPage(val name: String, val buttons: List<DeckButton> = emptyList())
+
+/** What a device offers to remotes. */
+@Serializable
+data class Catalog(
+    val apps: List<CatalogApp> = emptyList(),
+    val commands: List<CatalogCommand> = emptyList(),
+    val deck: List<DeckPage> = emptyList(),
+    val system: List<String> = emptyList(),
+)
+
+/** Outcome of a command this phone ran on another device. */
+data class RunResult(val from: String, val command: String, val ok: Boolean, val output: String, val ts: Long)
+
+/** Live numbers while this phone's screen is being watched. */
+data class ShareStats(val fps: Int, val latencyMs: Int, val kbps: Int)
+
 /** Text another device put on this phone's clipboard. */
 data class ClipboardIn(val fromName: String, val text: String, val ts: Long)
 
@@ -167,6 +196,12 @@ data class CoreState(
     val ringingOut: Set<String> = emptySet(),
     /** Files being copied out of other apps before they can be sent. */
     val preparing: Int = 0,
+    /** Catalogs of other devices (their apps, commands, deck), by device id. */
+    val catalogs: Map<String, Catalog> = emptyMap(),
+    val runResults: List<RunResult> = emptyList(),
+    /** Devices watching this phone's screen: id → name. */
+    val screenViewers: Map<String, String> = emptyMap(),
+    val shareStats: ShareStats? = null,
 ) {
     /** The Hub this phone belongs to: the first paired computer. */
     val hub: PeerSnapshot?

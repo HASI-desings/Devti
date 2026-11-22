@@ -1,4 +1,7 @@
+import app.devti.android.core.state.Catalog
+import app.devti.android.core.state.CatalogCommand
 import app.devti.android.core.state.CoreState
+import app.devti.android.core.state.Input
 import app.devti.android.core.state.NotifAction
 import app.devti.android.core.state.NotificationInfo
 import app.devti.android.core.state.Permissions
@@ -27,6 +30,7 @@ import uniffi.devti_ffi.coreVersion
 private class Device(name: String, kind: String, platform: String) : EventListener, PlatformSecretStore {
     private val secrets = ConcurrentHashMap<String, ByteArray>()
     val state = AtomicReference(CoreState())
+    val raw = java.util.concurrent.ConcurrentLinkedQueue<String>()
     val core: DevtiMobile = DevtiMobile(
         MobileConfig(
             dataDir = Files.createTempDirectory("devti-jvm").toString(),
@@ -47,6 +51,7 @@ private class Device(name: String, kind: String, platform: String) : EventListen
     }
 
     override fun onEvent(eventJson: String) {
+        raw.add(eventJson)
         state.updateAndGet { Reducer.apply(it, eventJson) }
     }
 
@@ -140,6 +145,32 @@ class CoreBridgeTest {
         hub.core.sendClipboard("should not arrive")
         Thread.sleep(800)
         assertEquals("from the laptop", phone.state.get().lastClipboard?.text)
+
+        // Phase 3 through the bindings: the phone reads the hub's catalog, sends touchpad
+        // input built by the app's Input helper, and runs a saved command.
+        hub.core.setCatalog(
+            Reducer.json.encodeToString(
+                Catalog.serializer(),
+                Catalog(commands = listOf(CatalogCommand("hello", "Say hello")), system = listOf("lock", "set_volume")),
+            ),
+        )
+        phone.core.requestCatalog(hubId)
+        val cat = phone.waitFor("catalog") { it.catalogs[hubId] != null }.catalogs[hubId]!!
+        assertEquals("Say hello", cat.commands.single().name)
+        phone.core.sendInput(hubId, Input.encode(listOf(Input.move(3f, -2f), Input.click(), Input.key("tab", "alt"), Input.text("hé"))))
+        val waitRaw = { what: String, pred: (String) -> Boolean ->
+            val end = System.currentTimeMillis() + 10_000
+            while (hub.raw.none(pred) && System.currentTimeMillis() < end) Thread.sleep(25)
+            assertTrue(hub.raw.any(pred), what)
+        }
+        waitRaw("remote input") { it.contains("\"remote_input\"") && it.contains("\"hé\"") && it.contains("\"alt\"") }
+        phone.core.systemAction(hubId, Input.system("set_volume", 140))
+        waitRaw("volume clamped to 100") { it.contains("\"system_requested\"") && it.contains("\"percent\":100") }
+        phone.core.runCommand(hubId, "hello")
+        waitRaw("run requested") { it.contains("\"run_requested\"") }
+        hub.core.reportRun(phoneId, "hello", true, "hi there")
+        val result = phone.waitFor("run result") { it.runResults.isNotEmpty() }.runResults.first()
+        assertEquals("hi there", result.output)
 
         // Errors arrive as typed exceptions with a readable reason.
         val bad = assertFailsWith<DevtiException.InvalidInput> { phone.core.pairWithUri("nope") }

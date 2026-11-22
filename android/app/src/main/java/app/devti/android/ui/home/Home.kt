@@ -66,6 +66,9 @@ private val WORKS_NOW = listOf(
     "Clipboard both ways — Android lets Devti read it only while Devti is open",
     "Phone notifications on your computer, with actions, replies and dismiss",
     "Do Not Disturb everywhere at once, and find my phone / computer",
+    "Touchpad, keyboard, media, power, apps, commands and presenter for your computer (Remote tab)",
+    "Your computer's shortcuts deck (Deck tab)",
+    "Your computer sees and controls this phone (screen sharing + Devti control)",
 )
 
 @Composable
@@ -157,7 +160,7 @@ fun Home(core: DevtiCore, state: CoreState, onPairAnother: () -> Unit) {
         Card {
             WORKS_NOW.forEach { Text("• $it", style = Devti.type.small, color = c.textDim) }
             Text(
-                "Screen sharing, remote control, calls and SMS arrive in the next Devti updates.",
+                "Using this phone as a second screen, calls and SMS arrive in the next Devti updates.",
                 style = Devti.type.small,
                 color = c.textFaint,
             )
@@ -349,6 +352,8 @@ private fun ContinuitySettings(core: DevtiCore, state: CoreState) {
         onDispose { owner.lifecycle.removeObserver(obs) }
     }
 
+    ThisPhoneOnComputer(core, state)
+
     Text("Everywhere", style = Devti.type.heading, color = c.text)
     Card {
         Toggle(
@@ -423,3 +428,40 @@ private fun AccessDialog(p: PeerSnapshot, onChange: (Permissions) -> Unit, onClo
 
 private fun toast(context: android.content.Context, text: String) =
     android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
+
+/** Phase 3: whether a computer can see and operate this phone, and who is watching now. */
+@Composable
+private fun ThisPhoneOnComputer(core: DevtiCore, state: CoreState) {
+    val c = Devti.colors
+    val context = LocalContext.current
+    var control by remember { mutableStateOf(app.devti.android.control.ControlAccessibility.enabled(context)) }
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val obs = LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_RESUME) control = app.devti.android.control.ControlAccessibility.enabled(context)
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+    Text("This phone on your computer", style = Devti.type.heading, color = c.text)
+    Card {
+        if (state.screenViewers.isNotEmpty()) {
+            val who = state.screenViewers.values.joinToString()
+            Text("$who can see this screen now", style = Devti.type.label, color = c.text)
+            state.shareStats?.let { Text("${it.fps} fps · ${it.latencyMs} ms", style = Devti.type.small, color = c.textDim) }
+            GhostButton("Stop sharing", onClick = { core.stopSharingScreen() })
+        } else {
+            Text("Mirror and control", style = Devti.type.label, color = c.text)
+            Text(
+                "Open this phone from Devti on your computer to see its screen there. Android asks you to allow screen sharing each time.",
+                style = Devti.type.small,
+                color = c.textDim,
+            )
+        }
+        Toggle(
+            "Let the computer tap and type here",
+            if (control) "On. Turn it off in Android's Accessibility settings." else "Needs “Devti control” turned on in Android's Accessibility settings.",
+            control,
+        ) { context.startActivity(app.devti.android.control.ControlAccessibility.settingsIntent()) }
+    }
+}

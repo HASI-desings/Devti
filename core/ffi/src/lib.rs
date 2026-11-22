@@ -346,6 +346,79 @@ impl DevtiMobile {
         Ok(self.node.set_low_battery_threshold(percent)?)
     }
 
+    // ------------------------------------------------------------- Phase 3
+
+    /// Sends input to a device (JSON array of `InputEvent`).
+    pub fn send_input(&self, device_id: String, events_json: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        let events: Vec<devti_core::protocol::InputEvent> =
+            serde_json::from_str(&events_json).map_err(|e| DevtiError::InvalidInput { reason: e.to_string() })?;
+        Ok(self.node.send_input(&device_id.parse()?, events)?)
+    }
+
+    /// Power, volume or brightness on a device (JSON `SystemAction`, e.g. `{"a":"lock"}`).
+    pub fn system_action(&self, device_id: String, action_json: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        let action: devti_core::protocol::SystemAction =
+            serde_json::from_str(&action_json).map_err(|e| DevtiError::InvalidInput { reason: e.to_string() })?;
+        Ok(self.node.system_action(&device_id.parse()?, action)?)
+    }
+
+    pub fn launch_app(&self, device_id: String, app: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.launch_app(&device_id.parse()?, &app)?)
+    }
+
+    pub fn run_command(&self, device_id: String, command: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.run_command(&device_id.parse()?, &command)?)
+    }
+
+    /// Answers a `run_requested` event.
+    pub fn report_run(&self, device_id: String, command: String, ok: bool, output: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.report_run(&device_id.parse()?, &command, ok, &output)?)
+    }
+
+    pub fn deck_press(&self, device_id: String, button: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.deck_press(&device_id.parse()?, &button)?)
+    }
+
+    pub fn request_catalog(&self, device_id: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.request_catalog(&device_id.parse()?)?)
+    }
+
+    /// What this phone offers to remotes (JSON `Catalog`).
+    pub fn set_catalog(&self, catalog_json: String) -> Result<(), DevtiError> {
+        let catalog: devti_core::protocol::Catalog =
+            serde_json::from_str(&catalog_json).map_err(|e| DevtiError::InvalidInput { reason: e.to_string() })?;
+        self.node.set_catalog(catalog);
+        Ok(())
+    }
+
+    /// Sharer side: the newest encoded JPEG frame of this phone's screen.
+    pub fn push_screen_frame(&self, width: u32, height: u32, jpeg: Vec<u8>) -> Result<(), DevtiError> {
+        Ok(self.node.push_screen_frame(width, height, jpeg)?)
+    }
+
+    /// What the encoder should produce now (JSON `ScreenTarget`: max_width, fps, quality).
+    pub fn screen_target_json(&self) -> String {
+        serde_json::to_string(&self.node.screen_target()).unwrap_or_default()
+    }
+
+    /// Device ids watching this phone's screen.
+    pub fn screen_viewers(&self) -> Vec<String> {
+        self.node.screen_viewers().into_iter().map(|d| d.to_string()).collect()
+    }
+
+    /// Stops sharing this phone's screen with one viewer.
+    pub fn screen_stop_sharing(&self, device_id: String) -> Result<(), DevtiError> {
+        self.node.screen_stop_sharing(&device_id.parse()?);
+        Ok(())
+    }
+
     /// Call when the network changes or the app returns to the foreground.
     pub fn reconnect_now(&self) {
         self.node.reconnect_now();

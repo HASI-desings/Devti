@@ -74,4 +74,22 @@ class ReducerTest {
         s = Reducer.apply(s, """{"type":"ring_requested","from":"AAAAAAAAAAAAAAAA","from_name":"Studio Laptop","on":false}""")
         assertNull(s.ringing)
     }
+
+    @Test
+    fun controlEvents() {
+        var s = CoreState(ready = true)
+        s = Reducer.apply(s, """{"type":"catalog_received","from":"AAAAAAAAAAAAAAAA","catalog":{"apps":[{"id":"firefox.desktop","name":"Firefox"}],
+            "commands":[{"id":"b","name":"Backup","confirm":true}],"deck":[{"name":"Main","buttons":[{"id":"x","label":"Go"}]}],"system":["lock"]}}""")
+        assertEquals("Firefox", s.catalogs["AAAAAAAAAAAAAAAA"]?.apps?.single()?.name)
+        assertTrue(s.catalogs["AAAAAAAAAAAAAAAA"]?.commands?.single()?.confirm == true)
+        s = Reducer.apply(s, """{"type":"run_finished","from":"AAAAAAAAAAAAAAAA","command":"b","ok":false,"output":"disk full"}""")
+        assertEquals("disk full", s.runResults.first().output)
+        s = Reducer.apply(s, """{"type":"screen_requested","from":"AAAAAAAAAAAAAAAA","from_name":"Studio Laptop","on":true}""")
+        assertEquals("Studio Laptop", s.screenViewers["AAAAAAAAAAAAAAAA"])
+        s = Reducer.apply(s, """{"type":"screen_stats","peer":"AAAAAAAAAAAAAAAA","sharing":true,"fps":28,"latency_ms":31,"kbps":5200}""")
+        assertEquals(28, s.shareStats?.fps)
+        s = Reducer.apply(s, """{"type":"screen_requested","from":"AAAAAAAAAAAAAAAA","from_name":"Studio Laptop","on":false}""")
+        assertTrue(s.screenViewers.isEmpty())
+        assertNull(s.shareStats)
+    }
 }

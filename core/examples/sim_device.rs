@@ -27,6 +27,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let seconds: u64 = arg("--seconds").and_then(|s| s.parse().ok()).unwrap_or(600);
     let send_path = arg("--send");
     let mut greeted = false;
+    let mut hub: Option<devti_core::model::DeviceId> = None;
+    let mut ran = false;
 
     let dir = std::env::temp_dir().join(format!("devti-sim-{}", std::process::id()));
     let mut cfg = NodeConfig::new(&dir, &name, kind);
@@ -71,6 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // Once connected: share a notification and (optionally) a file, like a phone would.
                     if peer.online && !greeted {
                         greeted = true;
+                        hub = Some(peer.info.id);
                         node.publish_notification(NotificationInfo {
                             key: "sim:1".into(),
                             app_id: "org.example.chat".into(),
@@ -98,6 +101,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(NodeEvent::Transfer { transfer, .. }) if transfer.state == "done" => {
                     println!("transfer {} done", transfer.name)
                 }
+                Ok(NodeEvent::CatalogReceived { from, catalog }) => {
+                    if !ran && catalog.commands.iter().any(|c| c.id == "hello") {
+                        ran = true;
+                        println!("catalog commands={}", catalog.commands.len());
+                        let _ = node.run_command(&from, "hello");
+                        let _ = node.send_input(&from, vec![devti_core::protocol::InputEvent::Move { dx: 5.0, dy: 5.0 }]);
+                    }
+                }
+                Ok(NodeEvent::RunFinished { command, ok, output, .. }) => {
+                    println!("run {command} ok={ok} out={output}")
+                }
                 Ok(NodeEvent::PeerRemoved { .. }) => {
                     println!("removed by the hub");
                     break;
@@ -108,6 +122,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ = tick.tick() => {
                 battery = battery.saturating_sub(1).max(5);
                 node.set_status(DeviceStatus { battery: Some(BatteryState::new(battery, false)) });
+                // Look for the Hub's saved commands (the smoke test adds one while running).
+                if let (Some(h), false) = (hub, ran) {
+                    let _ = node.request_catalog(&h);
+                }
             }
             _ = &mut deadline => break,
         }

@@ -20,7 +20,19 @@
     <!-- Received files go to Downloads/Devti; Android 8-9 need this for the shared folder. -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
+    <!-- Sharing this phone's screen with a computer you paired (you confirm each time). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
+
+    <!-- The computer's remote panel can open this phone's apps: list launchable ones only. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
 
     <application
         android:name=".DevtiApp"
@@ -94,6 +106,31 @@
             android:taskAffinity="app.devti.android.ring" />
 
         <receiver android:name=".continuity.StopRingReceiver" android:exported="false" />
+
+        <!-- Phase 3: a paired computer sees and controls this phone. -->
+        <service
+            android:name=".control.ControlAccessibility"
+            android:exported="true"
+            android:label="@string/accessibility_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_config" />
+        </service>
+
+        <service
+            android:name=".control.ScreenCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
+        <activity
+            android:name=".control.ScreenShareActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.Devti.Sheet" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -30,6 +30,8 @@ object Alerts {
 
     const val ID_CONNECTION = 1
     const val ID_RING = 2
+    const val ID_SCREEN = 3
+    private const val ID_SCREEN_REQUEST = 4
     private const val ID_BATTERY_BASE = 1000
     private const val ID_FILE_BASE = 2000
     private const val ID_MIRROR_BASE = 3000
@@ -111,6 +113,23 @@ object Alerts {
             .setSilent(silent)
             .setContentIntent(openApp(context))
             .setAutoCancel(true),
+    )
+
+    /** "Studio Laptop wants to see your screen" — tapping it opens Android's consent dialog. */
+    fun screenRequest(context: Context, fromName: String, consent: Intent) = post(
+        context,
+        ID_SCREEN_REQUEST,
+        NotificationCompat.Builder(context, RING)
+            .setSmallIcon(R.drawable.ic_stat_devti)
+            .setContentTitle(context.getString(R.string.screen_request_title, fromName))
+            .setContentText(context.getString(R.string.screen_request_body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setAutoCancel(true)
+            .setTimeoutAfter(60_000)
+            .setContentIntent(
+                PendingIntent.getActivity(context, 9, consent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
+            ),
     )
 
     fun cancelMirrored(context: Context, key: String) = NotificationManagerCompat.from(context).cancel(mirrorId(key))

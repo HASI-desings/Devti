@@ -174,6 +174,15 @@ try {
   await invoke("notification_action", { id: peer.info.id, key, action: "reply", reply: "On my way" });
   await waitSim("reply=On my way");
   console.log("PASS: quick reply reached the phone");
+  // Phase 3: a saved command on the Hub, run from the phone; output comes back.
+  await invoke("save_commands", {
+    commands: [{ id: "hello", name: "Say hello", command: "echo hello from the hub", confirm: false }],
+  });
+  await waitSim("run hello ok=true out=hello from the hub", 20000);
+  console.log("PASS: phone ran a saved command on the Hub and got its output");
+  await click(`//nav//button[contains(., "Control")]`);
+  await sleep(900);
+  await shot("08b-control");
   await click(`//nav//button[contains(., "Alerts")]`);
   await sleep(800);
   await shot("08-alerts");

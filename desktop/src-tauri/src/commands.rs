@@ -398,8 +398,18 @@ pub fn remote_settings(app: AppHandle, state: State<'_, AppState>) -> CmdResult<
         commands: r.commands(),
         deck: r.deck(),
         apps: r.apps(),
-        obs_url: state.node.setting(remote::SETTING_OBS_URL).ok().flatten().unwrap_or_else(|| "ws://127.0.0.1:4455".into()),
-        obs_password_set: state.node.setting(remote::SETTING_OBS_PASSWORD).ok().flatten().is_some_and(|p| !p.is_empty()),
+        obs_url: state
+            .node
+            .setting(remote::SETTING_OBS_URL)
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| "ws://127.0.0.1:4455".into()),
+        obs_password_set: state
+            .node
+            .setting(remote::SETTING_OBS_PASSWORD)
+            .ok()
+            .flatten()
+            .is_some_and(|p| !p.is_empty()),
         api: r.api_info(),
     })
 }
@@ -497,12 +507,7 @@ pub fn screen_unwatch(state: State<'_, AppState>, id: String) -> CmdResult<()> {
 /// Body: raw bytes; header `x-devti-name`: file name.
 #[tauri::command]
 pub fn save_capture(state: State<'_, AppState>, request: Request<'_>) -> CmdResult<String> {
-    let name = request
-        .headers()
-        .get("x-devti-name")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("capture.png")
-        .to_string();
+    let name = request.headers().get("x-devti-name").and_then(|v| v.to_str().ok()).unwrap_or("capture.png").to_string();
     let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
         return Err("expected file bytes".into());
     };

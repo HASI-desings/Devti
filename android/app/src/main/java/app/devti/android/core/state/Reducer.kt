@@ -108,6 +108,37 @@ object Reducer {
                 if (on) state.copy(ringing = RingIn(obj.string("from") ?: "", obj.string("from_name") ?: ""))
                 else state.copy(ringing = null)
             }
+            "catalog_received" -> {
+                val from = obj.string("from") ?: return state
+                val catalog = obj.decode("catalog", Catalog.serializer()) ?: return state
+                state.copy(catalogs = state.catalogs + (from to catalog))
+            }
+            "run_finished" -> {
+                val r = RunResult(
+                    from = obj.string("from") ?: return state,
+                    command = obj.string("command") ?: "",
+                    ok = obj["ok"]?.jsonPrimitive?.booleanOrNull ?: false,
+                    output = obj.string("output") ?: "",
+                    ts = System.currentTimeMillis(),
+                )
+                state.copy(runResults = (listOf(r) + state.runResults).take(20))
+            }
+            "screen_requested" -> {
+                val from = obj.string("from") ?: return state
+                val on = obj["on"]?.jsonPrimitive?.booleanOrNull ?: return state
+                val viewers = if (on) state.screenViewers + (from to (obj.string("from_name") ?: "")) else state.screenViewers - from
+                state.copy(screenViewers = viewers, shareStats = if (viewers.isEmpty()) null else state.shareStats)
+            }
+            "screen_stats" -> {
+                if (obj["sharing"]?.jsonPrimitive?.booleanOrNull != true) return state
+                state.copy(
+                    shareStats = ShareStats(
+                        fps = obj.long("fps")?.toInt() ?: 0,
+                        latencyMs = obj.long("latency_ms")?.toInt() ?: 0,
+                        kbps = obj.long("kbps")?.toInt() ?: 0,
+                    ),
+                )
+            }
             else -> state
         }
     }
