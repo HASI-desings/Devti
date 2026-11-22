@@ -15,11 +15,13 @@ Free, open-source, local-first. Your laptops, phones, tablets and Bluetooth acce
 
 ## Where Devti is today
 
-Devti is being built in eight phases. **Phases 1–3 are complete**: the secure core, pairing,
+Devti is being built in eight phases. **Phases 1–4 are complete**: the secure core, pairing,
 automatic reconnection, the desktop Hub with its first-run wizard and ecosystem map, the Android
 companion app, continuity (clipboard, files, notifications, find my device, battery history) and
 control (phone as touchpad, keyboard, remote and shortcuts deck; mirror and control an Android
-phone from the Hub; a local API and the `devti` CLI). Everything listed under "What works now" is real and tested; everything
+phone from the Hub; a local API and the `devti` CLI) and screens (show a computer's screen or a
+window on a phone, tablet or another computer, with touch or mouse control, and one keyboard and
+mouse across computers). Everything listed under "What works now" is real and tested; everything
 else is shown as planned, never faked.
 
 | Phase | Scope | Status |
@@ -27,8 +29,8 @@ else is shown as planned, never faked.
 | 1. Foundation | Core protocol, encryption, discovery, pairing, desktop Hub, onboarding, dashboard, Android pairing | **Done** |
 | 2. Continuity | Clipboard, file transfer, drag and drop, notifications, find my device, battery dashboard | **Done** |
 | 3. Control | Phone → laptop remote, laptop → Android mirror and control, shortcuts deck, local API + CLI | **Done** |
-| 4. Screens | Mirror, single-window cast, extended displays, multi-screen layout, one keyboard and mouse | Next |
-| 5. Bluetooth | Accessory manager, automatic feature detection, device profiles, audio relay | Planned |
+| 4. Screens | Mirror, single-window cast, extended displays, multi-screen layout, one keyboard and mouse | **Done** |
+| 5. Bluetooth | Accessory manager, automatic feature detection, device profiles, audio relay | Next |
 | 6. Communication + automation | SMS, calls, rules engine, proximity, handoff, webcam and mic sharing | Planned |
 | 7. Reach + extensibility | Remote access, plugin SDK, shared storage browser | Planned |
 | 8. iOS + release | iPhone and iPad app, final polish, v1.0.0 | Planned |
@@ -81,6 +83,13 @@ else is shown as planned, never faked.
   - back, home, recent apps, notifications and lock
   - screenshots and screen recordings, saved to Downloads/Devti
   - live fps and latency
+- **Second screens.** In the phone or tablet's **Screen** tab, open a computer's screen and use
+  it with your fingers: tap, hold to right-click, drag, two-finger scroll and pinch to zoom. The
+  computer picks what to show in **Screens**: the whole screen, one window, or a virtual monitor
+  that turns the device into an extended display. Another computer can show it too, with full
+  mouse and keyboard control.
+- **One keyboard and mouse.** In **Screens**, drag a paired computer to an edge, then push the
+  pointer past that edge to control it with this mouse and keyboard (X11 and Windows).
 - **Script everything.** A local API (127.0.0.1 only, token-protected) and the `devti` command:
   `devti send`, `devti ring`, `devti clip`, `devti run`, `devti watch`.
 
@@ -109,6 +118,9 @@ else is shown as planned, never faked.
 | Shortcuts deck (designed on the Hub) | ✅ | ✅ | ✅ | ✅ (deck) | Phase 8 |
 | Mirror + control an Android phone | ✅ | ✅ | ✅ | ✅ shares ⁵ | — ³ |
 | Local API + `devti` CLI | ✅ | ✅ | ✅ | — | — |
+| Show this screen / a window on other devices | ✅ | ✅ | ✅ ⁶ | ✅ (views) | Phase 8 (views) |
+| Mirror and control another computer | ✅ | ✅ | ✅ | — | — |
+| One keyboard and mouse across computers | ✅ | ✅ | — ⁷ | — | — |
 
 ¹ Uses the Wayland data-control protocol where the compositor offers it (KDE, wlroots-based),
 otherwise the XWayland clipboard bridge. ² Android 10+ allows reading the
@@ -116,7 +128,9 @@ clipboard only while Devti is open; writing works any time. ³ iOS doesn't let a
 apps' notifications. ⁴ Through libei (GNOME asks once for remote-desktop permission) or the
 Wayland virtual-keyboard/pointer protocols. Compositors with neither can't be controlled, and the
 Hub tells you. ⁵ Android asks you to allow screen sharing each time. Tapping and typing also need
-**Devti control** turned on in Settings → Accessibility, which Android requires to be done by you.
+**Devti control** turned on in Settings → Accessibility, which Android requires to be done by you. ⁶ The system asks which screen or window to share
+each time (the ScreenCast portal). ⁷ Wayland doesn't let apps capture the pointer and keyboard
+yet.
 
 **iPhone and iPad honesty box:** Apple doesn't allow any app to remote-control an iPhone, read SMS
 or calls, or mirror other apps' notifications. When the iOS app arrives it will do everything Apple
@@ -258,6 +272,17 @@ On the Hub:
   goes back, and typing goes into the phone's focused text field.
 - The buttons below the screen are Back, Home, Recent apps, Notifications and Lock.
 - **Screenshot** and **Record** save to Downloads/Devti.
+
+### Screens
+- **Phone or tablet as a screen:** in the app, open **Screen**, then **Show here** next to the
+  computer. On the Hub, **Screens → What to show** picks the whole screen or one window. To
+  *extend* rather than mirror, add a virtual monitor (the free, signed Virtual Display Driver on
+  Windows; a dummy plug or `evdi` on Linux) and pick it there.
+- **Another computer:** open it in the Hub and choose **Mirror and control**. The other computer
+  must allow *See this computer's screen* and *Control this computer* for this one.
+- **One keyboard and mouse:** **Screens → One keyboard and mouse**. Turn it on, then drag a
+  computer to an edge. Push the pointer past that edge to move onto it, and come back the same
+  way or press Scroll Lock.
 
 ### Command line and API
 `devti` comes with the Linux packages (`/usr/bin/devti`) and sits next to the Windows installers.

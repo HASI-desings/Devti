@@ -40,6 +40,16 @@ const MATRIX: { feature: string; cells: [Support, Support, Support, Support, Sup
     note: "On the phone: allow screen sharing each time, and turn on Devti control in Accessibility.",
   },
   { feature: "Local API and devti command", cells: ["yes", "yes", "yes", "no", "no"] },
+  {
+    feature: "Show this screen or a window on other devices",
+    cells: ["yes", "yes", "yes", "yes", "no"],
+    note: "On Wayland the system asks which screen or window each time. Android shows it.",
+  },
+  {
+    feature: "One keyboard and mouse across computers",
+    cells: ["yes", "yes", "no", "no", "no"],
+    note: "Wayland doesn't let apps capture the pointer yet.",
+  },
 ];
 const COLUMNS = ["Windows", "Linux X11", "Linux Wayland", "Android", "iPhone and iPad"];
 

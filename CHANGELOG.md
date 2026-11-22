@@ -5,6 +5,23 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Phase 4 — Screens
+#### Added
+- Hub:
+  - shares its screen or one window with devices that ask (xcap capture on X11, Windows and
+    Wayland via the portal; adaptive JPEG; still frames skipped)
+  - **Screens** page: what to show, who is watching with live stats and Stop, and the edge
+    arrangement
+  - one keyboard and mouse across computers (X11 grabs, Windows low-level hooks; Scroll Lock or
+    moving back returns)
+  - mirror and control another computer with mouse and keyboard
+- Android: **Screen** tab and full-screen viewer that turns a phone or tablet into a touch
+  screen for a computer (tap, hold, drag, two-finger scroll, pinch zoom, keyboard); it keeps
+  streaming through rotation.
+- Tests: encoder and fit tests; edge geometry and key translation tests; UI test for the Screens
+  page; JVM binding test for viewing frames. The real-app smoke test streams the real Hub screen
+  to the simulated phone and drives the X pointer across an edge and back.
+
 ### Phase 3 — Control
 #### Added
 - Protocol: input events (pointer, keys, text, media, touch gestures, navigation), system

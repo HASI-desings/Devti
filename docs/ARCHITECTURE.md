@@ -171,6 +171,19 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
 
   Live frames reach the web view through a Tauri `Channel` as raw bytes (12-byte header +
   JPEG), never as JSON.
+- **`screens.rs`** (Phase 4) shares this computer's screen with devices that ask to see it:
+  - One capture thread runs: xcap → `fast_image_resize` to the core's adaptive width →
+    `jpeg-encoder` at its quality → `push_screen_frame`, paced to the target fps.
+  - It starts with the first viewer and stops with the last. A sampled hash skips frames that
+    haven't changed.
+  - On Wayland, frames come from the ScreenCast portal (PipeWire) after the system dialog.
+- **`edges.rs`** (Phase 4), one keyboard and mouse:
+  - A platform-free core handles edge hits, entry and return points, the return condition and
+    key translation.
+  - The X11 backend polls the pointer, then grabs the pointer and keyboard, parks the real
+    pointer in the middle and forwards relative motion, buttons, wheel and keys.
+  - The Windows backend uses low-level hooks.
+  - Either way, Scroll Lock or moving back past the edge returns control.
 
 ### React UI (`src/`)
 - **`bridge/`**: one `Bridge` interface with two implementations. `tauri.ts` (the real one) is
@@ -190,7 +203,10 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
   - **device control**: media keys, power with confirmation, the device's commands and apps.
   - **mirror**: a canvas fed by `createImageBitmap`. Click, hold, drag, wheel and right-click map
     to tap, long press, swipe, scroll and back; keys type; screenshots and MediaRecorder
-    recordings are saved through `save_capture`.
+    recordings are saved through `save_capture`. For a computer, the mirror view acts as a remote
+    desktop: absolute pointer, buttons, wheel and shortcuts.
+  - **screens**: what to show (monitors and windows), who is watching with live stats, and the
+    edge arrangement for one keyboard and mouse.
 - **`ui/`**: React Aria primitives restyled with Devti tokens.
 
 ---
@@ -238,7 +254,11 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
     core's target width, then compresses JPEGs at the target quality and rate.
   - `PhoneCommands` builds the phone's catalog (launchable apps, flashlight, screenshot, camera)
     and runs it.
-- **UI tabs**: Home, **Remote** and **Deck**.
+- **Screen tab and `ScreenViewerActivity`** (Phase 4): a computer's screen shown full screen.
+  Frames come through the `FrameListener` callback into a conflated `StateFlow` and are decoded
+  off the main thread. Touch maps to mouse: tap is a click, hold is a right-click, one finger
+  drags, two fingers scroll, and a pinch sends Ctrl +/−.
+- **UI tabs**: Home, **Remote**, **Screen** and **Deck**.
   - The remote's touchpad turns raw pointer events into accelerated, batched moves (12 ms),
     clicks, right-clicks, scrolls and drags.
   - Its keyboard is an invisible text field that diffs what the IME typed into text and

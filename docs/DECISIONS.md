@@ -400,6 +400,38 @@ The `obws` crate would add a large dependency tree for that. Our implementation 
 against the worked example in the obs-websocket spec, and only `ws://127.0.0.1` / `localhost`
 URLs are accepted.
 
+## Phase 4 — final decisions
+
+### D-36 · Desktop capture — Decided: **xcap 0.9** (revises D-20)
+
+xcap covers the three sources Devti needs behind one API: X11 (XShm/XGetImage), Windows
+(DXGI/GDI) and Wayland (xdg-desktop-portal ScreenCast + PipeWire, or wlr-screencopy). It
+captures monitors and windows, and Wayland uses the portal, so the user always picks the screen
+or window in the system dialog. `windows-capture` and a hand-written PipeWire client would cover
+less for more code. Frames are scaled with `fast_image_resize` (SIMD) and encoded with
+`jpeg-encoder`, matching D-31's JPEG transport. A sampled hash skips unchanged frames, so a still
+desktop costs almost nothing.
+
+### D-37 · Extended displays — Decided: **use a virtual monitor when one exists** (D-23 confirmed)
+
+Devti doesn't install display drivers. When a virtual monitor exists (the signed Virtual
+Display Driver on Windows, a dummy plug, or `evdi` on Linux), it appears as one more source on
+the Screens page. Showing it on a device turns that device into an extended display. Without a
+virtual monitor, Devti offers mirror and single-window modes, and the page explains this.
+
+### D-38 · One keyboard and mouse — Decided: **own edge switching on X11 and Windows**
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Built into the Hub** | One app; it uses the existing encrypted session and per-device permissions | We write the input capture per platform |
+| Bundle Deskflow | Mature | A second daemon with its own pairing and TLS, which duplicates Devti's trust model |
+| InputCapture portal (libei) | The proper Wayland answer | Only on very recent GNOME; no stable Rust client yet |
+
+The X11 version polls the pointer and grabs pointer and keyboard while the other computer has
+control, parking the real pointer in the middle. The Windows version uses low-level hooks.
+Geometry, the return condition and key translation are platform-free and unit-tested. Wayland
+is listed as unsupported, with the reason.
+
 ---
 
 ## Deviation log
@@ -413,3 +445,5 @@ URLs are accepted.
 | D-21/D-22: H.264 for screens | Adaptive JPEG frames (D-31) | Decodes in every web view without FFmpeg; latest-frame flow control keeps latency low; H.264 stays an upgrade path |
 | D-24: own input backends | `enigo` 0.6 (D-32) | It now covers libei/Wayland, XTest and SendInput |
 | D-25b: ADB mode for Android control | Deferred (D-33) | Needs developer options; the wireless mode covers the features |
+| D-20: windows-capture + PipeWire by hand | xcap 0.9 (D-36) | One API for X11, Windows and Wayland (portal) |
+| "One keyboard and mouse" on every desktop | X11 and Windows; not Wayland (D-38) | Wayland has no stable input-capture API yet |

@@ -5,6 +5,42 @@ the results recorded here. A phase is only marked done when all of this passes.
 
 ---
 
+## Phase 4 — Screens
+
+**Date:** 2026-11-22
+
+### Automated results
+
+| Suite | Result | Where it runs |
+|---|---|---|
+| Hub host unit tests | 14 / 14 pass (adds frame fit, JPEG encode/scale/skip-still, edge hits, entry/return points, the return condition, X11 keysym and Windows key translation) | local + CI |
+| Desktop UI flows (Playwright) | 15 / 15 pass (adds choosing a window to show and placing a computer at an edge, saved) | local + CI |
+| **Real-app smoke test, Phase 4** | **pass** — the simulated phone watches the real Hub's screen: the Xvfb display is captured, scaled to 960×600 and arrives as JPEG over QUIC. xdotool pushes the X pointer past the Hub's right edge: the device receives the entry point and motion, then control returns | local + CI (Linux) |
+| Android: Kotlin bindings vs real core | 3 / 3 pass — adds showing the hub's screen through `FrameListener`, then stopping | local + CI |
+
+### Bugs found and fixed during Phase 4 QA
+- The first build failed to link without `libgbm`/`libegl` (pulled in by Wayland capture). CI,
+  the deb/rpm dependencies and the build docs now list PipeWire, GBM and EGL.
+- The UI test for the Screens page toggled the switch's hidden input. It now clicks its label,
+  like every other switch test.
+
+### Manual checklist (Phase 4)
+- [x] Hub shares the screen when a device asks and stops with the last viewer (real binary
+  under Xvfb).
+- [x] Screens page: sources, selection saved, edge placement saved, Wayland/unsupported texts
+  (preview).
+- [x] Edge switching across the right edge and back (real binary, X11 under Xvfb, driven by
+  xdotool).
+- [ ] On real hardware: Wayland portal dialog, Windows hooks, phone second-screen gestures,
+  tablet rotation, a virtual monitor used as an extended display.
+
+### Not verifiable in the build environment
+- The Windows hook backend and Windows capture compile in CI; using them needs a Windows
+  session.
+- The Wayland ScreenCast portal needs a desktop session with xdg-desktop-portal.
+
+---
+
 ## Phase 3 — Control
 
 **Date:** 2026-11-22
