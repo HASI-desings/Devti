@@ -48,9 +48,34 @@ pub(crate) fn show_main_window(app: &AppHandle) {
     match WebviewWindowBuilder::from_config(app, &cfg).and_then(|b| b.build()) {
         Ok(w) => {
             tune_webview(&w);
+            fit_to_screen(&w);
             let _ = w.set_focus();
         }
         Err(e) => tracing::error!(error = %e, "could not open the Devti window"),
+    }
+}
+
+/// The configured 1280×820 is taller than many laptop screens (1366×768 minus a panel). Shrink
+/// the window to the screen's usable area so its bottom is never off-screen.
+fn fit_to_screen(w: &tauri::WebviewWindow) {
+    let Ok(Some(m)) = w.current_monitor().or_else(|_| w.primary_monitor()) else { return };
+    let area = m.work_area();
+    let Ok(size) = w.outer_size() else { return };
+    let (aw, ah) = (area.size.width, area.size.height);
+    if size.width <= aw && size.height <= ah {
+        return;
+    }
+    let scale = m.scale_factor();
+    // Let the window go below its configured minimum on small screens instead of overflowing.
+    let _ = w.set_min_size(Some(tauri::LogicalSize::new(
+        640.0_f64.min(aw as f64 / scale),
+        420.0_f64.min(ah as f64 / scale),
+    )));
+    let _ = w.set_size(tauri::PhysicalSize::new(size.width.min(aw), size.height.min(ah)));
+    if size.height >= ah {
+        let _ = w.maximize();
+    } else {
+        let _ = w.center();
     }
 }
 

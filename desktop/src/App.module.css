@@ -3,7 +3,11 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
+  /* One row exactly the window's height: without it the row grows to fit the rail's
+     content and the bottom of both the rail and the page falls outside the window. */
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .main {
