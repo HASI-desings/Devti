@@ -155,6 +155,50 @@ data class RunResult(val from: String, val command: String, val ok: Boolean, val
 /** Live numbers while this phone's screen is being watched. */
 data class ShareStats(val fps: Int, val latencyMs: Int, val kbps: Int)
 
+// ------------------------------------------------------------------ Phase 6
+
+@Serializable
+data class SmsThread(
+    val id: String,
+    val addresses: List<String>,
+    val names: List<String> = emptyList(),
+    val snippet: String,
+    val ts: Long,
+    val unread: Int = 0,
+)
+
+@Serializable
+data class SmsMessage(
+    val id: String,
+    val thread: String,
+    val address: String,
+    val name: String = "",
+    val body: String,
+    val ts: Long,
+    val outgoing: Boolean,
+)
+
+@Serializable
+data class CallInfo(
+    val id: String,
+    /** ringing, active, ended, missed. */
+    val state: String,
+    val number: String,
+    val name: String = "",
+    val incoming: Boolean,
+    val ts: Long,
+)
+
+@Serializable
+data class HandoffItem(
+    /** url, text, media. */
+    val kind: String,
+    val url: String = "",
+    val title: String = "",
+    val text: String = "",
+    @SerialName("position_ms") val positionMs: Long? = null,
+)
+
 /** Text another device put on this phone's clipboard. */
 data class ClipboardIn(val fromName: String, val text: String, val ts: Long)
 
@@ -202,6 +246,13 @@ data class CoreState(
     /** Devices watching this phone's screen: id → name. */
     val screenViewers: Map<String, String> = emptyMap(),
     val shareStats: ShareStats? = null,
+    // ---- Phase 6 (phone-side; not from the core snapshot)
+    /** "mic" or "relay" while this phone streams audio to a computer. */
+    val audioSharing: Set<String> = emptySet(),
+    /** This phone's camera is a computer's webcam right now. */
+    val cameraSharing: Boolean = false,
+    /** Advertising the walk-away beacon. */
+    val walkAway: Boolean = false,
 ) {
     /** The Hub this phone belongs to: the first paired computer. */
     val hub: PeerSnapshot?

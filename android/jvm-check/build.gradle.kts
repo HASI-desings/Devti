@@ -21,6 +21,11 @@ kotlin {
     )
 }
 
+// The app's Android-free decisions (Pure.kt) run here too, so they are checked off-device.
+tasks.named<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>("compileKotlin") {
+    source("../app/src/main/java/app/devti/android/continuity/Pure.kt")
+}
+
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("net.java.dev.jna:jna:5.17.0")

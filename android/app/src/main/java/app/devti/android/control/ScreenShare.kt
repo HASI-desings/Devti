@@ -1,6 +1,9 @@
 package app.devti.android.control
 
+import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
+import android.content.pm.PackageManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -23,37 +26,113 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import app.devti.android.DevtiApp
 import app.devti.android.R
+import app.devti.android.comms.AudioShareService
+import app.devti.android.comms.CameraShareService
 import app.devti.android.continuity.Alerts
 import java.io.ByteArrayOutputStream
 import org.json.JSONObject
 
 /**
- * Asks Android for permission to share the screen (the system "Start now" dialog — it
- * can't be skipped or remembered), then hands the result to [ScreenCaptureService].
+ * Asks before anything leaves the phone, then starts the right service:
+ * * screen (default) — Android's own "Start now" dialog, which can't be skipped or remembered;
+ * * camera — Devti's "Let … use this camera?" (skipped right after you offered it), then
+ *   the camera permission;
+ * * mic — the microphone permission; relay — the microphone permission, then Android's
+ *   casting dialog, which is what lets an app hear other apps' sound.
  */
 class ScreenShareActivity : Activity() {
+    private val core get() = (application as DevtiApp).core
+    private val mode get() = intent.getStringExtra(EXTRA_MODE) ?: MODE_SCREEN
+    private val device get() = intent.getStringExtra(EXTRA_DEVICE).orEmpty()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState != null) return
+        when (mode) {
+            MODE_CAMERA -> if (core.cameraOfferedRecently()) needPermission(Manifest.permission.CAMERA) else confirmCamera()
+            MODE_MIC, MODE_RELAY -> needPermission(Manifest.permission.RECORD_AUDIO)
+            else -> askProjection()
+        }
+    }
+
+    private fun confirmCamera() {
+        val name = intent.getStringExtra(EXTRA_FROM_NAME) ?: "Your computer"
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle(getString(R.string.camera_request_title, name))
+            .setMessage(R.string.camera_request_body)
+            .setPositiveButton("Allow") { _, _ -> needPermission(Manifest.permission.CAMERA) }
+            .setNegativeButton("Don't allow") { _, _ -> decline() }
+            .setOnCancelListener { decline() }
+            .show()
+    }
+
+    private fun needPermission(permission: String) {
+        if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) granted()
+        else requestPermissions(arrayOf(permission), REQUEST_PERMISSION)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) granted() else decline()
+    }
+
+    private fun granted() {
+        when (mode) {
+            MODE_CAMERA -> {
+                CameraShareService.start(this, intent.getBooleanExtra(EXTRA_BACK, false))
+                finish()
+            }
+            MODE_MIC -> {
+                AudioShareService.startMic(this, device)
+                finish()
+            }
+            MODE_RELAY -> askProjection()
+            else -> finish()
+        }
+    }
+
+    private fun askProjection() {
         val mpm = getSystemService(MediaProjectionManager::class.java)
         @Suppress("DEPRECATION")
-        startActivityForResult(mpm.createScreenCaptureIntent(), REQUEST)
+        startActivityForResult(mpm.createScreenCaptureIntent(), REQUEST_PROJECTION)
+    }
+
+    private fun decline() {
+        if (mode == MODE_CAMERA || mode == MODE_SCREEN) core.declineScreenShare(camera = mode == MODE_CAMERA)
+        finish()
     }
 
     @Deprecated("Activity result API is fine for a one-shot translucent activity")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
-        val core = (application as DevtiApp).core
-        if (requestCode == REQUEST && resultCode == RESULT_OK && data != null) {
-            ScreenCaptureService.start(this, resultCode, data)
+        if (requestCode == REQUEST_PROJECTION && resultCode == RESULT_OK && data != null) {
+            if (mode == MODE_RELAY) AudioShareService.startRelay(this, device, resultCode, data)
+            else ScreenCaptureService.start(this, resultCode, data)
+            finish()
         } else {
-            core.declineScreenShare()
+            decline()
         }
-        finish()
     }
 
     companion object {
-        private const val REQUEST = 41
+        private const val REQUEST_PROJECTION = 41
+        private const val REQUEST_PERMISSION = 42
+        const val EXTRA_MODE = "mode"
+        const val EXTRA_DEVICE = "device"
+        const val EXTRA_FROM_NAME = "from_name"
+        const val EXTRA_BACK = "back"
+        const val MODE_SCREEN = "screen"
+        const val MODE_CAMERA = "camera"
+        const val MODE_MIC = "mic"
+        const val MODE_RELAY = "relay"
+
+        fun intent(context: Context, mode: String, device: String = "", fromName: String = "", back: Boolean = false): Intent =
+            Intent(context, ScreenShareActivity::class.java)
+                .putExtra(EXTRA_MODE, mode)
+                .putExtra(EXTRA_DEVICE, device)
+                .putExtra(EXTRA_FROM_NAME, fromName)
+                .putExtra(EXTRA_BACK, back)
     }
 }
 

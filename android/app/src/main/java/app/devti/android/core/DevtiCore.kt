@@ -15,6 +15,12 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 import app.devti.android.BuildConfig
+import app.devti.android.comms.AudioShareService
+import app.devti.android.comms.Beacon
+import app.devti.android.comms.CallBridge
+import app.devti.android.comms.CameraShareService
+import app.devti.android.comms.Handoff
+import app.devti.android.comms.SmsBridge
 import app.devti.android.continuity.Alerts
 import app.devti.android.continuity.ClipboardBridge
 import app.devti.android.continuity.Files
@@ -26,6 +32,11 @@ import app.devti.android.control.ScreenCaptureService
 import app.devti.android.control.ScreenShareActivity
 import app.devti.android.control.screenTargetOf
 import app.devti.android.core.state.Catalog
+import app.devti.android.core.state.CallInfo
+import app.devti.android.core.state.HandoffItem
+import app.devti.android.core.state.SmsMessage
+import app.devti.android.core.state.SmsThread
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.floatOrNull
 import org.json.JSONObject
@@ -51,6 +62,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import uniffi.devti_ffi.AudioStream
 import uniffi.devti_ffi.DevtiException
 import uniffi.devti_ffi.DevtiMobile
 import uniffi.devti_ffi.EventListener
@@ -67,6 +79,8 @@ import uniffi.devti_ffi.MobileConfig
  * - multicast: Android drops mDNS packets unless a MulticastLock is held.
  * - continuity: [platform] turns core events into Android actions (clipboard, ringing,
  *   notification actions, Do Not Disturb, moving received files to Downloads).
+ * - communication (Phase 6): texts, calls, "continue on phone", audio and camera sharing
+ *   and the walk-away beacon, each in its own class under `comms/`.
  */
 /** One frame of a computer's screen this phone is showing (Phase 4). */
 class ScreenFrame(val seq: Long, val width: Int, val height: Int, val latencyMs: Int, val fps: Int, val jpeg: ByteArray)
@@ -86,6 +100,11 @@ class DevtiCore(private val context: Context) : EventListener {
     val clipboard = ClipboardBridge(context)
     private val ringer = Ringer(context)
     private val phone = PhoneCommands(context)
+    val sms = SmsBridge(context)
+    val calls = CallBridge(context)
+    private val beacon = Beacon(context) { runCatching { node?.proximityToken() }.getOrNull() }
+    @Volatile private var call: CallInfo? = null
+    @Volatile private var cameraOfferedAt = 0L
     @Volatile private var warnedAccessibility = false
 
     /** Mirror this phone's notifications to the computer (needs notification access too). */
@@ -129,6 +148,10 @@ class DevtiCore(private val context: Context) : EventListener {
             runCatching { created.setDownloadsDir(files.incomingDir.absolutePath) }
             mirrorNotifications = created.setting(SETTING_MIRROR) != "false"
             clipboardSync = created.setting(SETTING_CLIPBOARD) != "false"
+            if (created.setting(SETTING_WALK_AWAY) == "true") {
+                _state.update { it.copy(walkAway = true) }
+                beacon.start()
+            }
             refresh()
             watchDevice()
             io.launch { files.cleanStale() }
@@ -148,7 +171,15 @@ class DevtiCore(private val context: Context) : EventListener {
         val pairing = _state.value.pairing
         val prev = _state.value
         _state.value = Reducer.snapshot(n.localJson(), n.peersJson(), n.nearbyJson(), n.transfersJson(), n.dnd())
-            .copy(pairing = pairing, ringing = prev.ringing, ringingOut = prev.ringingOut, lastClipboard = prev.lastClipboard)
+            .copy(
+                pairing = pairing,
+                ringing = prev.ringing,
+                ringingOut = prev.ringingOut,
+                lastClipboard = prev.lastClipboard,
+                audioSharing = prev.audioSharing,
+                cameraSharing = prev.cameraSharing,
+                walkAway = prev.walkAway,
+            )
     }
 
     override fun onEvent(eventJson: String) {
@@ -210,10 +241,50 @@ class DevtiCore(private val context: Context) : EventListener {
                 }
             }
             "screen_requested" -> {
-                if (ev["on"]?.jsonPrimitive?.booleanOrNull == true) requestScreenShare(str("from_name") ?: "Your computer")
-                else if (node?.screenViewers().isNullOrEmpty()) ScreenCaptureService.stop(context)
+                val camera = str("source") == "camera"
+                val from = str("from") ?: return
+                if (ev["on"]?.jsonPrimitive?.booleanOrNull == true) {
+                    if (camera) requestCamera(from, str("from_name") ?: "Your computer") else requestScreenShare(from, str("from_name") ?: "Your computer")
+                } else if (camera) {
+                    if (node?.cameraViewers().isNullOrEmpty()) CameraShareService.stop(context)
+                } else if (screenOnlyViewers().isEmpty()) {
+                    ScreenCaptureService.stop(context)
+                }
+            }
+            // ---- Phase 6: texts, calls and "continue on phone"
+            "sms_threads_requested" -> {
+                val from = str("from") ?: return
+                io.launch { runCatching { node?.answerSmsThreads(from, Reducer.json.encodeToString(ListSerializer(SmsThread.serializer()), sms.threads())) } }
+            }
+            "sms_messages_requested" -> {
+                val from = str("from") ?: return
+                val thread = str("thread") ?: return
+                io.launch {
+                    val list = sms.messages(thread)
+                    runCatching { node?.answerSmsMessages(from, thread, Reducer.json.encodeToString(ListSerializer(SmsMessage.serializer()), list)) }
+                }
+            }
+            "sms_send_requested" -> {
+                val from = str("from") ?: return
+                val to = (ev["to"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: return
+                val text = str("text") ?: return
+                io.launch {
+                    val err = sms.send(to, text)
+                    runCatching { node?.reportSmsResult(from, err == null, err) }
+                    if (err == null && to.size == 1) publishSms(sms.sent(to.first(), text))
+                }
+            }
+            "call_action_requested" -> calls.act(str("action") ?: return)?.let { toast(it) }
+            "handoff" -> {
+                val item = ev["item"]?.let { runCatching { Reducer.json.decodeFromJsonElement(HandoffItem.serializer(), it) }.getOrNull() } ?: return
+                Handoff.show(context, str("from_name") ?: "your computer", item) { clipboard.apply(it) }
             }
         }
+    }
+
+    private fun screenOnlyViewers(): List<String> {
+        val cams = node?.cameraViewers().orEmpty().toSet()
+        return node?.screenViewers().orEmpty().filterNot { it in cams }
     }
 
     /** One input event from a computer, performed through the accessibility service. */
@@ -242,22 +313,103 @@ class DevtiCore(private val context: Context) : EventListener {
     }
 
     /** A computer wants to see this screen: Android requires the user to say yes each time. */
-    private fun requestScreenShare(fromName: String) {
+    private fun requestScreenShare(from: String, fromName: String) {
         if (ScreenCaptureService.running) return
-        val intent = android.content.Intent(context, ScreenShareActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        // Screen and camera share one picture stream: one at a time.
+        if (CameraShareService.running) return busy(from, "This phone's camera is shared right now. Stop it to share the screen.")
+        val intent = ScreenShareActivity.intent(context, ScreenShareActivity.MODE_SCREEN, from, fromName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         // Works when Devti is open; otherwise the notification below lets the user say yes.
         runCatching { context.startActivity(intent) }
         Alerts.screenRequest(context, fromName, intent)
     }
 
-    fun declineScreenShare() {
-        node?.screenViewers()?.forEach { runCatching { node?.screenStopSharing(it) } }
+    /** A computer wants this phone's camera as its webcam. */
+    private fun requestCamera(from: String, fromName: String) {
+        if (CameraShareService.running) return
+        if (ScreenCaptureService.running) return busy(from, "This phone's screen is shared right now. Stop it to use the camera.")
+        val intent = ScreenShareActivity.intent(context, ScreenShareActivity.MODE_CAMERA, from, fromName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { context.startActivity(intent) }
+        Alerts.screenRequest(context, fromName, intent, camera = true)
+    }
+
+    private fun busy(from: String, why: String) {
+        runCatching { node?.screenStopSharing(from) }
+        toast(why)
+    }
+
+    /** Says no to every viewer waiting for the screen (or the camera). */
+    fun declineScreenShare(camera: Boolean = false) {
+        val cams = node?.cameraViewers().orEmpty().toSet()
+        node?.screenViewers()?.filter { (it in cams) == camera }?.forEach { runCatching { node?.screenStopSharing(it) } }
     }
 
     fun stopSharingScreen() {
         declineScreenShare()
         ScreenCaptureService.stop(context)
     }
+
+    // ---- Phase 6: this phone's camera, microphone and sound on a computer
+
+    /** "Use as webcam": the computer shows an offer; accepting starts the camera here. */
+    fun offerCamera(deviceId: String): String? = act {
+        node?.cameraOffer(deviceId)
+        cameraOfferedAt = System.currentTimeMillis()
+    }
+
+    /** True right after this phone offered its camera, so the computer's request needs no second yes. */
+    fun cameraOfferedRecently(): Boolean = System.currentTimeMillis() - cameraOfferedAt < 120_000
+
+    fun stopCamera() {
+        node?.cameraViewers()?.forEach { runCatching { node?.screenStopSharing(it) } }
+        CameraShareService.stop(context)
+    }
+
+    fun cameraSharing(on: Boolean) = _state.update { it.copy(cameraSharing = on) }
+
+    /** Opens the consent flow for the microphone ("mic") or the phone's sound ("relay"). */
+    fun shareAudio(deviceId: String, kind: String) {
+        val mode = if (kind == "relay") ScreenShareActivity.MODE_RELAY else ScreenShareActivity.MODE_MIC
+        context.startActivity(ScreenShareActivity.intent(context, mode, deviceId).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    fun stopAudio() = AudioShareService.stop(context)
+
+    fun startAudio(deviceId: String, kind: String, rate: Int, channels: Int): AudioStream? = try {
+        node?.startAudio(deviceId, kind, rate.toUInt(), channels.toUByte())
+    } catch (e: DevtiException) {
+        toast(e.readable())
+        null
+    }
+
+    fun audioSharing(kind: String, on: Boolean) = _state.update { s -> s.copy(audioSharing = if (on) s.audioSharing + kind else s.audioSharing - kind) }
+
+    // ---- Phase 6: texts, calls, handoff, walk-away
+
+    fun publishSms(message: SmsMessage) {
+        runCatching { node?.publishSms(Reducer.json.encodeToString(SmsMessage.serializer(), message)) }
+    }
+
+    /** Android's call state changed (from [app.devti.android.comms.PhoneStateReceiver]). */
+    fun callStateChanged(state: String, number: String?) {
+        val name = number?.let { sms.nameOf(it) }.orEmpty()
+        val next = app.devti.android.continuity.Pure.nextCall(call, state, number, name, System.currentTimeMillis()) ?: return
+        call = next.takeUnless { it.state == "ended" || it.state == "missed" }
+        runCatching { node?.publishCall(Reducer.json.encodeToString(CallInfo.serializer(), next)) }
+    }
+
+    /** "Continue on computer": a link or text from this phone. */
+    fun handoff(deviceId: String, item: HandoffItem): String? = act {
+        node?.handoff(deviceId, Reducer.json.encodeToString(HandoffItem.serializer(), item))
+    }
+
+    /** Lets paired computers sense this phone nearby (a rotating Bluetooth token). */
+    fun setWalkAway(on: Boolean): String? = act {
+        node?.setSetting(SETTING_WALK_AWAY, on.toString())
+        _state.update { it.copy(walkAway = on) }
+        if (on) beacon.start() else beacon.stop()
+    }
+
+    fun walkAwayAllowed(): Boolean = beacon.allowed()
 
     fun screenTarget(): JSONObject = screenTargetOf(node?.screenTargetJson())
 
@@ -503,6 +655,7 @@ class DevtiCore(private val context: Context) : EventListener {
 
 private const val SETTING_MIRROR = "mirror_notifications"
 private const val SETTING_CLIPBOARD = "clipboard_sync"
+private const val SETTING_WALK_AWAY = "walk_away"
 
 /** The human sentence inside a core error. */
 fun DevtiException.readable(): String = when (this) {

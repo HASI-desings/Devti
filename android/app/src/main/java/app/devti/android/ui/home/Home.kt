@@ -1,6 +1,10 @@
 package app.devti.android.ui.home
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -70,6 +74,11 @@ private val WORKS_NOW = listOf(
     "Your computer's shortcuts deck (Deck tab)",
     "Your computer sees and controls this phone (screen sharing + Devti control)",
     "This phone or tablet as a touch screen for your computer (Screen tab)",
+    "Texts on your computer: read, reply and start conversations from this phone's number",
+    "Calls on your computer: who's calling, answer, decline, end and mute",
+    "This phone's microphone, sound and camera on your computer (webcam on Linux via v4l2loopback)",
+    "Continue a link or a video from where you were, both ways",
+    "Your computer can lock itself when you walk away with this phone",
 )
 
 @Composable
@@ -161,7 +170,7 @@ fun Home(core: DevtiCore, state: CoreState, onPairAnother: () -> Unit) {
         Card {
             WORKS_NOW.forEach { Text("• $it", style = Devti.type.small, color = c.textDim) }
             Text(
-                "Calls, SMS and Bluetooth accessories arrive in the next Devti updates.",
+                "Call audio stays on the phone: Android doesn't let apps carry it. To talk through your computer, also pair this phone with it as a Bluetooth headset. Bluetooth accessories are managed from the computer.",
                 style = Devti.type.small,
                 color = c.textFaint,
             )
@@ -354,6 +363,7 @@ private fun ContinuitySettings(core: DevtiCore, state: CoreState) {
     }
 
     ThisPhoneOnComputer(core, state)
+    state.hub?.let { Communication(core, state, it) }
 
     Text("Everywhere", style = Devti.type.heading, color = c.text)
     Card {
@@ -464,5 +474,118 @@ private fun ThisPhoneOnComputer(core: DevtiCore, state: CoreState) {
             if (control) "On. Turn it off in Android's Accessibility settings." else "Needs “Devti control” turned on in Android's Accessibility settings.",
             control,
         ) { context.startActivity(app.devti.android.control.ControlAccessibility.settingsIntent()) }
+    }
+}
+
+/** Phase 6 permissions: each is optional, and each feature says what it needs. */
+private val TEXTS_AND_CALLS = buildList {
+    addAll(listOf(Manifest.permission.READ_SMS, Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_CONTACTS))
+    addAll(listOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG, Manifest.permission.ANSWER_PHONE_CALLS))
+}
+
+private fun granted(context: android.content.Context, permissions: List<String>) =
+    permissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
+
+/** Phase 6: texts and calls, this phone's mic / sound / camera, and the walk-away beacon. */
+@Composable
+private fun Communication(core: DevtiCore, state: CoreState, hub: PeerSnapshot) {
+    val c = Devti.colors
+    val context = LocalContext.current
+    var texts by remember { mutableStateOf(granted(context, TEXTS_AND_CALLS)) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        texts = granted(context, TEXTS_AND_CALLS)
+        if (!texts) toast(context, "Some were not allowed. Texts and calls on the computer need all of them.")
+    }
+    val beaconPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) listOf(Manifest.permission.BLUETOOTH_ADVERTISE) else emptyList()
+    val askBeacon = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        if (granted(context, beaconPermission)) core.setWalkAway(true)
+        else toast(context, "Devti needs “Nearby devices” to tell your computer you're close.")
+    }
+
+    Text("Calls, texts and sharing", style = Devti.type.heading, color = c.text)
+    Card {
+        Text("Texts and calls on ${hub.info.name}", style = Devti.type.label, color = c.text)
+        Text(
+            if (texts) {
+                "On. Your computer shows your conversations and who's calling; texts you send there go from this phone's number."
+            } else {
+                "Read and send texts, and see and answer calls, from your computer. Android asks for SMS, contacts and phone permissions."
+            },
+            style = Devti.type.small,
+            color = c.textDim,
+        )
+        if (!texts) GhostButton("Allow texts and calls", onClick = { ask.launch(TEXTS_AND_CALLS.toTypedArray()) })
+    }
+    Card {
+        Text("Use this phone with ${hub.info.name}", style = Devti.type.label, color = c.text)
+        val sharing = state.audioSharing
+        val busy = sharing.isNotEmpty()
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            ShareChip("Microphone", "mic" in sharing, Modifier.weight(1f), enabled = !busy || "mic" in sharing) {
+                if ("mic" in sharing) core.stopAudio() else core.shareAudio(hub.info.id, "mic")
+            }
+            ShareChip(
+                "Phone sound",
+                "relay" in sharing,
+                Modifier.weight(1f),
+                enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && (!busy || "relay" in sharing),
+            ) { if ("relay" in sharing) core.stopAudio() else core.shareAudio(hub.info.id, "relay") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            ShareChip("Webcam", state.cameraSharing, Modifier.weight(1f), enabled = hub.online) {
+                if (state.cameraSharing) {
+                    core.stopCamera()
+                } else {
+                    val err = core.offerCamera(hub.info.id)
+                    toast(context, err ?: "Accept it on ${hub.info.name} — it then shows up as a camera there.")
+                }
+            }
+        }
+        Text(
+            buildString {
+                append("Microphone and sound play on the computer while it's connected; one at a time. ")
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) append("Sharing this phone's sound needs Android 10 or later. ")
+                else append("“Phone sound” covers music and video apps that allow it — never calls. ")
+                append("Each shows a notification with Stop.")
+            },
+            style = Devti.type.small,
+            color = c.textFaint,
+        )
+    }
+    Card {
+        Toggle(
+            "Let your computer sense when you walk away",
+            if (state.walkAway) {
+                "On. This phone sends a tiny Bluetooth signal only your paired computers recognise; it changes every 15 minutes."
+            } else {
+                "Your computer can lock when you leave and wake when you're back (set up in its Automation page)."
+            },
+            state.walkAway,
+        ) { on ->
+            if (on && !granted(context, beaconPermission)) askBeacon.launch(beaconPermission.toTypedArray()) else core.setWalkAway(on)
+        }
+    }
+}
+
+@Composable
+private fun ShareChip(label: String, active: Boolean, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    val c = Devti.colors
+    Box(
+        modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (active) c.text else c.surface2)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 14.dp, horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            if (active) "Stop ${label.lowercase()}" else label,
+            style = Devti.type.label,
+            color = when {
+                active -> c.bg
+                enabled -> c.text
+                else -> c.textFaint
+            },
+        )
     }
 }

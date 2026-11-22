@@ -335,21 +335,32 @@ mod proximity {
             let Ok(manager) = Manager::new().await else { return };
             let Some(adapter) = manager.adapters().await.ok().and_then(|v| v.into_iter().next()) else { return };
             let Ok(mut events) = adapter.events().await else { return };
-            let _ = adapter.start_scan(ScanFilter { services: vec![uuid] }).await;
+            // No service filter: the phone's beacon carries the UUID as service data only (a
+            // service-UUID list would not fit beside it in one advert), and filters match
+            // service UUIDs. Only addresses seen with the beacon are re-read on updates.
+            let _ = adapter.start_scan(ScanFilter::default()).await;
+            let mut beacons = std::collections::HashSet::new();
             let mut tick = tokio::time::interval(Duration::from_secs(5));
             loop {
                 tokio::select! {
                     ev = events.next() => {
-                        let Some(CentralEvent::ServiceDataAdvertisement { id, service_data }) = ev else { continue };
-                        let Some(token) = service_data.get(&uuid) else { continue };
-                        let rssi = {
+                        let id = match ev {
+                            Some(CentralEvent::ServiceDataAdvertisement { id, .. } | CentralEvent::DeviceDiscovered(id)) => id,
+                            Some(CentralEvent::DeviceUpdated(id)) if beacons.contains(&id) => id,
+                            Some(_) => continue,
+                            None => break,
+                        };
+                        let props = {
                             use btleplug::api::Peripheral as _;
                             match adapter.peripheral(&id).await {
-                                Ok(p) => p.properties().await.ok().flatten().and_then(|pp| pp.rssi),
+                                Ok(p) => p.properties().await.ok().flatten(),
                                 Err(_) => None,
                             }
                         };
-                        let Some(rssi) = rssi else { continue };
+                        let Some(props) = props else { continue };
+                        let Some(token) = props.service_data.get(&uuid) else { continue };
+                        beacons.insert(id);
+                        let Some(rssi) = props.rssi else { continue };
                         for peer in a.node.peers() {
                             if a.node.proximity_tokens_of(&peer.info.id).iter().any(|t| t.as_slice() == token.as_slice()) {
                                 let changed = a.proximity.lock().entry(peer.info.id).or_default().reading(rssi, now_ms());

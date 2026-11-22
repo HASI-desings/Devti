@@ -32,6 +32,8 @@ object Alerts {
     const val ID_RING = 2
     const val ID_SCREEN = 3
     private const val ID_SCREEN_REQUEST = 4
+    const val ID_AUDIO = 5
+    const val ID_CAMERA = 6
     private const val ID_BATTERY_BASE = 1000
     private const val ID_FILE_BASE = 2000
     private const val ID_MIRROR_BASE = 3000
@@ -116,13 +118,13 @@ object Alerts {
     )
 
     /** "Studio Laptop wants to see your screen" — tapping it opens Android's consent dialog. */
-    fun screenRequest(context: Context, fromName: String, consent: Intent) = post(
+    fun screenRequest(context: Context, fromName: String, consent: Intent, camera: Boolean = false) = post(
         context,
         ID_SCREEN_REQUEST,
         NotificationCompat.Builder(context, RING)
             .setSmallIcon(R.drawable.ic_stat_devti)
-            .setContentTitle(context.getString(R.string.screen_request_title, fromName))
-            .setContentText(context.getString(R.string.screen_request_body))
+            .setContentTitle(context.getString(if (camera) R.string.camera_request_title else R.string.screen_request_title, fromName))
+            .setContentText(context.getString(if (camera) R.string.camera_request_body else R.string.screen_request_body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setAutoCancel(true)

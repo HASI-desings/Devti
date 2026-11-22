@@ -29,6 +29,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.devti.android.DevtiApp
+import app.devti.android.continuity.Pure
+import app.devti.android.core.state.HandoffItem
 import app.devti.android.core.state.PeerSnapshot
 import app.devti.android.ui.components.GhostButton
 import app.devti.android.ui.onboarding.VoiceDot
@@ -37,9 +39,9 @@ import app.devti.android.ui.theme.DevtiTheme
 import app.devti.android.ui.theme.voiceFor
 
 /**
- * "Send with Devti" in Android's share sheet. Files go to the chosen device; plain text
- * (a link, a note) goes to its clipboard. With one online computer it sends straight
- * away; otherwise a small sheet asks which device.
+ * "Send with Devti" in Android's share sheet. Files go to the chosen device; a link opens
+ * there ("continue on computer"); other text goes to the clipboard. With one online
+ * computer it sends straight away; otherwise a small sheet asks which device.
  */
 class ShareActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,11 +51,15 @@ class ShareActivity : ComponentActivity() {
         val uris = sharedUris(intent)
         val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { uris.isEmpty() }
         if (uris.isEmpty() && text.isNullOrBlank()) return finish()
+        val link = text?.let { Pure.sharedLink(it) }
 
         fun send(p: PeerSnapshot) {
             if (uris.isNotEmpty()) {
                 core.sendFiles(p.info.id, uris)
                 Toast.makeText(this, if (uris.size == 1) "Sending to ${p.info.name}" else "Sending ${uris.size} files to ${p.info.name}", Toast.LENGTH_SHORT).show()
+            } else if (link != null) {
+                val err = core.handoff(p.info.id, HandoffItem(kind = "url", url = link, title = intent.getStringExtra(Intent.EXTRA_SUBJECT).orEmpty()))
+                Toast.makeText(this, err ?: "Opening on ${p.info.name}", Toast.LENGTH_SHORT).show()
             } else {
                 val err = core.sendText(text!!)
                 Toast.makeText(this, err ?: "On ${p.info.name}'s clipboard", Toast.LENGTH_SHORT).show()
@@ -63,7 +69,7 @@ class ShareActivity : ComponentActivity() {
 
         val online = core.state.value.peers.filter { it.online }
         // Text goes to every connected device's clipboard, so there is nothing to choose.
-        if (online.size == 1 || (text != null && online.isNotEmpty())) return send(online.first())
+        if (online.size == 1 || (text != null && link == null && online.isNotEmpty())) return send(online.first())
 
         setContent {
             DevtiTheme {
@@ -80,7 +86,15 @@ class ShareActivity : ComponentActivity() {
                             .padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text(if (uris.size > 1) "Send ${uris.size} files to…" else "Send to…", style = Devti.type.heading, color = c.text)
+                        Text(
+                            when {
+                                uris.size > 1 -> "Send ${uris.size} files to…"
+                                link != null -> "Open on…"
+                                else -> "Send to…"
+                            },
+                            style = Devti.type.heading,
+                            color = c.text,
+                        )
                         if (state.peers.isEmpty()) {
                             Text("Pair this phone with a computer first.", style = Devti.type.body, color = c.textDim)
                         }

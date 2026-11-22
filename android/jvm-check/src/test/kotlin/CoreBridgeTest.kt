@@ -1,5 +1,10 @@
 import app.devti.android.core.state.Catalog
 import app.devti.android.core.state.CatalogCommand
+import app.devti.android.core.state.CallInfo
+import app.devti.android.core.state.HandoffItem
+import app.devti.android.core.state.SmsMessage
+import app.devti.android.core.state.SmsThread
+import kotlinx.serialization.builtins.ListSerializer
 import app.devti.android.core.state.CoreState
 import app.devti.android.core.state.Input
 import app.devti.android.core.state.NotifAction
@@ -193,6 +198,42 @@ class CoreBridgeTest {
         pusher.join()
         phone.core.screenStop(hubId)
         waitRaw("screen stopped") { it.contains("\"screen_requested\"") && it.contains("\"on\":false") }
+
+        // Phase 6 through the bindings, encoded with the app's own models: a new text, the
+        // conversation list, a ringing call, "continue on computer", the walk-away token,
+        // the phone's microphone and its camera offered as a webcam.
+        val waitPhone = { what: String, pred: (String) -> Boolean ->
+            val end = System.currentTimeMillis() + 10_000
+            while (phone.raw.none(pred) && System.currentTimeMillis() < end) Thread.sleep(25)
+            assertTrue(phone.raw.any(pred), what)
+        }
+        val j = Reducer.json
+        // Handoffs ride the clipboard permission, which the phone took away above.
+        phone.core.setPermissions(hubId, j.encodeToString(Permissions.serializer(), perms.copy(clipboard = true)))
+        phone.core.publishSms(j.encodeToString(SmsMessage.serializer(), SmsMessage("m1", "7", "+15550100", "Ana", "On my way", 1_700_000_000_000, outgoing = false)))
+        waitRaw("sms") { it.contains("\"type\":\"sms\"") && it.contains("On my way") && it.contains("\"thread\":\"7\"") }
+        val threads = listOf(SmsThread("7", listOf("+15550100"), listOf("Ana"), "On my way", 1_700_000_000_000, unread = 1))
+        phone.core.answerSmsThreads(hubId, j.encodeToString(ListSerializer(SmsThread.serializer()), threads))
+        waitRaw("sms threads") { it.contains("\"sms_threads\"") && it.contains("\"unread\":1") }
+        phone.core.reportSmsResult(hubId, false, "No signal")
+        waitRaw("sms result") { it.contains("\"sms_result\"") && it.contains("No signal") }
+        phone.core.publishCall(j.encodeToString(CallInfo.serializer(), CallInfo("c1", "ringing", "+15550100", "Ana", incoming = true, ts = 1)))
+        waitRaw("call") { it.contains("\"type\":\"call\"") && it.contains("\"ringing\"") }
+        phone.core.handoff(hubId, j.encodeToString(HandoffItem.serializer(), HandoffItem("url", url = "https://example.org/a", title = "A")))
+        waitRaw("handoff to hub") { it.contains("\"handoff\"") && it.contains("https://example.org/a") }
+        hub.core.handoff(phoneId, j.encodeToString(HandoffItem.serializer(), HandoffItem("media", url = "https://youtu.be/x", positionMs = 61_000)))
+        waitPhone("handoff to phone") { it.contains("\"handoff\"") && it.contains("\"position_ms\":61000") }
+        // Only http(s) links are ever handed over.
+        assertFailsWith<DevtiException> { phone.core.handoff(hubId, j.encodeToString(HandoffItem.serializer(), HandoffItem("url", url = "file:///etc/passwd"))) }
+        assertEquals(8, phone.core.proximityToken().size)
+
+        val mic = phone.core.startAudio(hubId, "mic", 48_000u, 1.toUByte())
+        waitRaw("audio started") { it.contains("\"audio_started\"") && it.contains("\"mic\"") }
+        repeat(5) { mic.push(ByteArray(1920)) }
+        mic.stop()
+        waitRaw("audio ended") { it.contains("\"audio_ended\"") }
+        phone.core.cameraOffer(hubId)
+        waitRaw("camera offered") { it.contains("\"camera_offered\"") }
 
         // Errors arrive as typed exceptions with a readable reason.
         val bad = assertFailsWith<DevtiException.InvalidInput> { phone.core.pairWithUri("nope") }
