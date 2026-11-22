@@ -81,6 +81,57 @@ data class DiscoveredDevice(
     @SerialName("pairing_open") val pairingOpen: Boolean = false,
 )
 
+/** One file transfer, either direction (core `TransferRecord`). */
+@Serializable
+data class TransferRecord(
+    val id: Long,
+    @SerialName("device_id") val deviceId: String,
+    @SerialName("device_name") val deviceName: String,
+    val incoming: Boolean,
+    val name: String,
+    val path: String = "",
+    val size: Long,
+    val done: Long = 0,
+    /** `queued`, `active`, `paused`, `done`, `failed`, `cancelled`. */
+    val state: String,
+    val ts: Long = 0,
+    /** Bytes per second, from the latest progress event (not persisted by the core). */
+    val rateBps: Long = 0,
+) {
+    val finished: Boolean get() = state == "done" || state == "failed" || state == "cancelled"
+    val fraction: Float get() = if (size <= 0) (if (state == "done") 1f else 0f) else (done.toFloat() / size).coerceIn(0f, 1f)
+}
+
+@Serializable
+data class NotifAction(val id: String, val label: String, val reply: Boolean = false)
+
+/** A notification as Devti Core carries it (`NotificationInfo`). */
+@Serializable
+data class NotificationInfo(
+    val key: String,
+    @SerialName("app_id") val appId: String,
+    @SerialName("app_name") val appName: String,
+    val title: String = "",
+    val text: String = "",
+    val ts: Long,
+    val actions: List<NotifAction> = emptyList(),
+    @SerialName("icon_png") val iconPng: List<Int>? = null,
+    val dismissable: Boolean = true,
+)
+
+@Serializable
+data class MirroredNotification(
+    val from: String,
+    @SerialName("from_name") val fromName: String,
+    val notif: NotificationInfo,
+)
+
+/** Text another device put on this phone's clipboard. */
+data class ClipboardIn(val fromName: String, val text: String, val ts: Long)
+
+/** Someone is ringing this phone (find my device). */
+data class RingIn(val fromId: String, val fromName: String)
+
 /** Where a pairing attempt is, as the phone's UI shows it. */
 sealed interface PairingStage {
     val pairingId: Long
@@ -106,6 +157,16 @@ data class CoreState(
     val pairing: PairingStage? = null,
     /** Devices removed by the other side, to tell the user once. */
     val removedNotice: String? = null,
+    /** Ecosystem-wide Do Not Disturb. */
+    val dnd: Boolean = false,
+    /** Newest first, at most [Reducer.MAX_TRANSFERS]. */
+    val transfers: List<TransferRecord> = emptyList(),
+    val lastClipboard: ClipboardIn? = null,
+    val ringing: RingIn? = null,
+    /** Device ids this phone is currently ringing. */
+    val ringingOut: Set<String> = emptySet(),
+    /** Files being copied out of other apps before they can be sent. */
+    val preparing: Int = 0,
 ) {
     /** The Hub this phone belongs to: the first paired computer. */
     val hub: PeerSnapshot?

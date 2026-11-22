@@ -299,6 +299,11 @@ impl DevtiMobile {
         serde_json::to_string(&self.node.transfers().unwrap_or_default()).unwrap_or_default()
     }
 
+    /// Forgets finished, failed and cancelled transfers.
+    pub fn clear_finished_transfers(&self) -> Result<(), DevtiError> {
+        Ok(self.node.clear_finished_transfers()?)
+    }
+
     pub fn set_downloads_dir(&self, path: String) -> Result<(), DevtiError> {
         Ok(self.node.set_downloads_dir(std::path::Path::new(&path))?)
     }
@@ -308,6 +313,37 @@ impl DevtiMobile {
         let id = device_id.map(|d| d.parse()).transpose()?;
         let h = self.node.battery_history(id.as_ref(), since)?;
         Ok(serde_json::to_string(&h).unwrap_or_default())
+    }
+
+    /// Changes what `device_id` may do on this phone (JSON `Permissions`); keeps its role.
+    pub fn set_permissions(&self, device_id: String, permissions_json: String) -> Result<String, DevtiError> {
+        let _g = self.runtime.enter();
+        let id: DeviceId = device_id.parse()?;
+        let permissions: devti_core::model::Permissions =
+            serde_json::from_str(&permissions_json).map_err(|e| DevtiError::InvalidInput { reason: e.to_string() })?;
+        let role = self
+            .node
+            .peers()
+            .into_iter()
+            .find(|p| p.info.id == id)
+            .map(|p| p.role)
+            .ok_or_else(|| DevtiError::InvalidInput { reason: "that device isn't paired".into() })?;
+        let snap = self.node.set_access(&id, role, permissions)?;
+        Ok(serde_json::to_string(&snap).unwrap_or_default())
+    }
+
+    /// A persisted app setting (stored in the core database).
+    pub fn setting(&self, key: String) -> Option<String> {
+        self.node.setting(&key).ok().flatten()
+    }
+
+    pub fn set_setting(&self, key: String, value: String) -> Result<(), DevtiError> {
+        Ok(self.node.set_setting(&key, &value)?)
+    }
+
+    /// Battery level at which other devices raise a low-battery alert.
+    pub fn set_low_battery_threshold(&self, percent: u8) -> Result<(), DevtiError> {
+        Ok(self.node.set_low_battery_threshold(percent)?)
     }
 
     /// Call when the network changes or the app returns to the foreground.

@@ -47,4 +47,31 @@ class ReducerTest {
         assertEquals(s, Reducer.apply(s, "{"))
         assertEquals(s, Reducer.apply(s, """{"type":"hologram"}"""))
     }
+
+    @Test
+    fun transfersAreUpsertedNewestFirstWithRate() {
+        fun ev(id: Long, state: String, done: Long, ts: Long, rate: Long = 0) =
+            """{"type":"transfer","rate_bps":$rate,"transfer":{"id":$id,"device_id":"AAAAAAAAAAAAAAAA","device_name":"Studio Laptop",
+            "incoming":true,"name":"a.bin","path":"/x/a.bin","size":100,"done":$done,"state":"$state","ts":$ts}}"""
+        var s = Reducer.apply(CoreState(ready = true), ev(1, "active", 10, 5, rate = 2048))
+        s = Reducer.apply(s, ev(2, "queued", 0, 9))
+        s = Reducer.apply(s, ev(1, "done", 100, 5))
+        assertEquals(listOf(2L, 1L), s.transfers.map { it.id })
+        assertEquals(1f, s.transfers[1].fraction)
+        assertTrue(s.transfers[1].finished)
+        assertEquals(0L, s.transfers[1].rateBps)
+    }
+
+    @Test
+    fun continuityEvents() {
+        var s = CoreState(ready = true)
+        s = Reducer.apply(s, """{"type":"dnd_changed","on":true,"by":"AAAAAAAAAAAAAAAA"}""")
+        assertTrue(s.dnd)
+        s = Reducer.apply(s, """{"type":"clipboard_received","from":"AAAAAAAAAAAAAAAA","from_name":"Studio Laptop","text":"hi","ts":3}""")
+        assertEquals("hi", s.lastClipboard?.text)
+        s = Reducer.apply(s, """{"type":"ring_requested","from":"AAAAAAAAAAAAAAAA","from_name":"Studio Laptop","on":true}""")
+        assertEquals("Studio Laptop", s.ringing?.fromName)
+        s = Reducer.apply(s, """{"type":"ring_requested","from":"AAAAAAAAAAAAAAAA","from_name":"Studio Laptop","on":false}""")
+        assertNull(s.ringing)
+    }
 }

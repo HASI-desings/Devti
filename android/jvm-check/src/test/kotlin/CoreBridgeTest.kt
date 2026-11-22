@@ -1,4 +1,7 @@
 import app.devti.android.core.state.CoreState
+import app.devti.android.core.state.NotifAction
+import app.devti.android.core.state.NotificationInfo
+import app.devti.android.core.state.Permissions
 import app.devti.android.core.state.PairingStage
 import app.devti.android.core.state.Reducer
 import app.devti.android.core.state.formatCode
@@ -40,7 +43,7 @@ private class Device(name: String, kind: String, platform: String) : EventListen
     )
 
     init {
-        state.set(Reducer.snapshot(core.localJson(), core.peersJson(), core.nearbyJson()))
+        state.set(Reducer.snapshot(core.localJson(), core.peersJson(), core.nearbyJson(), core.transfersJson(), core.dnd()))
     }
 
     override fun onEvent(eventJson: String) {
@@ -109,6 +112,34 @@ class CoreBridgeTest {
         phone.core.setBattery(57u, true)
         val hubSees = hub.waitFor("battery") { s -> s.peers.any { it.status.battery?.percent == 57 } }
         assertEquals(true, hubSees.peers.first().status.battery?.charging)
+
+        // Phase 2 through the bindings: clipboard, notifications, a file, permissions.
+        val hubId = paired.hub!!.info.id
+        val phoneId = phone.state.get().local!!.info.id
+        hub.core.sendClipboard("from the laptop")
+        assertEquals("from the laptop", phone.waitFor("clipboard") { it.lastClipboard != null }.lastClipboard?.text)
+
+        val notif = NotificationInfo(key = "k1", appId = "org.chat", appName = "Chat", title = "Ana", text = "Lunch?", ts = 1,
+            actions = listOf(NotifAction("0", "Reply", reply = true)), iconPng = listOf(137, 80, 78, 71))
+        phone.core.publishNotification(Reducer.json.encodeToString(NotificationInfo.serializer(), notif))
+        val end = System.currentTimeMillis() + 10_000
+        while (!hub.core.notificationsJson().contains("Lunch?") && System.currentTimeMillis() < end) Thread.sleep(25)
+        assertTrue(hub.core.notificationsJson().contains("Lunch?"))
+
+        val downloads = Files.createTempDirectory("devti-dl")
+        phone.core.setDownloadsDir(downloads.toString())
+        val payload = Files.createTempFile("devti", ".bin").toFile().apply { writeBytes(ByteArray(300_000) { (it % 251).toByte() }) }
+        hub.core.sendFile(phoneId, payload.absolutePath)
+        val got = phone.waitFor("file") { s -> s.transfers.any { it.incoming && it.state == "done" } }.transfers.first()
+        assertEquals(300_000L, got.size)
+        assertTrue(java.io.File(got.path).readBytes().contentEquals(payload.readBytes()))
+
+        // The phone takes clipboard rights away from the hub; the hub's next clipboard is ignored.
+        val perms = phone.state.get().peers.first().permissions.copy(clipboard = false)
+        phone.core.setPermissions(hubId, Reducer.json.encodeToString(Permissions.serializer(), perms))
+        hub.core.sendClipboard("should not arrive")
+        Thread.sleep(800)
+        assertEquals("from the laptop", phone.state.get().lastClipboard?.text)
 
         // Errors arrive as typed exceptions with a readable reason.
         val bad = assertFailsWith<DevtiException.InvalidInput> { phone.core.pairWithUri("nope") }

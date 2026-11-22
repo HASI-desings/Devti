@@ -41,13 +41,15 @@ frame = length:u32be  body:CBOR(message)
 Every bidirectional stream starts with a `StreamOpen` frame:
 
 ```cddl
-StreamOpen = { "stream": "pair" / "control" / tstr }   ; unknown → stream reset
+StreamOpen = { "stream": "pair" / "control" / "file" / tstr }   ; unknown → stream reset
 ```
 
 ### Control stream (one per session, opened by the dialler)
 
 ```cddl
 ControlMsg = Hello / Status / Info / Ping / Pong / Goodbye
+           / Clipboard / Ring / Notification / NotificationRemoved
+           / NotificationAction / NotificationDismiss / Dnd            ; Phase 2
 Hello   = { "t": "hello",   "proto": 1, "info": DeviceInfo, "status": DeviceStatus }
 Status  = { "t": "status",  "status": DeviceStatus }
 Info    = { "t": "info",    "info": DeviceInfo }
@@ -61,7 +63,48 @@ DeviceInfo = {
   ? "os_version": tstr, ? "model": tstr / null, ? "app_version": tstr, ? "capabilities": [* tstr]
 }
 DeviceStatus = { ? "battery": { "percent": 0..100, "charging": bool } / null }
+
+; Phase 2 — continuity
+Clipboard           = { "t": "clipboard", "text": tstr .size (0..262144), "ts": int }
+Ring                = { "t": "ring", "on": bool }                      ; find my device
+Notification        = { "t": "notification", "notif": NotificationInfo }
+NotificationRemoved = { "t": "notification_removed", "key": tstr }
+NotificationAction  = { "t": "notification_action", "key": tstr, "action": tstr, ? "reply": tstr }
+NotificationDismiss = { "t": "notification_dismiss", "key": tstr }
+Dnd                 = { "t": "dnd", "on": bool }                       ; ecosystem-wide
+NotificationInfo = {
+  "key": tstr, "app_id": tstr, "app_name": tstr, ? "title": tstr, ? "text": tstr, "ts": int,
+  ? "actions": [* { "id": tstr, "label": tstr, ? "reply": bool }],
+  ? "icon_png": bstr .size (0..65536) / null, ? "dismissable": bool
+}
 ```
+
+Phase 2 rules:
+- Every request is checked against the permissions **the receiver** granted the sender:
+  `clipboard` for Clipboard, `commands` for Ring, `notifications` for all notification messages,
+  `files` for file streams. Requests without permission are dropped silently.
+- Notifications are owned by the device that posted them. Owners re-send all current ones when a
+  session starts; receivers drop a peer's notifications when its session ends. Receivers cap
+  every field (text 4096 chars, at most 3 actions, icon 64 KiB).
+- Clipboard echo suppression: a device never re-sends text it just applied from another device.
+
+### File stream (`"stream": "file"`, opened by the sender)
+
+```cddl
+Offer  = { "t": "offer", "id": uint, "name": tstr, "size": uint, ? "mime": tstr }
+Answer = { "t": "answer", "accept": bool, "offset": uint, ? "reason": tstr }
+; then exactly (size − offset) raw bytes, not framed
+Done   = { "t": "done", "sha256": bstr .size 32 }     ; hash of the WHOLE file, not just this part
+Saved  = { "t": "saved" }                             ; receiver verified the hash and kept the file
+```
+
+- The receiver sanitizes `name` (no path separators, reserved characters or leading dots) and
+  never overwrites: an existing name gets ` (1)`, ` (2)`… appended.
+- **Resume:** the receiver keeps `.devti-<id>.part`. On a new offer with the same `id` and `size`
+  it answers with `offset` = bytes already on disk. The sender skips to the offset but still
+  hashes the whole file, so the final check covers every byte.
+- A hash mismatch deletes the part file and fails the transfer. Cancelling resets the stream
+  with code `1`.
 
 Rules:
 - The dialler sends `Hello` first and the acceptor replies with its own. `info.id` **must** equal
@@ -145,6 +188,9 @@ Desktop (Tauri events `devti://event`) and mobile (UniFFI `EventListener`) recei
 `NodeEvent` JSON, tagged by `"type"`:
 `local_changed`, `peer_changed`, `peer_removed`, `device_discovered`, `device_lost`,
 `pairing_window_changed`, `pairing_started`, `pairing_verify`, `pairing_completed`,
-`pairing_failed`, `paused` (and `resync` when a listener fell behind). Shapes:
+`pairing_failed`, `paused`, and for Phase 2 `clipboard_received`, `ring_requested`,
+`notification_posted`, `notification_removed`, `notification_action_requested`,
+`notification_dismiss_requested`, `dnd_changed`, `low_battery`, `transfer` (and `resync` when a
+listener fell behind). Shapes:
 `core/src/node/events.rs`, mirrored in `desktop/src/bridge/types.ts` and
 `android/.../core/state/Models.kt`. Pairing IDs are below 2⁵³ so they survive JavaScript numbers.

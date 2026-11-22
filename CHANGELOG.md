@@ -5,6 +5,28 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Phase 2 — Continuity
+#### Added
+- Protocol: clipboard, ring, notification post/remove/action/dismiss, and Do Not Disturb
+  messages; a resumable `file` stream verified with SHA-256. Every request is checked against
+  the receiver's permissions.
+- Hub: **Files** (drop anywhere or on a device, live progress, cancel/retry/open, clipboard
+  history), **Alerts** (phone notifications with actions, quick reply, dismiss, DND), **Battery**
+  (24 h / 7 d charts, validated colour-blind-safe palette, table view, low-battery alert), and
+  *Ring it* with a full-screen overlay and chime. Adds OS clipboard sync, native notifications,
+  and `--send` paths for "Send to Devti".
+- Android: notification mirroring via a notification listener (actions, RemoteInput replies,
+  dismiss, DND in both directions), clipboard sync within Android's limits, find my phone at
+  alarm volume over the lock screen, *Send with Devti* in the share sheet, received files in
+  Downloads/Devti, and per-computer permissions.
+- Tests: core continuity end-to-end suite (including a 48 MB resume after a dropped
+  connection), Phase 2 checks in the real-app smoke test, and Kotlin binding tests covering
+  clipboard, notifications, a file verified byte for byte, and revoking a permission.
+
+#### Fixed
+- File transfers could stall when a device reconnected before the interrupted attempt had
+  unwound; the sender now retries by itself.
+
 ### Phase 1 — Foundation
 #### Added
 - **Devti Core** (Rust): Ed25519 device identities with pinned fingerprints; mutual TLS 1.3 over

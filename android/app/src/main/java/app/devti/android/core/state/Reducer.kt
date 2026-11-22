@@ -1,5 +1,6 @@
 package app.devti.android.core.state
 
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -19,13 +20,26 @@ object Reducer {
         coerceInputValues = true
     }
 
+    const val MAX_TRANSFERS = 50
+
     /** Builds the initial state from the core's snapshot calls. */
-    fun snapshot(localJson: String, peersJson: String, nearbyJson: String): CoreState =
+    fun snapshot(
+        localJson: String,
+        peersJson: String,
+        nearbyJson: String,
+        transfersJson: String = "[]",
+        dnd: Boolean = false,
+    ): CoreState =
         CoreState(
             ready = true,
             local = json.decodeFromString(LocalSnapshot.serializer(), localJson),
-            peers = sortPeers(json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(PeerSnapshot.serializer()), peersJson)),
-            nearby = json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(DiscoveredDevice.serializer()), nearbyJson),
+            peers = sortPeers(json.decodeFromString(ListSerializer(PeerSnapshot.serializer()), peersJson)),
+            nearby = json.decodeFromString(ListSerializer(DiscoveredDevice.serializer()), nearbyJson),
+            transfers = runCatching { json.decodeFromString(ListSerializer(TransferRecord.serializer()), transfersJson) }
+                .getOrDefault(emptyList())
+                .sortedByDescending { it.ts }
+                .take(MAX_TRANSFERS),
+            dnd = dnd,
         )
 
     fun apply(state: CoreState, eventJson: String): CoreState {
@@ -78,6 +92,21 @@ object Reducer {
             "paused" -> {
                 val paused = obj["paused"]?.jsonPrimitive?.booleanOrNull ?: return state
                 state.copy(local = state.local?.copy(paused = paused))
+            }
+            "transfer" -> {
+                val t = obj.decode("transfer", TransferRecord.serializer()) ?: return state
+                val rated = t.copy(rateBps = obj.long("rate_bps") ?: 0)
+                val list = state.transfers.filterNot { it.id == t.id } + rated
+                state.copy(transfers = list.sortedByDescending { it.ts }.take(MAX_TRANSFERS))
+            }
+            "dnd_changed" -> state.copy(dnd = obj["on"]?.jsonPrimitive?.booleanOrNull ?: return state)
+            "clipboard_received" -> state.copy(
+                lastClipboard = ClipboardIn(obj.string("from_name") ?: "", obj.string("text") ?: return state, obj.long("ts") ?: 0),
+            )
+            "ring_requested" -> {
+                val on = obj["on"]?.jsonPrimitive?.booleanOrNull ?: return state
+                if (on) state.copy(ringing = RingIn(obj.string("from") ?: "", obj.string("from_name") ?: ""))
+                else state.copy(ringing = null)
             }
             else -> state
         }

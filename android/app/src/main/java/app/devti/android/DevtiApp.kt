@@ -1,6 +1,7 @@
 package app.devti.android
 
 import android.app.Application
+import app.devti.android.continuity.Alerts
 import app.devti.android.core.DevtiCore
 
 /** Process entry point: owns the single Devti Core instance for the whole app. */
@@ -10,6 +11,7 @@ class DevtiApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        Alerts.createChannels(this)
         core = DevtiCore(this)
     }
 }

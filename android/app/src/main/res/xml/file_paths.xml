@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What Devti may share with other apps when you tap "Open" on a received file. -->
+<paths>
+    <external-files-path name="incoming" path="incoming/" />
+    <files-path name="incoming_internal" path="incoming/" />
+    <external-path name="downloads" path="Download/Devti/" />
+</paths>

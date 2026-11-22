@@ -99,6 +99,16 @@ than corrupted, and an unreadable peer row is skipped and logged, never fatal.
   found by driving the actual app; a regression test now covers it.
 - **Events:** a broadcast channel of `NodeEvent` (JSON-tagged). The desktop and mobile UIs both
   render from it.
+- **`continuity`** (Phase 2): clipboard (history of 50, echo suppression), find my device,
+  notifications (the owner keeps the truth and re-sends on reconnect; receivers keep a mirror
+  per device and clear it when the device disconnects), ecosystem-wide Do Not Disturb, battery
+  history (30 days, de-duplicated within 10 minutes) and one-shot low-battery alerts. Each
+  incoming request is checked against the permissions this device granted the sender.
+- **`transfer`** (Phase 2): one QUIC stream per file. Offer → answer (with a resume offset) →
+  raw bytes → SHA-256 → saved. Partial files survive drops; when the device comes back the
+  sender resumes automatically. A small retry scheduler fixes a race in which the device
+  reconnected before the interrupted attempt had finished unwinding. Received names are made
+  safe and never overwrite existing files.
 
 ---
 
@@ -131,6 +141,12 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
   messages instead of errors.
 - **`system.rs`**: battery (`starship-battery`), OS version, Wayland/X11 detection, and the
   diagnostics export, which redacts pairing secrets, codes and home paths.
+- **`continuity.rs`** (Phase 2): polls the OS clipboard once a second with `arboard` (no
+  portable change event exists) and writes received text back. It posts native notifications
+  for mirrored phone alerts (silent during DND), low battery and received files, and parses
+  `--send <paths>` for "Send to Devti" (forwarded by the single-instance plugin).
+- **Files commands** open or reveal only paths inside the received-files folder, so the UI
+  can't be used to open arbitrary files.
 
 ### React UI (`src/`)
 - **`bridge/`**: one `Bridge` interface with two implementations. `tauri.ts` (the real one) is
@@ -141,6 +157,10 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
 - **`design/`**: the custom icon set, the `Prism` hub glyph and voice assignment (see DESIGN.md).
 - **`features/`**: onboarding (7 steps), ecosystem map (SVG threads, HTML nodes and a canvas dot
   field that only redraws on change), pairing panel, device page, security, settings, help, tour.
+  Phase 2 adds **files** (drop anywhere or on a device, live progress, clipboard history),
+  **notifications** (grouped by device, inline quick reply, DND), **battery** (one chart per
+  device, palette validated for colour blindness, table view) and the full-screen **ring**
+  overlay with a WebAudio chime.
 - **`ui/`**: React Aria primitives restyled with Devti tokens.
 
 ---
@@ -160,6 +180,26 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
   Google Play Services, and `devti://pair` deep links mean the system camera can start pairing too.
 - **Build**: Gradle runs `cargo ndk` for arm64-v8a, armeabi-v7a and x86_64, and `uniffi-bindgen`
   for the Kotlin sources, before `preBuild`.
+- **`continuity/`** (Phase 2), the Android side of each feature:
+  - `NotificationMirror`, a `NotificationListenerService`, filters noise (Devti's own
+    notifications, ongoing ones, group summaries and foreground services) and converts the rest:
+    big text, up to three actions with reply flags, and a 64 px icon. It runs actions with
+    `RemoteInput` exactly as if typed on the phone, dismisses, and keeps the phone's DND and
+    the ecosystem's in step, without overriding the user's own DND type.
+  - `ClipboardBridge` writes any time. It reads only while Devti has focus, because Android 10+
+    forbids background reads: on focus, while open, via "Send clipboard", or with text shared
+    to Devti.
+  - `Ringer` plays the alarm sound at alarm volume, restoring the volume afterwards, vibrates,
+    and shows a full-screen `RingActivity` over the lock screen. It stops itself after three
+    minutes.
+  - `Files` copies shared `content://` documents into the cache before sending, because those
+    URIs don't stay readable long enough for resumes. Received files move to
+    **Downloads/Devti**: MediaStore on Android 10+, or the public folder on 8–9 when storage
+    permission was granted, otherwise they stay in app storage behind a `FileProvider`.
+  - `ShareActivity` adds "Send with Devti" to the share sheet: files go to the chosen device,
+    and text goes to the clipboard.
+  - `Pure` holds platform-free decisions (notification filter, safe names, sizes), unit-tested
+    on the JVM.
 
 ---
 

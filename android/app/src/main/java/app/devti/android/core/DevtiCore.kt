@@ -10,11 +10,33 @@ import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Build
 import android.provider.Settings
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import app.devti.android.BuildConfig
+import app.devti.android.continuity.Alerts
+import app.devti.android.continuity.ClipboardBridge
+import app.devti.android.continuity.Files
+import app.devti.android.continuity.NotificationMirror
+import app.devti.android.continuity.Ringer
 import app.devti.android.core.state.CoreState
+import app.devti.android.core.state.MirroredNotification
 import app.devti.android.core.state.PairingStage
+import app.devti.android.core.state.Permissions
 import app.devti.android.core.state.Reducer
+import app.devti.android.core.state.TransferRecord
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +54,8 @@ import uniffi.devti_ffi.MobileConfig
  * - events: the core calls [onEvent] on its own thread; [Reducer] folds it into state.
  * - device signals: battery level and network changes are pushed into the core.
  * - multicast: Android drops mDNS packets unless a MulticastLock is held.
+ * - continuity: [platform] turns core events into Android actions (clipboard, ringing,
+ *   notification actions, Do Not Disturb, moving received files to Downloads).
  */
 class DevtiCore(private val context: Context) : EventListener {
     private val _state = MutableStateFlow(CoreState())
@@ -41,6 +65,22 @@ class DevtiCore(private val context: Context) : EventListener {
     private var multicast: WifiManager.MulticastLock? = null
     private var batteryReceiver: BroadcastReceiver? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val main = Handler(Looper.getMainLooper())
+
+    val files = Files(context)
+    val clipboard = ClipboardBridge(context)
+    private val ringer = Ringer(context)
+
+    /** Mirror this phone's notifications to the computer (needs notification access too). */
+    @Volatile var mirrorNotifications: Boolean = true
+        private set
+
+    /** Share the clipboard both ways. */
+    @Volatile var clipboardSync: Boolean = true
+        private set
+
+    @Volatile private var lastSentClip: String? = null
 
     @Synchronized
     fun start(): DevtiMobile? {
@@ -61,8 +101,12 @@ class DevtiCore(private val context: Context) : EventListener {
                 this,
             )
             node = created
+            runCatching { created.setDownloadsDir(files.incomingDir.absolutePath) }
+            mirrorNotifications = created.setting(SETTING_MIRROR) != "false"
+            clipboardSync = created.setting(SETTING_CLIPBOARD) != "false"
             refresh()
             watchDevice()
+            io.launch { files.cleanStale() }
             created
         } catch (e: DevtiException) {
             _state.update { it.copy(error = e.readable()) }
@@ -76,7 +120,9 @@ class DevtiCore(private val context: Context) : EventListener {
     fun refresh() {
         val n = node ?: return
         val pairing = _state.value.pairing
-        _state.value = Reducer.snapshot(n.localJson(), n.peersJson(), n.nearbyJson()).copy(pairing = pairing)
+        val prev = _state.value
+        _state.value = Reducer.snapshot(n.localJson(), n.peersJson(), n.nearbyJson(), n.transfersJson(), n.dnd())
+            .copy(pairing = pairing, ringing = prev.ringing, ringingOut = prev.ringingOut, lastClipboard = prev.lastClipboard)
     }
 
     override fun onEvent(eventJson: String) {
@@ -85,6 +131,53 @@ class DevtiCore(private val context: Context) : EventListener {
             return
         }
         _state.update { Reducer.apply(it, eventJson) }
+        val obj = runCatching { Reducer.json.parseToJsonElement(eventJson).jsonObject }.getOrNull() ?: return
+        runCatching { platform(obj) }
+    }
+
+    /** What the phone itself must do for an event (the UI state is already updated). */
+    private fun platform(ev: JsonObject) {
+        fun str(k: String) = ev[k]?.jsonPrimitive?.contentOrNull
+        when (str("type")) {
+            "clipboard_received" -> if (clipboardSync) str("text")?.let {
+                lastSentClip = it
+                clipboard.apply(it)
+            }
+            "ring_requested" -> if (ev["on"]?.jsonPrimitive?.booleanOrNull == true) ringer.start(str("from_name") ?: "") else ringer.stop()
+            "notification_action_requested" -> {
+                val ok = NotificationMirror.running()?.runAction(str("key") ?: return, str("action") ?: return, str("reply"))
+                if (ok != true) toast("Couldn't do that on this phone: the notification is gone or access is off")
+            }
+            "notification_dismiss_requested" -> NotificationMirror.running()?.dismiss(str("key") ?: return)
+            "dnd_changed" -> {
+                // Only follow changes made elsewhere; ours already match the phone.
+                if (str("by") != null) NotificationMirror.running()?.applyDnd(ev["on"]?.jsonPrimitive?.booleanOrNull ?: return)
+            }
+            "low_battery" -> Alerts.lowBattery(context, str("id") ?: "", str("name") ?: "", ev["percent"]?.jsonPrimitive?.intOrNull ?: 0)
+            "transfer" -> {
+                val t = ev["transfer"]?.let { runCatching { Reducer.json.decodeFromJsonElement(TransferRecord.serializer(), it) }.getOrNull() } ?: return
+                onTransfer(t)
+            }
+            "notification_posted" -> {
+                // Another phone or tablet's notification (computers don't publish theirs).
+                val m = ev["notification"]?.let { runCatching { Reducer.json.decodeFromJsonElement(MirroredNotification.serializer(), it) }.getOrNull() } ?: return
+                val title = listOf(m.notif.appName, m.notif.title).filter { it.isNotBlank() }.joinToString(" · ")
+                Alerts.mirrored(context, "${m.from}/${m.notif.key}", title, "${m.notif.text}\n— ${m.fromName}", ev["dnd"]?.jsonPrimitive?.booleanOrNull == true)
+            }
+            "notification_removed" -> Alerts.cancelMirrored(context, "${str("from")}/${str("key")}")
+        }
+    }
+
+    private fun onTransfer(t: TransferRecord) {
+        if (t.incoming && t.state == "done") {
+            io.launch {
+                val already = files.published(t.id) != null
+                val where = files.publish(t.id, t.path)
+                if (!already) Alerts.fileReceived(context, t.id, t.name, t.deviceName, where?.uri, where?.mime)
+            }
+        } else if (!t.incoming && (t.state == "done" || t.state == "cancelled")) {
+            io.launch { files.unstage(t.path) }
+        }
     }
 
     // ----------------------------------------------------------- actions
@@ -118,6 +211,108 @@ class DevtiCore(private val context: Context) : EventListener {
     fun reconnectNow() {
         node?.reconnectNow()
     }
+
+    // ------------------------------------------------------------ continuity
+
+    /** Shares the clipboard if it changed. Only works while Devti has focus (Android 10+). */
+    fun captureClipboard(force: Boolean = false): Boolean {
+        if (!clipboardSync && !force) return false
+        val text = clipboard.read() ?: return false
+        if (!force && text == lastSentClip) return false
+        lastSentClip = text
+        return runCatching { node?.sendClipboard(text) == true }.getOrDefault(false)
+    }
+
+    /** Text shared to Devti from another app goes to the computer's clipboard. */
+    fun sendText(text: String): String? = act {
+        lastSentClip = text
+        node?.sendClipboard(text)
+    }
+
+    fun ring(deviceId: String, on: Boolean): String? = act {
+        node?.ring(deviceId, on)
+        _state.update { s -> s.copy(ringingOut = if (on) s.ringingOut + deviceId else s.ringingOut - deviceId) }
+    }
+
+    /** "I found it" — stops ringing here. */
+    fun stopRinging() {
+        ringer.stop()
+        _state.update { it.copy(ringing = null) }
+    }
+
+    /** Copies the documents into Devti's cache and queues them for [deviceId]. */
+    fun sendFiles(deviceId: String, uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        _state.update { it.copy(preparing = it.preparing + uris.size) }
+        io.launch {
+            var failed = 0
+            for (uri in uris) {
+                try {
+                    val staged = files.stage(uri)
+                    try {
+                        node?.sendFile(deviceId, staged.absolutePath)
+                    } catch (e: DevtiException) {
+                        files.unstage(staged.absolutePath)
+                        throw e
+                    }
+                } catch (e: Exception) {
+                    failed++
+                } finally {
+                    _state.update { it.copy(preparing = (it.preparing - 1).coerceAtLeast(0)) }
+                }
+            }
+            if (failed > 0) toast(if (failed == 1) "One file couldn't be read" else "$failed files couldn't be read")
+        }
+    }
+
+    fun cancelTransfer(id: Long): String? = act { node?.cancelTransfer(id.toULong()) }
+
+    fun retryTransfer(id: Long): String? = act { node?.retryTransfer(id.toULong()) }
+
+    fun clearFinishedTransfers(): String? = act {
+        node?.clearFinishedTransfers()
+        _state.update { s -> s.copy(transfers = s.transfers.filterNot { it.finished }) }
+    }
+
+    fun publishNotification(json: String) {
+        runCatching { node?.publishNotification(json) }
+    }
+
+    fun removeNotification(key: String) {
+        node?.removeNotification(key)
+    }
+
+    /** The phone's own Do Not Disturb changed. */
+    fun phoneDndChanged(on: Boolean) {
+        val n = node ?: return
+        // When notification access starts, "on" wins: never switch off DND the user wants.
+        if (n.dnd() != on) n.setDnd(on)
+    }
+
+    /** Ecosystem-wide Do Not Disturb from the app's switch. */
+    fun setDnd(on: Boolean) {
+        node?.setDnd(on)
+        NotificationMirror.running()?.applyDnd(on)
+    }
+
+    fun setMirrorNotifications(on: Boolean): String? = act {
+        node?.setSetting(SETTING_MIRROR, on.toString())
+        mirrorNotifications = on
+        NotificationMirror.running()?.let { if (on) it.publishAll() else it.unpublishAll() }
+    }
+
+    fun setClipboardSync(on: Boolean): String? = act {
+        node?.setSetting(SETTING_CLIPBOARD, on.toString())
+        clipboardSync = on
+    }
+
+    /** What [deviceId] may do on this phone. */
+    fun setPermissions(deviceId: String, permissions: Permissions): String? = act {
+        node?.setPermissions(deviceId, Reducer.json.encodeToString(Permissions.serializer(), permissions))
+        refresh()
+    }
+
+    private fun toast(text: String) = main.post { Toast.makeText(context, text, Toast.LENGTH_LONG).show() }
 
     private inline fun act(block: () -> Unit): String? =
         try {
@@ -175,6 +370,9 @@ class DevtiCore(private val context: Context) : EventListener {
 
     private fun isTablet(): Boolean = context.resources.configuration.smallestScreenWidthDp >= 600
 }
+
+private const val SETTING_MIRROR = "mirror_notifications"
+private const val SETTING_CLIPBOARD = "clipboard_sync"
 
 /** The human sentence inside a core error. */
 fun DevtiException.readable(): String = when (this) {

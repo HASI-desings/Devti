@@ -15,16 +15,17 @@ Free, open-source, local-first. Your laptops, phones, tablets and Bluetooth acce
 
 ## Where Devti is today
 
-Devti is being built in eight phases. **Phase 1 — Foundation — is complete**: the secure core,
-pairing, automatic reconnection, the desktop Hub with its first-run wizard and ecosystem map, and
-the Android companion app. Everything listed under "What works now" is real and tested; everything
+Devti is being built in eight phases. **Phases 1 and 2 are complete**: the secure core, pairing,
+automatic reconnection, the desktop Hub with its first-run wizard and ecosystem map, the Android
+companion app, and continuity — clipboard, files, notifications, find my device and battery
+history. Everything listed under "What works now" is real and tested; everything
 else is shown as planned, never faked.
 
 | Phase | Scope | Status |
 |---|---|---|
 | 1. Foundation | Core protocol, encryption, discovery, pairing, desktop Hub, onboarding, dashboard, Android pairing | **Done** |
-| 2. Continuity | Clipboard, file transfer, drag and drop, notifications, find my device, battery dashboard | Next |
-| 3. Control | Phone → laptop remote, laptop → Android mirror and control, shortcuts deck, local API + CLI | Planned |
+| 2. Continuity | Clipboard, file transfer, drag and drop, notifications, find my device, battery dashboard | **Done** |
+| 3. Control | Phone → laptop remote, laptop → Android mirror and control, shortcuts deck, local API + CLI | Next |
 | 4. Screens | Mirror, single-window cast, extended displays, multi-screen layout, one keyboard and mouse | Planned |
 | 5. Bluetooth | Accessory manager, automatic feature detection, device profiles, audio relay | Planned |
 | 6. Communication + automation | SMS, calls, rules engine, proximity, handoff, webcam and mic sharing | Planned |
@@ -47,6 +48,22 @@ else is shown as planned, never faked.
   ecosystem in one click.
 - **Accessories detected.** The setup wizard shows nearby Bluetooth accessories live (names,
   makers, signal). Controlling them arrives in Phase 5.
+- **Clipboard everywhere.** Copy on one device, paste on another. The Hub keeps a history of 50
+  clips. On Android, text copied on the computer arrives instantly. Going the other way, Android
+  only lets apps read the clipboard while they're open, so Devti sends it when you open the app,
+  tap *Send clipboard*, or share text to Devti.
+- **Files, any size.** Drop files anywhere in the Hub, or onto a device on the map. On a phone,
+  use *Send with Devti* in any app's share sheet. Transfers show their speed and time left, and
+  they resume by themselves after a dropped connection. Every file is checked with SHA-256. On
+  Android, received files land in **Downloads/Devti**.
+- **Phone notifications on your computer.** See them grouped by phone, run their actions, type
+  a quick reply, or dismiss them everywhere at once. One switch turns on **Do Not Disturb** for
+  every device.
+- **Find my device.** *Ring it* makes a phone ring at full alarm volume, even on silent, with an
+  "I found it" screen over the lock screen. It works the other way round too: the phone can make
+  the computer chime.
+- **Battery dashboard.** Get a 24-hour or 7-day chart for every device, with charging periods
+  marked, plus an alert when a device runs low.
 
 <p align="center">
   <img src="docs/media/pair-qr.png" width="49%" alt="Pairing sheet showing a QR code and three steps">
@@ -63,6 +80,17 @@ else is shown as planned, never faked.
 | Per-device permissions, pause, remove | ✅ | ✅ | ✅ | ✅ | Phase 8 |
 | Activity log | ✅ | ✅ | ✅ | via Hub | Phase 8 |
 | Bluetooth accessory detection | ✅ | ✅ (BlueZ) | ✅ (BlueZ) | — | — |
+| Clipboard sync (text) | ✅ | ✅ | ✅ ¹ | ✅ ² | Phase 8 |
+| File transfer, resumable | ✅ | ✅ | ✅ | ✅ (share sheet) | Phase 8 |
+| Phone notifications + actions + reply | shows | shows | shows | ✅ sends | — ³ |
+| Do Not Disturb everywhere | ✅ | ✅ | ✅ | ✅ | Phase 8 |
+| Find my device | ✅ | ✅ | ✅ | ✅ | Phase 8 |
+| Battery history + low-battery alert | ✅ | ✅ | ✅ | ✅ (alerts) | Phase 8 |
+
+¹ Uses the Wayland data-control protocol where the compositor offers it (KDE, wlroots-based),
+otherwise the XWayland clipboard bridge. ² Android 10+ allows reading the
+clipboard only while Devti is open; writing works any time. ³ iOS doesn't let apps read other
+apps' notifications.
 
 **iPhone and iPad honesty box:** Apple doesn't allow any app to remote-control an iPhone, read SMS
 or calls, or mirror other apps' notifications. When the iOS app arrives it will do everything Apple
@@ -150,6 +178,32 @@ connections are refused until you resume.
 ### Activity log
 **Security → Activity** lists pairings, connections, removals and permission changes. Filter by
 device and export as CSV.
+
+### Files
+Drop files anywhere in the Hub, or onto a device on the map, or use **Files → Choose files**.
+Received files go to `Downloads/Devti` (change it in **Settings → Files**). On Linux and
+Windows you can also run `devti --send <file>…` (used by "Send to" menus). On Android, share
+anything to **Send with Devti**, or tap **Send files** on the home screen.
+
+### Clipboard
+It's on by default. Turn it off in **Settings** (Hub) or on the phone's home screen. The Hub's
+**Files → Clipboard** tab keeps the last 50 clips; click one to copy it again.
+
+### Notifications and Do Not Disturb
+On the phone, turn on **Show this phone's notifications on my computer**. Android then asks you
+to allow *Notification access* for Devti. The Hub's **Alerts** page groups notifications by
+phone: buttons run the phone's own actions, **Reply** sends a quick reply, and **Dismiss** clears
+the notification on the phone too. **Do Not Disturb, everywhere** silences every device at once.
+
+### Find my device
+Open a device and press **Ring it**. A phone rings at alarm volume with an "I found it" screen
+and stops by itself after three minutes. On the phone, **Find <computer>** makes the Hub chime
+until you click *I found it*.
+
+### Battery
+**Battery** shows each device's level over 24 hours or 7 days, with charging periods shaded.
+Hover over the chart for exact values, or switch to the table view. Set the low-battery alert
+level in **Settings**.
 
 ### Tray
 Closing the window keeps Devti running in the tray (it frees the window's memory). Use the tray

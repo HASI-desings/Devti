@@ -3,4 +3,20 @@
     <string name="app_name">Devti</string>
     <string name="channel_connection">Connection</string>
     <string name="channel_connection_desc">Shows while Devti keeps your devices connected.</string>
+    <string name="channel_alerts">Alerts</string>
+    <string name="channel_alerts_desc">Low battery on your other devices.</string>
+    <string name="channel_files">Files received</string>
+    <string name="channel_files_desc">When a file from another device has arrived.</string>
+    <string name="channel_ring">Find my phone</string>
+    <string name="channel_ring_desc">Shown while another device is ringing this phone.</string>
+    <string name="channel_mirrored">From your other phones</string>
+    <string name="channel_mirrored_desc">Notifications mirrored from your other phones and tablets.</string>
+    <string name="low_battery_title">%1$s is at %2$d%%</string>
+    <string name="low_battery_body">Plug it in soon.</string>
+    <string name="file_received_title">Received %1$s</string>
+    <string name="file_received_body">From %1$s · saved in Downloads/Devti</string>
+    <string name="ring_title">Find my phone</string>
+    <string name="ring_body">%1$s is looking for this phone.</string>
+    <string name="ring_found">I found it</string>
+    <string name="share_label">Send with Devti</string>
 </resources>
