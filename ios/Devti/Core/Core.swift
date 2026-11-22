@@ -296,9 +296,11 @@ final class Core: ObservableObject {
     private func continueHere(_ item: HandoffItem, from: String) {
         if let s = item.url, var url = URL(string: s), s.hasPrefix("http") {
             if let ms = item.positionMs, ms >= 1000, s.contains("youtu") {
-                var c = URLComponents(url: url, resolvingAgainstBaseURL: false)
-                c?.queryItems = (c?.queryItems ?? []).filter { $0.name != "t" } + [URLQueryItem(name: "t", value: "\(ms / 1000)s")]
-                url = c?.url ?? url
+                if var c = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+                    let kept = (c.queryItems ?? []).filter { $0.name != "t" }
+                    c.queryItems = kept + [URLQueryItem(name: "t", value: "\(ms / 1000)s")]
+                    url = c.url ?? url
+                }
             }
             UIApplication.shared.open(url)
             toast = "Continued from \(from)"

@@ -66,6 +66,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let deadline = tokio::time::sleep(Duration::from_secs(seconds));
     tokio::pin!(deadline);
     let mut tick = tokio::time::interval(Duration::from_secs(5));
+    // How often the simulated battery drops 1 %. A phone at rest changes far less often than
+    // the 5 s default (and the core only sends changes), so performance runs pass ~120.
+    let battery_every: u64 = arg("--battery-every").and_then(|s| s.parse().ok()).unwrap_or(5).max(5);
+    let mut ticks = 0u64;
     loop {
         tokio::select! {
             ev = events.recv() => match ev {
@@ -180,7 +184,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             },
             _ = tick.tick() => {
-                battery = battery.saturating_sub(1).max(5);
+                ticks += 1;
+                if ticks % (battery_every / 5) == 0 {
+                    battery = battery.saturating_sub(1).max(5);
+                }
                 node.set_status(DeviceStatus { battery: Some(BatteryState::new(battery, false)) });
                 // Look for the Hub's saved commands (the smoke test adds one while running).
                 if let (Some(h), false) = (hub, ran) {

@@ -149,7 +149,14 @@ try {
       "--watch",
       "--watch-width",
       "1280",
-    ].concat(["--watch-fps", "30", "--watch-frames", process.env.DEVTI_PERF_FRAMES || "150"]),
+      "--watch-fps",
+      "30",
+      "--watch-frames",
+      process.env.DEVTI_PERF_FRAMES || "150",
+      // A phone at rest reports a new battery level every few minutes, not every 5 s.
+      "--battery-every",
+      "120",
+    ],
     { stdio: ["ignore", "pipe", "inherit"] },
   );
   simProc.stdout.on("data", (d) => {
@@ -174,13 +181,14 @@ try {
       el.id = "perf-clock";
       el.style.cssText = "position:fixed;right:24px;bottom:24px;font:600 48px monospace;color:#fff;z-index:99999";
       document.body.appendChild(el);
-      const tick = () => { el.textContent = performance.now().toFixed(1); requestAnimationFrame(tick); };
+      window.__perfClock = true;
+      const tick = () => { if (!window.__perfClock) return; el.textContent = performance.now().toFixed(1); requestAnimationFrame(tick); };
       tick();`,
     args: [],
   });
   await waitSim("screen latency", 180000);
   await wd("POST", s("/execute/sync"), {
-    script: "document.getElementById('perf-clock')?.remove();",
+    script: "window.__perfClock = false; document.getElementById('perf-clock')?.remove();",
     args: [],
   });
   const m = simOut.match(
@@ -203,32 +211,71 @@ try {
   await sleep(15000);
   const hub = pids().find((p) => cmdline(p).startsWith(app));
   if (!hub) throw new Error("Hub process not found");
-  const procs = tree(hub);
-  const t0 = procs.reduce(
-    (a, p) =>
-      a +
-      (() => {
-        try {
-          return stat(p).ticks;
-        } catch {
-          return 0;
-        }
-      })(),
-    0,
+  const running = await wd("POST", s("/execute/sync"), {
+    script: `return { idle: document.documentElement.dataset.idle, animations: document.getAnimations()
+      .filter((a) => a.playState === "running")
+      .map((a) => (a.animationName || a.transitionProperty || a.id || "animation") + " on " +
+        String(a.effect?.target?.className?.baseVal ?? a.effect?.target?.className ?? a.effect?.target?.tagName).slice(0, 60)) };`,
+    args: [],
+  });
+  console.log(`      idle=${running.idle}; running animations: ${running.animations.join(" | ") || "none"}`);
+  const churn = await wd("POST", s("/execute/async"), {
+    script: `const done = arguments[0];
+      let raf = 0; const orig = window.requestAnimationFrame;
+      const stacks = new Map();
+      window.requestAnimationFrame = (cb) => { raf++;
+        const st = (new Error().stack || "").split("\\n").slice(1, 5).map((l) => l.replace(/tauri:\\/\\/localhost\\//, "")).join(" < ");
+        stacks.set(st, (stacks.get(st) ?? 0) + 1); return orig(cb); };
+      const seen = new Map(); let n = 0;
+      const mo = new MutationObserver((list) => { for (const m of list) { n++;
+        const el = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+        const key = (el?.className?.baseVal ?? el?.className ?? el?.tagName ?? "?") + "";
+        seen.set(key.slice(0, 50), (seen.get(key.slice(0, 50)) ?? 0) + 1); } });
+      mo.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+      setTimeout(() => { mo.disconnect(); window.requestAnimationFrame = orig;
+        done({ raf, mutations: n, top: [...seen].sort((a, b) => b[1] - a[1]).slice(0, 6),
+          rafBy: [...stacks].sort((a, b) => b[1] - a[1]).slice(0, 3) }); }, 5000);`,
+    args: [],
+  });
+  for (const [st, c] of churn.rafBy ?? []) console.log(`      rAF ×${c}: ${st.slice(0, 400)}`);
+  console.log(
+    `      in 5 s: ${churn.raf} animation frames requested, ${churn.mutations} DOM mutations (${churn.top.map(([k, v]) => `${k}×${v}`).join(", ")})`,
   );
+  const ticksOf = (p) => {
+    try {
+      return stat(p).ticks;
+    } catch {
+      return 0;
+    }
+  };
+  const threadTicks = () => {
+    const out = new Map();
+    for (const t of readdirSync(`/proc/${hub}/task`)) {
+      try {
+        const raw = readFileSync(`/proc/${hub}/task/${t}/stat`, "utf8");
+        const name = raw.slice(raw.indexOf("(") + 1, raw.lastIndexOf(")"));
+        const rest = raw.slice(raw.lastIndexOf(")") + 2).split(" ");
+        out.set(`${name}#${t}`, Number(rest[11]) + Number(rest[12]));
+      } catch {}
+    }
+    return out;
+  };
+  const per0 = new Map(tree(hub).map((p) => [p, ticksOf(p)]));
+  const th0 = threadTicks();
+  const t0 = [...per0.values()].reduce((a, b) => a + b, 0);
   await sleep(60000);
-  const t1 = tree(hub).reduce(
-    (a, p) =>
-      a +
-      (() => {
-        try {
-          return stat(p).ticks;
-        } catch {
-          return 0;
-        }
-      })(),
-    0,
-  );
+  const per1 = new Map(tree(hub).map((p) => [p, ticksOf(p)]));
+  const th1 = threadTicks();
+  const t1 = [...per1.values()].reduce((a, b) => a + b, 0);
+  for (const [p, v] of per1) {
+    const pct = (((v - (per0.get(p) ?? 0)) / 100 / 60) * 100).toFixed(2);
+    console.log(`      cpu ${cmdline(p).split(" ")[0].split("/").pop()}: ${pct} %`);
+  }
+  const busy = [...th1]
+    .map(([k, v]) => [k, v - (th0.get(k) ?? 0)])
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+  console.log(`      busiest Hub threads (ticks in 60 s): ${busy.map(([k, v]) => `${k}=${v}`).join(", ")}`);
   const hz = 100; // USER_HZ on Linux
   const idleCpuPercent = +(((t1 - t0) / hz / 60) * 100).toFixed(2);
   const now = tree(hub);
