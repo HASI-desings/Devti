@@ -16,8 +16,10 @@ mod comms;
 mod continuity;
 mod control;
 mod events;
+pub mod reach;
 pub mod screen;
 mod session;
+pub mod storage;
 mod transfer;
 mod trust;
 
@@ -32,6 +34,8 @@ use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
 
 pub use events::*;
+pub use reach::{ReachAddress, ReachInfo};
+pub use storage::SharedFolder;
 pub use transfer::safe_file_name;
 
 use crate::discovery::{Advertisement, DiscoveredDevice, Discovery, DiscoveryEvent};
@@ -166,6 +170,8 @@ pub(crate) struct Inner {
     pub screen: screen::State,
     /// Live audio streams received.
     pub audio: audio::State,
+    /// Where peers said they can be reached away from the local network.
+    pub reach: reach::State,
 }
 
 /// Handle to a running node. Cheap to clone.
@@ -250,11 +256,13 @@ impl Node {
             control: control::State::new(),
             screen: screen::State::new(),
             audio: audio::State::new(),
+            reach: reach::State::new(),
         });
 
         if config.discovery && !paused {
             inner.start_discovery();
         }
+        reach::load(&inner);
         inner.rt.spawn(session::accept_loop(inner.clone()));
         inner.rt.spawn(session::reconnect_loop(inner.clone()));
         inner.rt.spawn(session::discovery_loop(inner.clone(), discovery_rx));
@@ -560,7 +568,7 @@ impl Inner {
 
     pub(crate) fn snapshot(&self, p: &PeerState) -> PeerSnapshot {
         let connection = p.session.as_ref().map(|s| ConnectionSnapshot {
-            kind: crate::model::ConnectionKind::Lan,
+            kind: crate::model::ConnectionKind::of(&s.conn.remote_address()),
             address: s.conn.remote_address().to_string(),
             rtt_ms: s.conn.rtt().as_millis().min(u32::MAX as u128) as u32,
             since: s.connected_at,
@@ -690,6 +698,7 @@ impl Inner {
         let state = removed.ok_or_else(|| Error::UnknownPeer(id.to_string()))?;
         self.trust.remove(&state.record.fingerprint);
         self.store.remove_peer(id)?;
+        reach::forget(self, id);
         if let Some(s) = state.session {
             if reason == RemovalReason::RevokedHere {
                 let _ = s.tx.send(ControlMsg::Goodbye { reason: GoodbyeReason::Revoked });

@@ -10,6 +10,7 @@ import type {
   DeckPageDef,
   DeviceInfo,
   DiscoveredDevice,
+  FsEntry,
   InputEvent,
   LocalSnapshot,
   MirroredNotification,
@@ -17,7 +18,10 @@ import type {
   PairingWindowInfo,
   PeerSnapshot,
   Permissions,
+  PluginInfo,
+  ReachInfo,
   SavedCommand,
+  SharedFolder,
   Snapshot,
   TransferRecord,
 } from "./types";
@@ -90,6 +94,66 @@ const TRUSTED: Permissions = {
   notifications: true,
   commands: true,
   bluetooth: true,
+  browse: true,
+};
+
+/** What a simulated device shares (Phase 7 browse). */
+const SIM_TREE: Record<string, FsEntry[]> = {
+  "/": [
+    { name: "Documents", dir: true, size: 0, modified: Date.now() - 3_600_000 },
+    { name: "Photos", dir: true, size: 0, modified: Date.now() - 86_400_000 },
+  ],
+  "/Documents": [
+    { name: "Trips", dir: true, size: 0, modified: Date.now() - 7_200_000 },
+    { name: "Budget 2026.xlsx", dir: false, size: 48_213, modified: Date.now() - 5_400_000 },
+    { name: "Thesis draft.pdf", dir: false, size: 2_400_000, modified: Date.now() - 900_000 },
+  ],
+  "/Documents/Trips": [
+    { name: "Hunza itinerary.pdf", dir: false, size: 820_000, modified: Date.now() - 172_800_000 },
+  ],
+  "/Photos": [
+    { name: "IMG_2041.jpg", dir: false, size: 3_100_000, modified: Date.now() - 260_000_000 },
+    { name: "IMG_2042.jpg", dir: false, size: 2_950_000, modified: Date.now() - 259_000_000 },
+  ],
+};
+
+/** Same rules as the core's `reach::valid_entry`. */
+export function validReachEntry(e: string): boolean {
+  const m = /^(\[[0-9a-fA-F:.]+\]|[A-Za-z0-9.-]+):(\d{1,5})$/.exec(e);
+  if (!m) return false;
+  const port = Number(m[2]);
+  const host = m[1] ?? "";
+  if (port < 1 || port > 65535) return false;
+  if (host.startsWith("[")) return true;
+  return (
+    !host.startsWith(".") &&
+    !host.startsWith("-") &&
+    host.split(".").every((l) => l.length > 0 && l.length <= 63)
+  );
+}
+
+const EXAMPLE_PLUGIN: PluginInfo = {
+  manifest: {
+    id: "link-cleaner",
+    name: "Link cleaner",
+    version: "1.0.0",
+    description:
+      "Removes tracking parameters (utm_…, fbclid, gclid and friends) from links you copy — on this computer with a command, and automatically when a link arrives from another device.",
+    author: "Devti",
+    permissions: ["clipboard:read", "clipboard:write", "notify", "events:clipboard"],
+    commands: [{ id: "clean", name: "Clean the copied link" }],
+  },
+  enabled: true,
+  running: true,
+  needs_approval: false,
+  permissions: [
+    ["clipboard:read", "Read this computer's clipboard"],
+    ["clipboard:write", "Change this computer's clipboard (which may then sync to your devices)"],
+    ["notify", "Show notifications on this computer"],
+    ["events:clipboard", "Be told when text is copied on another device — it receives the text"],
+  ],
+  problem: null,
+  log: ["started Link cleaner 1.0.0"],
 };
 
 const now = () => Date.now();
@@ -307,6 +371,17 @@ export function createPreviewBridge(): Bridge {
   };
 
   const peers = new Map<string, PeerSnapshot>();
+  let reach: ReachInfo = {
+    enabled: false,
+    port: 47810,
+    addresses: [
+      { address: "192.168.1.24:47810", kind: "lan", interface: "wlan0" },
+      { address: "100.101.12.7:47810", kind: "vpn", interface: "tailscale0" },
+    ],
+    extra: [],
+  };
+  let shared: SharedFolder[] = [];
+  let plugins: PluginInfo[] = [];
   const nearby: DiscoveredDevice[] = [
     {
       id: "N2B7Q4XZ5K3M8P6R",
@@ -1083,6 +1158,119 @@ export function createPreviewBridge(): Bridge {
       rules = structuredClone(next);
     },
     async runRuleNow() {},
+    async pickFolder() {
+      return "/home/you/Shared";
+    },
+    async reachInfo() {
+      return structuredClone(reach);
+    },
+    async setReach(enabled, extra) {
+      const bad = extra.find((e) => !validReachEntry(e));
+      if (bad)
+        throw new Error(
+          `“${bad}” isn't an address Devti can dial — use host:port, for example home.example.org:47810`,
+        );
+      reach = {
+        ...reach,
+        enabled,
+        extra,
+        addresses: [
+          ...reach.addresses.filter((a) => a.kind !== "manual"),
+          ...extra.map((address) => ({ address, kind: "manual" as const, interface: "" })),
+        ],
+      };
+      return structuredClone(reach);
+    },
+    async peerReach(id) {
+      return peers.get(id)?.info.kind === "phone" ? [] : ["100.101.40.2:47810"];
+    },
+    async sharedFolders() {
+      return structuredClone(shared);
+    },
+    async setSharedFolders(next) {
+      const names = new Set<string>();
+      for (const f of next) {
+        if (!f.name.trim() || /[/\\:]/.test(f.name))
+          throw new Error(`“${f.name}” can't be a shared folder's name`);
+        if (names.has(f.name.toLowerCase())) throw new Error(`two shared folders are called “${f.name}”`);
+        names.add(f.name.toLowerCase());
+      }
+      shared = structuredClone(next);
+    },
+    async fsList(id, path) {
+      const p = peers.get(id);
+      if (!p?.online) throw new Error("That device is offline.");
+      setTimeout(() => {
+        const entries = SIM_TREE[path.replace(/\/$/, "") || "/"];
+        emit({
+          type: "fs_listing",
+          from: id,
+          path,
+          entries: entries ?? [],
+          truncated: false,
+          error: entries ? null : "that file or folder is gone",
+        });
+      }, 180);
+    },
+    async fsGet(id, path) {
+      const p = peers.get(id);
+      if (!p?.online) throw new Error("That device is offline.");
+      const name = path.split("/").pop() ?? "file";
+      const dir = path.slice(0, path.length - name.length - 1) || "/";
+      const size = SIM_TREE[dir]?.find((e) => e.name === name)?.size ?? 100_000;
+      const t: TransferRecord = {
+        id: Math.floor(Math.random() * 1e12),
+        device_id: id,
+        device_name: p.info.name,
+        incoming: true,
+        name,
+        path: `/home/you/Downloads/Devti/${name}`,
+        size,
+        done: 0,
+        state: "active",
+        ts: now(),
+      };
+      pushTransfer(t);
+      let step = 0;
+      const timer = setInterval(() => {
+        step++;
+        const cur = transfers.get(t.id);
+        if (cur?.state !== "active") return clearInterval(timer);
+        const done = Math.min(size, Math.round((size * step) / 8));
+        pushTransfer({ ...cur, done, state: done >= size ? "done" : "active" });
+        if (done >= size) clearInterval(timer);
+      }, 200);
+    },
+    async plugins() {
+      return structuredClone(plugins);
+    },
+    async pluginInspect() {
+      return {
+        ...structuredClone(EXAMPLE_PLUGIN),
+        enabled: false,
+        running: false,
+        needs_approval: true,
+        log: [],
+      };
+    },
+    async pluginInstall() {
+      plugins = [
+        structuredClone(EXAMPLE_PLUGIN),
+        ...plugins.filter((x) => x.manifest.id !== EXAMPLE_PLUGIN.manifest.id),
+      ];
+      return structuredClone(EXAMPLE_PLUGIN);
+    },
+    async pluginSetEnabled(id, enabled) {
+      plugins = plugins.map((x) => (x.manifest.id === id ? { ...x, enabled, running: enabled } : x));
+    },
+    async pluginRemove(id) {
+      plugins = plugins.filter((x) => x.manifest.id !== id);
+    },
+    async pluginRun(id) {
+      const pl = plugins.find((x) => x.manifest.id === id);
+      if (!pl?.running) throw new Error("That plugin isn't running. Turn it on in Plugins.");
+      return "Removed 2 tracking parameters. (simulated)";
+    },
     async saveCapture(name, bytes) {
       // The browser saves it through its own download prompt.
       const url = URL.createObjectURL(new Blob([bytes as BlobPart]));

@@ -16,6 +16,13 @@ import type {
 } from "../bridge";
 import { assignVoices, type Voice } from "../design/voice";
 
+export interface FsListing {
+  entries: import("../bridge").FsEntry[];
+  truncated: boolean;
+  error: string | null;
+  at: number;
+}
+
 export type Page =
   | "ecosystem"
   | "device"
@@ -30,7 +37,8 @@ export type Page =
   | "screens"
   | "accessories"
   | "messages"
-  | "automation";
+  | "automation"
+  | "plugins";
 
 export type PairingStage =
   | { stage: "waiting" }
@@ -91,6 +99,8 @@ interface State {
   smsThreads: Record<string, import("../bridge").SmsThread[]>;
   /** Messages, by `${phone}/${thread}`. */
   smsMessages: Record<string, import("../bridge").SmsMessage[]>;
+  /** Shared-folder listings by `${device}|${path}` (Phase 7). */
+  fsListings: Record<string, FsListing>;
   /** The current or last call per phone. */
   calls: Record<string, CallInfo & { from_name: string }>;
 }
@@ -150,6 +160,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   viewers: {},
   smsThreads: {},
   smsMessages: {},
+  fsListings: {},
   calls: {},
 
   load(s, mode) {
@@ -347,6 +358,24 @@ export const useStore = create<State & Actions>((set, get) => ({
         break;
       case "call":
         set({ calls: { ...st.calls, [e.from]: { ...e.call, from_name: e.from_name } } });
+        break;
+      case "fs_listing":
+        set({
+          fsListings: {
+            ...st.fsListings,
+            [`${e.from}|${e.path}`]: {
+              entries: e.entries,
+              truncated: e.truncated,
+              error: e.error,
+              at: Date.now(),
+            },
+          },
+        });
+        break;
+      case "fs_error":
+        get().toast(`${e.path.split("/").pop() ?? "That file"}: ${e.error}`, "danger");
+        break;
+      case "reach_changed":
         break;
       case "handoff":
         get().toast(`Continued from ${e.from_name}${e.item.title ? `: ${e.item.title}` : ""}.`, "info");

@@ -1,0 +1,9 @@
+{
+  "id": "link-cleaner",
+  "name": "Link cleaner",
+  "version": "1.0.0",
+  "description": "Removes tracking parameters (utm_…, fbclid, gclid and friends) from links you copy — on this computer with a command, and automatically when a link arrives from another device.",
+  "author": "Devti",
+  "permissions": ["clipboard:read", "clipboard:write", "notify", "events:clipboard"],
+  "commands": [{ "id": "clean", "name": "Clean the copied link" }]
+}

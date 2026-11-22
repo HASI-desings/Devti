@@ -15,6 +15,7 @@ mod comms_host;
 mod continuity;
 mod edges;
 mod media;
+mod plugins;
 mod remote;
 mod screens;
 mod system;
@@ -115,6 +116,8 @@ pub fn run() {
             app.manage(media.clone());
             let automation = automation::Automation::start(&handle, node.clone());
             app.manage(automation.clone());
+            let plugins = plugins::Plugins::start(&handle, node.clone(), &data_dir);
+            app.manage(plugins.clone());
 
             // Forward every core event to the UI.
             let mut events = node.subscribe();
@@ -130,6 +133,7 @@ pub fn run() {
                             comms_host::on_node_event(&emitter, &event_node, &ev);
                             media.on_node_event(&ev);
                             automation.on_node_event(&ev);
+                            plugins.on_node_event(&ev);
                             if matches!(ev, devti_core::NodeEvent::ScreenRequested { .. }) {
                                 screens.ensure_running(Some(&emitter));
                             }
@@ -238,6 +242,20 @@ pub fn run() {
             commands::automation,
             commands::save_rules,
             commands::run_rule_now,
+            commands::pick_folder,
+            commands::reach_info,
+            commands::set_reach,
+            commands::peer_reach,
+            commands::shared_folders,
+            commands::set_shared_folders,
+            commands::fs_list,
+            commands::fs_get,
+            commands::plugins,
+            commands::plugin_inspect,
+            commands::plugin_install,
+            commands::plugin_set_enabled,
+            commands::plugin_remove,
+            commands::plugin_run,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Devti");

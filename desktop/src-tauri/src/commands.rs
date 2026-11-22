@@ -704,3 +704,91 @@ pub fn save_rules(app: AppHandle, rules: Vec<devti_core::rules::Rule>) -> CmdRes
 pub fn run_rule_now(app: AppHandle, id: String) -> CmdResult<()> {
     crate::automation::app_state(&app).ok_or("automation isn't ready")?.run_now(&id)
 }
+
+// ------------------------------------------------------------------ Phase 7
+
+/// A folder chooser (shared folders, plugin folders); `None` when cancelled.
+#[tauri::command]
+pub async fn pick_folder(app: AppHandle, title: String) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().set_title(title).pick_folder(move |f| {
+        let _ = tx.send(f);
+    });
+    rx.await.ok().flatten().and_then(|f| f.into_path().ok()).map(|p| p.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn reach_info(state: State<'_, AppState>) -> devti_core::node::ReachInfo {
+    state.node.reach_info()
+}
+
+#[tauri::command]
+pub fn set_reach(
+    state: State<'_, AppState>,
+    enabled: bool,
+    extra: Vec<String>,
+) -> CmdResult<devti_core::node::ReachInfo> {
+    state.node.set_reach(enabled, extra).map_err(err)?;
+    Ok(state.node.reach_info())
+}
+
+/// Where `id` said it can be reached away from home.
+#[tauri::command]
+pub fn peer_reach(state: State<'_, AppState>, id: String) -> CmdResult<Vec<String>> {
+    Ok(state.node.peer_reach(&parse_id(&id)?))
+}
+
+#[tauri::command]
+pub fn shared_folders(state: State<'_, AppState>) -> Vec<devti_core::node::SharedFolder> {
+    state.node.shared_folders()
+}
+
+#[tauri::command]
+pub fn set_shared_folders(state: State<'_, AppState>, folders: Vec<devti_core::node::SharedFolder>) -> CmdResult<()> {
+    state.node.set_shared_folders(folders).map_err(err)
+}
+
+#[tauri::command]
+pub fn fs_list(state: State<'_, AppState>, id: String, path: String) -> CmdResult<()> {
+    state.node.fs_list(&parse_id(&id)?, &path).map_err(err)
+}
+
+#[tauri::command]
+pub fn fs_get(state: State<'_, AppState>, id: String, path: String) -> CmdResult<()> {
+    state.node.fs_get(&parse_id(&id)?, &path).map_err(err)
+}
+
+#[tauri::command]
+pub fn plugins(app: AppHandle) -> CmdResult<Vec<crate::plugins::PluginInfo>> {
+    Ok(crate::plugins::app_state(&app).ok_or("plugins aren't ready")?.list())
+}
+
+/// Reads a plugin folder for the consent sheet (nothing is installed yet).
+#[tauri::command]
+pub fn plugin_inspect(app: AppHandle, path: String) -> CmdResult<crate::plugins::PluginInfo> {
+    crate::plugins::app_state(&app).ok_or("plugins aren't ready")?.inspect(std::path::Path::new(&path))
+}
+
+#[tauri::command]
+pub async fn plugin_install(app: AppHandle, path: String) -> CmdResult<crate::plugins::PluginInfo> {
+    let p = crate::plugins::app_state(&app).ok_or("plugins aren't ready")?;
+    tauri::async_runtime::spawn_blocking(move || p.install(std::path::Path::new(&path))).await.map_err(err)?
+}
+
+#[tauri::command]
+pub async fn plugin_set_enabled(app: AppHandle, id: String, enabled: bool) -> CmdResult<()> {
+    let p = crate::plugins::app_state(&app).ok_or("plugins aren't ready")?;
+    tauri::async_runtime::spawn_blocking(move || p.set_enabled(&id, enabled)).await.map_err(err)?
+}
+
+#[tauri::command]
+pub fn plugin_remove(app: AppHandle, id: String) -> CmdResult<()> {
+    crate::plugins::app_state(&app).ok_or("plugins aren't ready")?.remove(&id)
+}
+
+#[tauri::command]
+pub async fn plugin_run(app: AppHandle, id: String, command: String) -> CmdResult<String> {
+    let p = crate::plugins::app_state(&app).ok_or("plugins aren't ready")?;
+    tauri::async_runtime::spawn_blocking(move || p.run_command(&id, &command)).await.map_err(err)?
+}

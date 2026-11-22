@@ -357,6 +357,7 @@ fn register_session(
     super::continuity::on_peer_status(inner, peer_id, &snap.info.name, &snap.status);
     super::continuity::on_session_up(inner, peer_id);
     super::transfer::resume_for(inner, peer_id);
+    super::reach::on_session(inner, peer_id);
     inner.log(Some((&peer_id, &snap.info.name)), "connected", &addr.to_string());
     inner.emit(NodeEvent::PeerChanged { peer: snap });
     Ok(())
@@ -448,6 +449,11 @@ fn handle_control(inner: &Arc<Inner>, peer_id: DeviceId, msg: ControlMsg) {
         | ControlMsg::Call { .. }
         | ControlMsg::CallAction { .. }
         | ControlMsg::Handoff { .. } => super::comms::handle(inner, peer_id, msg),
+        ControlMsg::Reach { addrs } => super::reach::handle(inner, peer_id, addrs),
+        ControlMsg::FsList { .. }
+        | ControlMsg::FsListing { .. }
+        | ControlMsg::FsGet { .. }
+        | ControlMsg::FsError { .. } => super::storage::handle(inner, peer_id, msg),
         ControlMsg::Goodbye { .. } | ControlMsg::Pong { .. } | ControlMsg::Hello { .. } => {}
         ControlMsg::Unknown => tracing::trace!(peer = %peer_id, "ignoring unknown control message"),
     }
@@ -504,7 +510,7 @@ pub(crate) async fn reconnect_loop(inner: Arc<Inner>) {
             continue;
         }
         let now = Instant::now();
-        let due: Vec<(DeviceId, Fingerprint, Vec<SocketAddr>)> = {
+        let due: Vec<(DeviceId, Fingerprint, Vec<SocketAddr>, Vec<String>)> = {
             // Lock order: discovered → peers.
             let discovered = inner.discovered.read();
             let mut peers = inner.peers.write();
@@ -518,22 +524,29 @@ pub(crate) async fn reconnect_loop(inner: Arc<Inner>) {
                             addrs.push(*a);
                         }
                     }
-                    if addrs.is_empty() {
+                    // Addresses the peer gave for when it's away (Phase 7), tried last.
+                    let reach = inner.reach.of(id);
+                    if addrs.is_empty() && reach.is_empty() {
                         p.next_attempt = now + Duration::from_secs(5);
                         return None;
                     }
                     p.dialing = true;
-                    Some((*id, p.record.fingerprint, addrs))
+                    Some((*id, p.record.fingerprint, addrs, reach))
                 })
                 .collect()
         };
-        for (id, fp, addrs) in due {
-            inner.rt.spawn(dial_peer(inner.clone(), id, fp, addrs));
+        for (id, fp, addrs, reach) in due {
+            inner.rt.spawn(dial_peer(inner.clone(), id, fp, addrs, reach));
         }
     }
 }
 
-async fn dial_peer(inner: Arc<Inner>, id: DeviceId, fp: Fingerprint, addrs: Vec<SocketAddr>) {
+async fn dial_peer(inner: Arc<Inner>, id: DeviceId, fp: Fingerprint, mut addrs: Vec<SocketAddr>, reach: Vec<String>) {
+    for a in super::reach::resolve(&reach, inner.local_addr.is_ipv4()).await {
+        if !addrs.contains(&a) {
+            addrs.push(a);
+        }
+    }
     let result = async {
         let conn = connect_any(&inner, &addrs, ServerExpectation::Pinned(fp)).await?;
         if let Err(e) = establish_outgoing(&inner, conn.clone(), id).await {

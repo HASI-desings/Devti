@@ -33,6 +33,8 @@ data class Permissions(
     val notifications: Boolean,
     val commands: Boolean,
     val bluetooth: Boolean,
+    /** Browse and download from this device's shared folders (Phase 7). */
+    val browse: Boolean = false,
 )
 
 @Serializable
@@ -199,6 +201,43 @@ data class HandoffItem(
     @SerialName("position_ms") val positionMs: Long? = null,
 )
 
+// ------------------------------------------------------------------ Phase 7
+
+@Serializable
+data class FsEntry(
+    val name: String,
+    val dir: Boolean,
+    val size: Long = 0,
+    val modified: Long = 0,
+)
+
+/** A listing of another device's shared folder, as it last arrived. */
+data class FsListing(
+    val entries: List<FsEntry>,
+    val truncated: Boolean,
+    val error: String?,
+    val at: Long,
+)
+
+@Serializable
+data class ReachAddress(
+    val address: String,
+    /** lan, vpn, internet or manual. */
+    val kind: String,
+    val `interface`: String = "",
+)
+
+@Serializable
+data class ReachInfo(
+    val enabled: Boolean,
+    val port: Int,
+    val addresses: List<ReachAddress>,
+    val extra: List<String>,
+)
+
+@Serializable
+data class SharedFolder(val name: String, val path: String)
+
 /** Text another device put on this phone's clipboard. */
 data class ClipboardIn(val fromName: String, val text: String, val ts: Long)
 
@@ -246,6 +285,8 @@ data class CoreState(
     /** Devices watching this phone's screen: id → name. */
     val screenViewers: Map<String, String> = emptyMap(),
     val shareStats: ShareStats? = null,
+    /** Shared-folder listings by "deviceId|path" (Phase 7). */
+    val fsListings: Map<String, FsListing> = emptyMap(),
     // ---- Phase 6 (phone-side; not from the core snapshot)
     /** "mic" or "relay" while this phone streams audio to a computer. */
     val audioSharing: Set<String> = emptySet(),

@@ -325,4 +325,23 @@ pub enum NodeEvent {
         from: DeviceId,
         kind: String,
     },
+    // ---- Phase 7
+    /// A peer's remote addresses changed (see `Node::peer_reach`).
+    ReachChanged {
+        peer: DeviceId,
+    },
+    /// A listing of another device's shared folder.
+    FsListing {
+        from: DeviceId,
+        path: String,
+        entries: Vec<crate::protocol::FsEntry>,
+        truncated: bool,
+        error: Option<String>,
+    },
+    /// A download from another device's shared folder couldn't start.
+    FsError {
+        from: DeviceId,
+        path: String,
+        error: String,
+    },
 }

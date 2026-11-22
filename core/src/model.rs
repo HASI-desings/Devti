@@ -369,6 +369,10 @@ pub struct Permissions {
     pub notifications: bool,
     pub commands: bool,
     pub bluetooth: bool,
+    /// Browse and download from the folders this device shares (Phase 7). Records saved
+    /// before it existed read as `false`.
+    #[serde(default)]
+    pub browse: bool,
 }
 
 impl Permissions {
@@ -383,6 +387,7 @@ impl Permissions {
                 notifications: true,
                 commands: true,
                 bluetooth: true,
+                browse: true,
             },
             TrustRole::Restricted => Self {
                 screen_view: false,
@@ -392,6 +397,7 @@ impl Permissions {
                 notifications: true,
                 commands: false,
                 bluetooth: false,
+                browse: false,
             },
         }
     }
@@ -403,6 +409,40 @@ impl Permissions {
 pub enum ConnectionKind {
     /// Direct QUIC over the local network.
     Lan,
+    /// Through a private overlay network (Tailscale, Headscale, ZeroTier, WireGuard…).
+    Vpn,
+    /// Over the internet (a forwarded port or a public address).
+    Internet,
+}
+
+impl ConnectionKind {
+    /// Classifies the address a session runs over.
+    pub fn of(addr: &std::net::SocketAddr) -> Self {
+        match addr.ip() {
+            std::net::IpAddr::V4(ip) => {
+                let o = ip.octets();
+                if o[0] == 100 && (64..128).contains(&o[1]) {
+                    ConnectionKind::Vpn // 100.64.0.0/10: Tailscale and other CGNAT overlays
+                } else if ip.is_private() || ip.is_loopback() || ip.is_link_local() {
+                    ConnectionKind::Lan
+                } else {
+                    ConnectionKind::Internet
+                }
+            }
+            std::net::IpAddr::V6(ip) => {
+                let seg = ip.segments();
+                if ip.is_loopback() || (seg[0] & 0xffc0) == 0xfe80 {
+                    ConnectionKind::Lan
+                } else if seg[0] == 0xfd7a && seg[1] == 0x115c {
+                    ConnectionKind::Vpn // Tailscale's IPv6 range
+                } else if (seg[0] & 0xfe00) == 0xfc00 {
+                    ConnectionKind::Lan
+                } else {
+                    ConnectionKind::Internet
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

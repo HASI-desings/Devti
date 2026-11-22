@@ -105,6 +105,8 @@ jobs:
           cache: pnpm
           cache-dependency-path: desktop/pnpm-lock.yaml
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - run: pnpm install --frozen-lockfile
       - name: Lint
@@ -118,7 +120,14 @@ jobs:
         run: |
           pnpm exec playwright install --with-deps chromium
           pnpm test:e2e --trace off
-      - name: Rust tests
+      - name: Example plugin (unit tests + WebAssembly build)
+        working-directory: plugins/link-cleaner
+        run: |
+          cargo test
+          cargo build --release --target wasm32-unknown-unknown
+      - name: Rust tests (the plugin host runs the example plugin in its sandbox)
+        env:
+          DEVTI_TEST_PLUGIN: ${{ github.workspace }}/plugins/link-cleaner/target/wasm32-unknown-unknown/release/link_cleaner.wasm
         run: cargo test -p devti-desktop
       - name: Real-app smoke test (WebKitGTK + core + simulated phone)
         if: runner.os == 'Linux'

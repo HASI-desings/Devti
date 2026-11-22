@@ -374,3 +374,68 @@ test("automation: default rules, switch one on, build a new rule", async ({ page
   await expect(page.getByText("Morning focus", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("When at a time → do not disturb")).toBeVisible();
 });
+
+test("browse: share a folder here, browse a device's folders and download a file", async ({ page }) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Pair" }).click();
+  await pairPhone(page, "Pixel 8");
+  await page.keyboard.press("Escape");
+
+  await rail(page).getByRole("button", { name: "Files" }).click();
+  await page.getByRole("radio", { name: "Browse" }).click({ force: true });
+  await expect(page.getByText("Nothing is shared.", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Share a folder" }).click();
+  await expect(page.getByText("/home/you/Shared")).toBeVisible();
+
+  // The connected phone's shared folders, then one level down, then a download.
+  await expect(page.getByRole("tab", { name: "Pixel 8" })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("button", { name: "Documents", exact: true }).click();
+  await expect(page.getByText("Thesis draft.pdf", { exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Folder" }).getByRole("button", { name: "Documents" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await page.getByRole("button", { name: "Download Thesis draft.pdf" }).click();
+  await expect(page.getByText("Downloading Thesis draft.pdf", { exact: false })).toBeVisible();
+  await page.getByRole("radio", { name: "Transfers" }).click({ force: true });
+  await expect(page.getByText("Thesis draft.pdf", { exact: true })).toBeVisible();
+});
+
+test("plugins: consent sheet lists what it may do, then its command runs", async ({ page }) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Plugins" }).click();
+  await expect(page.getByText("No plugins yet.", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Add a plugin" }).click();
+  const sheet = page.getByRole("dialog", { name: "Add a plugin" });
+  await expect(sheet.getByRole("heading", { name: "Add Link cleaner 1.0.0?" })).toBeVisible();
+  await expect(sheet.getByText("Read this computer's clipboard")).toBeVisible();
+  await expect(sheet.getByText("it receives the text", { exact: false })).toBeVisible();
+  await sheet.getByRole("button", { name: "Add and turn on" }).click();
+
+  await expect(page.getByRole("heading", { name: /Link cleaner/ })).toBeVisible();
+  await expect(page.getByText("Running", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Clean the copied link" }).click();
+  await expect(page.getByText("Removed 2 tracking parameters. (simulated)")).toBeVisible();
+
+  // Off means its commands stop.
+  await page.getByRole("switch", { name: "Turn Link cleaner on" }).locator("xpath=ancestor::label").click();
+  await expect(page.getByText("Off", { exact: true })).toBeVisible();
+});
+
+test("settings: reach from anywhere shows addresses and validates typed ones", async ({ page }) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByRole("heading", { name: "Reach from anywhere" })).toBeVisible();
+  await expect(page.getByText("100.101.12.7:47810")).toBeVisible();
+  await expect(page.getByText("Private network · tailscale0")).toBeVisible();
+
+  const field = page.getByLabel("Addresses you set up yourself");
+  await field.fill("not an address");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("isn't an address Devti can dial", { exact: false })).toBeVisible();
+
+  await field.fill("home.example.org:47810");
+  await page.getByRole("switch", { name: "Reach from anywhere" }).locator("xpath=ancestor::label").click();
+  await expect(page.getByText("Your devices can now reach this computer from anywhere.")).toBeVisible();
+  await expect(page.getByText("Set up by you")).toBeVisible();
+});

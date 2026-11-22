@@ -5,6 +5,7 @@ import { useBridge } from "../../lib/bridge-context";
 import { useStore } from "../../state/store";
 import { Button, Field, Segmented, Switch } from "../../ui";
 import p from "../shell/page.module.css";
+import { ReachSection } from "./ReachSection";
 import s from "./SettingsPage.module.css";
 
 const CREDITS: [string, string][] = [
@@ -142,6 +143,8 @@ export function SettingsPage() {
             </div>
           </div>
         </section>
+
+        <ReachSection />
 
         <section className={p.section} aria-labelledby="continuity">
           <h2 id="continuity" className={p.sectionTitle}>

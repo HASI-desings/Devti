@@ -34,6 +34,10 @@ import app.devti.android.control.screenTargetOf
 import app.devti.android.core.state.Catalog
 import app.devti.android.core.state.CallInfo
 import app.devti.android.core.state.HandoffItem
+import app.devti.android.core.state.ReachInfo
+import app.devti.android.core.state.SharedFolder
+import app.devti.android.continuity.PhoneFolders
+import kotlinx.serialization.builtins.serializer
 import app.devti.android.core.state.SmsMessage
 import app.devti.android.core.state.SmsThread
 import kotlinx.serialization.builtins.ListSerializer
@@ -179,6 +183,7 @@ class DevtiCore(private val context: Context) : EventListener {
                 audioSharing = prev.audioSharing,
                 cameraSharing = prev.cameraSharing,
                 walkAway = prev.walkAway,
+                fsListings = prev.fsListings,
             )
     }
 
@@ -410,6 +415,33 @@ class DevtiCore(private val context: Context) : EventListener {
     }
 
     fun walkAwayAllowed(): Boolean = beacon.allowed()
+
+    // ---- Phase 7: reach from anywhere and shared folders
+
+    fun reachInfo(): ReachInfo? = runCatching {
+        Reducer.json.decodeFromString(ReachInfo.serializer(), node?.reachInfoJson() ?: return null)
+    }.getOrNull()
+
+    /** Lets paired computers reconnect to this phone away from home (VPN / typed addresses). */
+    fun setReach(on: Boolean, extra: List<String> = reachInfo()?.extra.orEmpty()): String? = act {
+        node?.setReach(on, Reducer.json.encodeToString(ListSerializer(String.serializer()), extra))
+    }
+
+    /** Asks a computer for a folder listing; the answer lands in [CoreState.fsListings]. */
+    fun fsList(deviceId: String, path: String): String? = act { node?.fsList(deviceId, path) }
+
+    /** Downloads a shared file; it arrives like any received file (Downloads/Devti). */
+    fun fsGet(deviceId: String, path: String): String? = act { node?.fsGet(deviceId, path) }
+
+    fun sharedFolders(): List<SharedFolder> = runCatching {
+        Reducer.json.decodeFromString(ListSerializer(SharedFolder.serializer()), node?.sharedFoldersJson() ?: "[]")
+    }.getOrDefault(emptyList())
+
+    /** Shares (or stops sharing) this phone's media and document folders, read-only. */
+    fun setPhoneShared(on: Boolean): String? = act {
+        val folders = if (on) PhoneFolders.defaults() else emptyList()
+        node?.setSharedFolders(Reducer.json.encodeToString(ListSerializer(SharedFolder.serializer()), folders))
+    }
 
     fun screenTarget(): JSONObject = screenTargetOf(node?.screenTargetJson())
 

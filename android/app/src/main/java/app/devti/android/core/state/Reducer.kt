@@ -108,6 +108,20 @@ object Reducer {
                 if (on) state.copy(ringing = RingIn(obj.string("from") ?: "", obj.string("from_name") ?: ""))
                 else state.copy(ringing = null)
             }
+            "fs_listing" -> {
+                val from = obj.string("from") ?: return state
+                val path = obj.string("path") ?: return state
+                val entries = (obj["entries"] as? kotlinx.serialization.json.JsonArray)
+                    ?.mapNotNull { runCatching { json.decodeFromJsonElement(FsEntry.serializer(), it) }.getOrNull() }
+                    .orEmpty()
+                val listing = FsListing(
+                    entries = entries,
+                    truncated = obj["truncated"]?.jsonPrimitive?.booleanOrNull == true,
+                    error = obj.string("error"),
+                    at = System.currentTimeMillis(),
+                )
+                state.copy(fsListings = state.fsListings + ("$from|$path" to listing))
+            }
             "catalog_received" -> {
                 val from = obj.string("from") ?: return state
                 val catalog = obj.decode("catalog", Catalog.serializer()) ?: return state

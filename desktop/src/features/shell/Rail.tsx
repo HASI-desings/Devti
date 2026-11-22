@@ -13,6 +13,7 @@ const ITEMS: { page: Page; label: string; icon: IconName }[] = [
   { page: "accessories", label: "Accessories", icon: "bluetooth" },
   { page: "control", label: "Control", icon: "deck" },
   { page: "automation", label: "Automation", icon: "flow" },
+  { page: "plugins", label: "Plugins", icon: "plugin" },
   { page: "security", label: "Security", icon: "shield" },
   { page: "settings", label: "Settings", icon: "settings" },
   { page: "help", label: "Help", icon: "help" },

@@ -89,6 +89,7 @@ fun Home(core: DevtiCore, state: CoreState, onPairAnother: () -> Unit) {
     var renaming by remember { mutableStateOf(false) }
     var forget by remember { mutableStateOf<PeerSnapshot?>(null) }
     var access by remember { mutableStateOf<PeerSnapshot?>(null) }
+    var browsing by remember { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -123,6 +124,7 @@ fun Home(core: DevtiCore, state: CoreState, onPairAnother: () -> Unit) {
 
         if (hub != null) {
             QuickActions(core, state, hub)
+            if (hub.online) QuietButton("Browse ${hub.info.name}'s shared folders", onClick = { browsing = true }, modifier = Modifier.fillMaxWidth())
             Transfers(core, state.transfers, state.preparing)
             ContinuitySettings(core, state)
         }
@@ -196,6 +198,12 @@ fun Home(core: DevtiCore, state: CoreState, onPairAnother: () -> Unit) {
             confirmButton = { TextButton(onClick = { core.rename(name); renaming = false }) { Text("Save") } },
             dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } },
         )
+    }
+    if (browsing) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { browsing = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) { app.devti.android.ui.browse.Browse(core, state, onClose = { browsing = false }) }
     }
     access?.let { p ->
         val live = state.peers.firstOrNull { it.info.id == p.info.id } ?: p
@@ -391,6 +399,7 @@ private fun ContinuitySettings(core: DevtiCore, state: CoreState) {
             GhostButton("Allow notification access", onClick = { context.startActivity(NotificationMirror.settingsIntent(context)) })
         }
     }
+    Reach(core)
     Card {
         Toggle(
             "Share the clipboard",
@@ -431,6 +440,7 @@ private fun AccessDialog(p: PeerSnapshot, onChange: (Permissions) -> Unit, onClo
                 Toggle("Clipboard", "Put text on this phone's clipboard.", perms.clipboard) { onChange(perms.copy(clipboard = it)) }
                 Toggle("Notifications", "Act on, reply to and dismiss this phone's notifications.", perms.notifications) { onChange(perms.copy(notifications = it)) }
                 Toggle("Ring this phone", "Find my phone, at full volume.", perms.commands) { onChange(perms.copy(commands = it)) }
+                Toggle("Browse this phone's folders", "Only the folders you share below, and only to read.", perms.browse) { onChange(perms.copy(browse = it)) }
             }
         },
         confirmButton = { TextButton(onClick = onClose) { Text("Done") } },
@@ -587,5 +597,67 @@ private fun ShareChip(label: String, active: Boolean, modifier: Modifier, enable
                 else -> c.textFaint
             },
         )
+    }
+}
+
+/** Phase 7: reconnect from anywhere, and let computers browse this phone's folders. */
+@Composable
+private fun Reach(core: DevtiCore) {
+    val context = LocalContext.current
+    var reach by remember { mutableStateOf(core.reachInfo()?.enabled == true) }
+    var sharing by remember { mutableStateOf(core.sharedFolders().isNotEmpty()) }
+    var wantShare by remember { mutableStateOf(false) }
+    val legacyAsk = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) {
+            core.setPhoneShared(true)?.let { toast(context, it) } ?: run { sharing = true }
+        } else {
+            toast(context, "Sharing needs access to this phone's storage.")
+        }
+    }
+    // Coming back from Android's "All files access" page.
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val obs = LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_RESUME && wantShare) {
+                wantShare = false
+                if (app.devti.android.continuity.PhoneFolders.canRead(context)) {
+                    core.setPhoneShared(true)?.let { toast(context, it) } ?: run { sharing = true }
+                }
+            }
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+    Card {
+        Toggle(
+            "Reach from anywhere",
+            if (reach) {
+                "On. Your computers can reconnect to this phone through a private network like Tailscale."
+            } else {
+                "Away from home, your devices can still connect through a private network like Tailscale (free)."
+            },
+            reach,
+        ) { on -> core.setReach(on)?.let { toast(context, it) } ?: run { reach = on } }
+    }
+    Card {
+        Toggle(
+            "Let my computers browse this phone",
+            if (sharing) {
+                "Camera, Pictures, Downloads, Documents, Music and Movies — read-only. A computer also needs “Browse” in its permissions."
+            } else {
+                "Your computers can see and download photos and documents from here. Android asks for storage access."
+            },
+            sharing,
+        ) { on ->
+            when {
+                !on -> core.setPhoneShared(false)?.let { toast(context, it) } ?: run { sharing = false }
+                app.devti.android.continuity.PhoneFolders.canRead(context) ->
+                    core.setPhoneShared(true)?.let { toast(context, it) } ?: run { sharing = true }
+                else -> app.devti.android.continuity.PhoneFolders.accessIntent(context)?.let {
+                    wantShare = true
+                    context.startActivity(it)
+                } ?: legacyAsk.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+        }
     }
 }

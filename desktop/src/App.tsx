@@ -16,6 +16,7 @@ import { MirrorPage } from "./features/mirror/MirrorPage";
 import { NotificationsPage } from "./features/notifications/NotificationsPage";
 import { Done, Onboarding } from "./features/onboarding/Onboarding";
 import { PairPanel } from "./features/pairing/PairPanel";
+import { PluginsPage } from "./features/plugins/PluginsPage";
 import { ScreensPage } from "./features/screens/ScreensPage";
 import { SecurityPage } from "./features/security/SecurityPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
@@ -183,6 +184,7 @@ export function App() {
           {page === "accessories" && <AccessoriesPage />}
           {page === "messages" && <MessagesPage />}
           {page === "automation" && <AutomationPage />}
+          {page === "plugins" && <PluginsPage />}
           {page === "security" && <SecurityPage onPair={() => setPairOpen(true)} />}
           {page === "settings" && <SettingsPage />}
           {page === "help" && (

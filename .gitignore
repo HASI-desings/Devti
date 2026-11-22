@@ -19,3 +19,4 @@ android/app/src/main/java/uniffi
 **/.gradle
 android/jvm-check/build
 .kotlin
+plugins/*/target

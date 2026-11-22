@@ -23,7 +23,12 @@ export const PERMISSION_COPY: { key: keyof Permissions; title: string; hint: str
     title: "Control this computer",
     hint: "Use the device as a touchpad, keyboard or remote.",
   },
-  { key: "files", title: "Send and browse files", hint: "Transfer files in both directions." },
+  { key: "files", title: "Send files", hint: "Files it sends are saved in your received-files folder." },
+  {
+    key: "browse",
+    title: "Browse shared folders",
+    hint: "See and download what you share in Files → Browse.",
+  },
   { key: "clipboard", title: "Share the clipboard", hint: "Copy on one device, paste on the other." },
   {
     key: "notifications",
@@ -37,6 +42,12 @@ export const PERMISSION_COPY: { key: keyof Permissions; title: string; hint: str
     hint: "Play through and control accessories connected here.",
   },
 ];
+
+const PATH_COPY: Record<"lan" | "vpn" | "internet", string> = {
+  lan: "over your local network",
+  vpn: "through your private network",
+  internet: "over the internet",
+};
 
 export function DevicePage() {
   const bridge = useBridge();
@@ -75,6 +86,7 @@ export function DevicePage() {
       notifications: true,
       commands: true,
       bluetooth: true,
+      browse: true,
     },
     restricted: {
       screen_view: false,
@@ -84,6 +96,7 @@ export function DevicePage() {
       notifications: true,
       commands: false,
       bluetooth: false,
+      browse: false,
     },
   };
 
@@ -125,12 +138,12 @@ export function DevicePage() {
             <div className={p.item}>
               <div className={p.itemText}>
                 <span className={p.itemTitle}>
-                  {peer.online ? "Connected over your local network" : "Offline"}
+                  {peer.online ? `Connected ${PATH_COPY[peer.connection?.kind ?? "lan"]}` : "Offline"}
                 </span>
                 <span className={p.itemHint}>
                   {peer.online && peer.connection
                     ? `Since ${clockTime(peer.connection.since)}, at ${peer.connection.address}`
-                    : "Devti reconnects automatically when both devices are on the same network."}
+                    : "Devti reconnects automatically on the same network — or from anywhere, with Settings → Reach from anywhere."}
                 </span>
               </div>
               {peer.connection && (

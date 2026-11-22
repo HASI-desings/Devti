@@ -39,3 +39,56 @@
   justify-content: space-between;
   gap: var(--s-3);
 }
+
+/* Reach from anywhere (Phase 7) */
+.addresses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  margin-top: var(--s-2);
+  list-style: none;
+  padding: 0;
+}
+
+.address {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  align-items: baseline;
+}
+
+.addressKind {
+  font-size: var(--t-13);
+  color: var(--text-dim);
+}
+
+.address[data-kind="vpn"] .addressKind,
+.address[data-kind="manual"] .addressKind {
+  color: var(--ok);
+}
+
+.reachField {
+  min-width: 0;
+}
+
+.ways {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s-3);
+}
+
+.way {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--r-panel);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-size: var(--t-13);
+}
+
+.way strong {
+  color: var(--text);
+  font-size: var(--t-16);
+}

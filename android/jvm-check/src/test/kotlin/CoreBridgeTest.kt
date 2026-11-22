@@ -2,6 +2,8 @@ import app.devti.android.core.state.Catalog
 import app.devti.android.core.state.CatalogCommand
 import app.devti.android.core.state.CallInfo
 import app.devti.android.core.state.HandoffItem
+import app.devti.android.core.state.ReachInfo
+import app.devti.android.core.state.SharedFolder
 import app.devti.android.core.state.SmsMessage
 import app.devti.android.core.state.SmsThread
 import kotlinx.serialization.builtins.ListSerializer
@@ -234,6 +236,28 @@ class CoreBridgeTest {
         waitRaw("audio ended") { it.contains("\"audio_ended\"") }
         phone.core.cameraOffer(hubId)
         waitRaw("camera offered") { it.contains("\"camera_offered\"") }
+
+        // Phase 7 through the bindings: the hub shares a folder; the phone lists it (into the
+        // reducer's state) and downloads from it; remote addresses travel to the phone.
+        val sharedDir = Files.createTempDirectory("devti-shared").toFile()
+        java.io.File(sharedDir, "notes.txt").writeText("hello from the hub")
+        hub.core.setSharedFolders(j.encodeToString(ListSerializer(SharedFolder.serializer()), listOf(SharedFolder("Notes", sharedDir.absolutePath))))
+        phone.core.fsList(hubId, "/Notes")
+        val listing = phone.waitFor("listing") { it.fsListings["$hubId|/Notes"] != null }.fsListings.getValue("$hubId|/Notes")
+        assertEquals("notes.txt", listing.entries.single().name)
+        assertEquals(18L, listing.entries.single().size)
+        phone.core.fsList(hubId, "/Notes/../..")
+        assertNotNull(phone.waitFor("refusal") { it.fsListings["$hubId|/Notes/../.."] != null }.fsListings.getValue("$hubId|/Notes/../..").error)
+        phone.core.fsGet(hubId, "/Notes/notes.txt")
+        val dl = phone.waitFor("download") { s -> s.transfers.any { it.name == "notes.txt" && it.state == "done" } }
+            .transfers.first { it.name == "notes.txt" }
+        assertEquals("hello from the hub", java.io.File(dl.path).readText())
+        hub.core.setReach(true, "[\"home.example.org:47810\"]")
+        waitPhone("reach") { it.contains("\"reach_changed\"") }
+        val reach = j.decodeFromString(ReachInfo.serializer(), hub.core.reachInfoJson())
+        assertTrue(reach.enabled)
+        assertTrue(reach.addresses.any { it.kind == "manual" && it.address == "home.example.org:47810" })
+        assertFailsWith<DevtiException> { hub.core.setReach(true, "[\"not an address\"]") }
 
         // Errors arrive as typed exceptions with a readable reason.
         val bad = assertFailsWith<DevtiException.InvalidInput> { phone.core.pairWithUri("nope") }

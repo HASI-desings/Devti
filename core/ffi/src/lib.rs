@@ -540,6 +540,40 @@ impl DevtiMobile {
         self.node.screen_sources().into_iter().filter(|(_, s)| s == "camera").map(|(d, _)| d.to_string()).collect()
     }
 
+    // ---- Phase 7: reach and shared folders
+
+    /// Remote-access settings and every address this device was found at (`ReachInfo`).
+    pub fn reach_info_json(&self) -> String {
+        serde_json::to_string(&self.node.reach_info()).unwrap_or_else(|_| "{}".into())
+    }
+
+    /// Turns remote access on or off; `extra_json` is a list of typed "host:port" addresses.
+    pub fn set_reach(&self, enabled: bool, extra_json: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.set_reach(enabled, parse_json(&extra_json)?)?)
+    }
+
+    /// The folders this device shares, as `[{name, path}]`.
+    pub fn shared_folders_json(&self) -> String {
+        serde_json::to_string(&self.node.shared_folders()).unwrap_or_else(|_| "[]".into())
+    }
+
+    pub fn set_shared_folders(&self, folders_json: String) -> Result<(), DevtiError> {
+        Ok(self.node.set_shared_folders(parse_json(&folders_json)?)?)
+    }
+
+    /// Lists another device's shared folder; the answer arrives as an `fs_listing` event.
+    pub fn fs_list(&self, device_id: String, path: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.fs_list(&device_id.parse()?, &path)?)
+    }
+
+    /// Downloads a shared file from another device (an ordinary incoming transfer).
+    pub fn fs_get(&self, device_id: String, path: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.fs_get(&device_id.parse()?, &path)?)
+    }
+
     /// The bytes to advertise in the BLE proximity beacon right now (rotates every 15 min).
     pub fn proximity_token(&self) -> Vec<u8> {
         self.node.proximity_token().to_vec()

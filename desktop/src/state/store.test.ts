@@ -24,6 +24,7 @@ const peer = (id: string, online: boolean, paired_at = 1): PeerSnapshot => ({
     notifications: true,
     commands: true,
     bluetooth: true,
+    browse: true,
   },
   paired_at,
   last_seen: null,

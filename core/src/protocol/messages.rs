@@ -260,6 +260,35 @@ pub enum ControlMsg {
     Handoff {
         item: HandoffItem,
     },
+    // ---- Phase 7: reach and shared folders
+    /// Addresses the sender can be reached at away from the local network ("ip:port" or
+    /// "host:port": VPN addresses such as Tailscale's, or ones the user typed). Sent after
+    /// every handshake; an empty list means remote access is off.
+    Reach {
+        addrs: Vec<String>,
+    },
+    /// List a folder the receiver shares; "/" lists the shared folders (`browse`).
+    FsList {
+        path: String,
+    },
+    FsListing {
+        path: String,
+        entries: Vec<FsEntry>,
+        /// More entries existed than one listing carries.
+        #[serde(default)]
+        truncated: bool,
+        #[serde(default)]
+        error: Option<String>,
+    },
+    /// Send me this shared file; it arrives as an ordinary file transfer (`browse`).
+    FsGet {
+        path: String,
+    },
+    /// Why an `FsGet` didn't start.
+    FsError {
+        path: String,
+        error: String,
+    },
     ScreenStop,
     /// The session is ending on purpose.
     Goodbye {
@@ -334,6 +363,18 @@ impl HandoffItem {
         let url_ok = self.url.is_empty() || self.url.starts_with("https://") || self.url.starts_with("http://");
         url_ok && self.url.len() <= 4096 && self.title.len() <= 512 && self.text.len() <= 64 * 1024
     }
+}
+
+/// One entry of a shared-folder listing.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FsEntry {
+    pub name: String,
+    pub dir: bool,
+    #[serde(default)]
+    pub size: u64,
+    /// Unix milliseconds; 0 when unknown.
+    #[serde(default)]
+    pub modified: i64,
 }
 
 /// One chunk on an audio stream: interleaved signed 16-bit little-endian PCM.
@@ -712,6 +753,16 @@ mod tests {
             ControlMsg::Ping { nonce: 1 },
             ControlMsg::Pong { nonce: 1 },
             ControlMsg::Goodbye { reason: GoodbyeReason::Revoked },
+            ControlMsg::Reach { addrs: vec!["100.101.102.103:47810".into(), "home.example.org:47810".into()] },
+            ControlMsg::FsList { path: "/Documents/2026".into() },
+            ControlMsg::FsListing {
+                path: "/Documents".into(),
+                entries: vec![FsEntry { name: "plan.pdf".into(), dir: false, size: 1234, modified: 1_700_000_000_000 }],
+                truncated: false,
+                error: None,
+            },
+            ControlMsg::FsGet { path: "/Documents/plan.pdf".into() },
+            ControlMsg::FsError { path: "/x".into(), error: "gone".into() },
         ];
         for m in msgs {
             let f = encode(&m).unwrap();

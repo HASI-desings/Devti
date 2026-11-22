@@ -7,9 +7,10 @@ import { clockTime, relativeTime } from "../../lib/format";
 import { useStore } from "../../state/store";
 import { Button, Segmented, Switch } from "../../ui";
 import p from "../shell/page.module.css";
+import { BrowsePane } from "./BrowsePane";
 import s from "./Files.module.css";
 
-type Tab = "transfers" | "clipboard";
+type Tab = "transfers" | "clipboard" | "browse";
 
 export function FilesPage() {
   const [tab, setTab] = useState<Tab>("transfers");
@@ -29,9 +30,12 @@ export function FilesPage() {
           options={[
             { value: "transfers", label: "Transfers", icon: "folder" },
             { value: "clipboard", label: "Clipboard", icon: "clipboard" },
+            { value: "browse", label: "Browse", icon: "network" },
           ]}
         />
-        {tab === "transfers" ? <Transfers /> : <Clipboard />}
+        {tab === "transfers" && <Transfers />}
+        {tab === "clipboard" && <Clipboard />}
+        {tab === "browse" && <BrowsePane />}
       </div>
     </div>
   );

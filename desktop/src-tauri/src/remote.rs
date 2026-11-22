@@ -138,11 +138,15 @@ impl Remote {
     /// Tells the core what remotes may see.
     pub fn publish_catalog(&self) {
         let apps = self.apps.lock().iter().map(|a| CatalogApp { id: a.id.clone(), name: a.name.clone() }).collect();
-        let commands = self
+        let mut commands: Vec<CatalogCommand> = self
             .commands()
             .into_iter()
             .map(|c| CatalogCommand { id: c.id, name: c.name, confirm: c.confirm })
             .collect();
+        // Running plugins' commands, as `plugin:<plugin>:<command>` (Phase 7).
+        if let Some(p) = crate::plugins::host() {
+            commands.extend(p.catalog_commands());
+        }
         let deck = self
             .deck()
             .into_iter()
@@ -216,6 +220,15 @@ impl Remote {
 
     /// Runs a saved command by id: `(ok, output)`.
     pub async fn run_saved(&self, id: &str) -> (bool, String) {
+        if id.starts_with(crate::plugins::COMMAND_PREFIX) {
+            let Some(host) = crate::plugins::host() else { return (false, "Plugins aren't ready yet.".into()) };
+            let id = id.to_string();
+            return match tauri::async_runtime::spawn_blocking(move || host.run_catalog_id(&id)).await {
+                Ok(Some(Ok(out))) => (true, out),
+                Ok(Some(Err(e))) => (false, e),
+                _ => (false, "That plugin command doesn't exist.".into()),
+            };
+        }
         match self.commands().into_iter().find(|c| c.id == id) {
             Some(c) => run_shell(&c.command).await,
             None => (false, "That command doesn't exist any more.".into()),

@@ -33,10 +33,13 @@ export interface Permissions {
   notifications: boolean;
   commands: boolean;
   bluetooth: boolean;
+  /** Browse and download from this device's shared folders (Phase 7). */
+  browse: boolean;
 }
 
 export interface ConnectionSnapshot {
-  kind: "lan";
+  /** How the session runs: local network, a private VPN (Tailscale…), or the internet. */
+  kind: "lan" | "vpn" | "internet";
   address: string;
   rtt_ms: number;
   since: number;
@@ -147,7 +150,70 @@ export type NodeEvent =
       sample_rate: number;
       channels: number;
     }
-  | { type: "audio_ended"; from: string; kind: string };
+  | { type: "audio_ended"; from: string; kind: string }
+  | { type: "reach_changed"; peer: string }
+  | {
+      type: "fs_listing";
+      from: string;
+      path: string;
+      entries: FsEntry[];
+      truncated: boolean;
+      error: string | null;
+    }
+  | { type: "fs_error"; from: string; path: string; error: string };
+
+// ------------------------------------------------------------------ Phase 7
+
+export interface ReachAddress {
+  address: string;
+  kind: "lan" | "vpn" | "internet" | "manual";
+  interface: string;
+}
+
+export interface ReachInfo {
+  enabled: boolean;
+  port: number;
+  addresses: ReachAddress[];
+  extra: string[];
+}
+
+export interface SharedFolder {
+  name: string;
+  path: string;
+}
+
+export interface FsEntry {
+  name: string;
+  dir: boolean;
+  size: number;
+  modified: number;
+}
+
+export interface PluginCommand {
+  id: string;
+  name: string;
+}
+
+export interface PluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  permissions: string[];
+  commands: PluginCommand[];
+}
+
+export interface PluginInfo {
+  manifest: PluginManifest;
+  enabled: boolean;
+  running: boolean;
+  needs_approval: boolean;
+  /** [permission, what it lets the plugin do] */
+  permissions: [string, string][];
+  problem: string | null;
+  log: string[];
+}
 
 // ------------------------------------------------------------------ Phase 6
 
@@ -586,4 +652,22 @@ export interface Bridge {
   automation(): Promise<AutomationInfo>;
   saveRules(rules: Rule[]): Promise<void>;
   runRuleNow(id: string): Promise<void>;
+
+  // Phase 7 — reach and extensibility
+  pickFolder(title: string): Promise<string | null>;
+  reachInfo(): Promise<ReachInfo>;
+  setReach(enabled: boolean, extra: string[]): Promise<ReachInfo>;
+  peerReach(id: string): Promise<string[]>;
+  sharedFolders(): Promise<SharedFolder[]>;
+  setSharedFolders(folders: SharedFolder[]): Promise<void>;
+  /** The answer arrives as an `fs_listing` event. */
+  fsList(id: string, path: string): Promise<void>;
+  /** The file arrives as an ordinary transfer (or an `fs_error` event). */
+  fsGet(id: string, path: string): Promise<void>;
+  plugins(): Promise<PluginInfo[]>;
+  pluginInspect(path: string): Promise<PluginInfo>;
+  pluginInstall(path: string): Promise<PluginInfo>;
+  pluginSetEnabled(id: string, enabled: boolean): Promise<void>;
+  pluginRemove(id: string): Promise<void>;
+  pluginRun(id: string, command: string): Promise<string>;
 }
