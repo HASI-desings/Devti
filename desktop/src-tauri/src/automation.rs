@@ -165,7 +165,13 @@ impl Automation {
             }
             Action::RunCommand { command } => {
                 let r = crate::remote::app_state(&self.app).ok_or("remote control isn't ready")?;
-                let (ok, out) = tauri::async_runtime::block_on(r.run_saved(command));
+                // Rules fire from async tasks too; blocking there would panic, so the command
+                // runs to completion on its own short-lived thread.
+                let (ok, out) = std::thread::scope(|s| {
+                    s.spawn(|| tauri::async_runtime::block_on(r.run_saved(command)))
+                        .join()
+                        .unwrap_or((false, "the command crashed".into()))
+                });
                 if ok { Ok(()) } else { Err(out) }
             }
             Action::LaunchApp { app } => crate::remote::app_state(&self.app)

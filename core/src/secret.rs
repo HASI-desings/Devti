@@ -151,6 +151,17 @@ fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Runs `f` outside any async runtime. The Linux keyring talks to D-Bus through its own
+/// runtime; calling it from inside Devti's (node start, async commands) panics with "Cannot
+/// start a runtime from within a runtime" — which only happens on desktops that really have a
+/// keyring, so test machines never saw it. Keychain calls run on a short-lived thread instead.
+pub(crate) fn off_runtime<T: Send>(f: impl FnOnce() -> T + Send) -> T {
+    if tokio::runtime::Handle::try_current().is_err() {
+        return f();
+    }
+    std::thread::scope(|s| s.spawn(f).join().expect("keychain call panicked"))
+}
+
 /// The operating system's credential vault.
 #[cfg(feature = "keychain")]
 pub struct KeychainSecretStore {
@@ -182,20 +193,20 @@ impl KeychainSecretStore {
 #[cfg(feature = "keychain")]
 impl SecretStore for KeychainSecretStore {
     fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        match self.entry(key)?.get_secret() {
+        off_runtime(|| match self.entry(key)?.get_secret() {
             Ok(v) => Ok(Some(v)),
             Err(keyring::Error::NoEntry) => Ok(None),
             Err(e) => Err(Error::SecretStore(e.to_string())),
-        }
+        })
     }
     fn set(&self, key: &str, value: &[u8]) -> Result<()> {
-        self.entry(key)?.set_secret(value).map_err(|e| Error::SecretStore(e.to_string()))
+        off_runtime(|| self.entry(key)?.set_secret(value).map_err(|e| Error::SecretStore(e.to_string())))
     }
     fn delete(&self, key: &str) -> Result<()> {
-        match self.entry(key)?.delete_credential() {
+        off_runtime(|| match self.entry(key)?.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(e) => Err(Error::SecretStore(e.to_string())),
-        }
+        })
     }
     fn backend(&self) -> String {
         if cfg!(target_os = "windows") {
@@ -227,6 +238,17 @@ pub fn best_available(service: &str, fallback_dir: impl AsRef<Path>) -> Result<B
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn work_that_starts_its_own_runtime_is_safe_inside_ours() {
+        // What the Linux keyring does internally; without off_runtime this panics.
+        let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+        let got = rt.block_on(async {
+            off_runtime(|| tokio::runtime::Builder::new_current_thread().build().unwrap().block_on(async { 7 }))
+        });
+        assert_eq!(got, 7);
+        assert_eq!(off_runtime(|| 8), 8, "outside a runtime it runs in place");
+    }
 
     fn exercise(store: &dyn SecretStore) {
         assert_eq!(store.get("device-key").unwrap(), None);
