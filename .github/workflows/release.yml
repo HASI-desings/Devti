@@ -2,10 +2,12 @@ name: Release
 
 # Builds every installer from a version tag and publishes them as a GitHub Release.
 #   git tag v1.0.0 && git push origin v1.0.0
+#   …or publish a release with a new v* tag on the GitHub website.
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
   contents: write
