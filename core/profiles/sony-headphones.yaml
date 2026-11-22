@@ -1,0 +1,56 @@
+# Sony WH-1000XM / WF-1000XM headphones: the MDR protocol (v1) over RFCOMM.
+# Message types follow the community's reverse engineering (Sony Headphones Client,
+# Gadgetbridge); reimplemented here.
+id: sony-headphones
+name: Sony WH / WF headphones
+vendor: Sony
+verified: false
+notes: >-
+  Noise cancelling and ambient sound, equalizer, and battery for each bud and the case.
+  DSEE and speak-to-chat aren't in this profile yet. Needs a Linux Hub (BlueZ) for now.
+match:
+  manufacturer_ids: [0x012D]
+  names: ["WH-1000XM*", "WF-1000XM*", "WH-XB*", "WF-SP*", "WH-CH*", "LinkBuds*"]
+  services: ["96cc203e-5068-46ad-b32d-e316f5e069ba"]
+transport: { kind: rfcomm, uuid: "96cc203e-5068-46ad-b32d-e316f5e069ba" }
+framing: sony
+init:
+  - "00 00"   # connect: protocol info
+  - "10 00"   # battery (single)
+  - "10 01"   # battery (left/right)
+  - "10 02"   # battery (case)
+controls:
+  - id: ambient
+    label: Noise control
+    type: choice
+    options:
+      - { value: "off", label: "Off", send: "68 02 00 02 00 01 00 14" }
+      - { value: nc, label: "Noise cancelling", send: "68 02 11 02 02 01 00 14" }
+      - { value: ambient, label: "Ambient sound", send: "68 02 11 02 00 01 00 14" }
+  - id: ambient_level
+    label: Ambient sound level
+    type: slider
+    min: 1
+    max: 20
+    send: "68 02 11 02 00 01 00 {v}"
+  - id: eq
+    label: Equalizer
+    type: equalizer
+    bands: ["Clear Bass", "400", "1k", "2.5k", "6.3k", "16k"]
+    min: -10
+    max: 10
+    offset: 10
+    send: "58 01 A0 06 {bands}"
+readings:
+  - match: "11 00"
+    kind: battery
+    components: [{ name: battery, byte: 2, charging_byte: 3 }]
+  - match: "11 01"
+    kind: battery
+    components: [{ name: left, byte: 2, charging_byte: 3 }, { name: right, byte: 4, charging_byte: 5 }]
+  - match: "11 02"
+    kind: battery
+    components: [{ name: case, byte: 2, charging_byte: 3 }]
+  - match: "13 01"
+    kind: battery
+    components: [{ name: left, byte: 2, charging_byte: 3 }, { name: right, byte: 4, charging_byte: 5 }]

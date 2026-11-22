@@ -364,11 +364,17 @@ impl Store {
 
     /// Stores a sample unless it repeats the previous one within 10 minutes.
     pub fn add_battery(&self, device: &DeviceId, s: BatterySample) -> Result<bool> {
+        self.add_battery_key(&device.to_string(), s)
+    }
+
+    /// Battery history under any key (paired devices use their id, accessories `bt:<address>`).
+    pub fn add_battery_key(&self, key: &str, s: BatterySample) -> Result<bool> {
+        let device = key;
         let conn = self.conn.lock();
         let last: Option<(i64, i64, bool)> = conn
             .query_row(
                 "SELECT ts, percent, charging FROM battery WHERE device_id = ?1 ORDER BY ts DESC LIMIT 1",
-                [device.to_string()],
+                [device],
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .optional()?;
@@ -389,10 +395,14 @@ impl Store {
     }
 
     pub fn battery_history(&self, device: &DeviceId, since: i64) -> Result<Vec<BatterySample>> {
+        self.battery_history_key(&device.to_string(), since)
+    }
+
+    pub fn battery_history_key(&self, device: &str, since: i64) -> Result<Vec<BatterySample>> {
         let conn = self.conn.lock();
         let mut stmt =
             conn.prepare("SELECT ts, percent, charging FROM battery WHERE device_id = ?1 AND ts >= ?2 ORDER BY ts")?;
-        let rows = stmt.query_map(params![device.to_string(), since], |r| {
+        let rows = stmt.query_map(params![device, since], |r| {
             Ok(BatterySample { ts: r.get(0)?, percent: r.get::<_, i64>(1)?.clamp(0, 100) as u8, charging: r.get(2)? })
         })?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)

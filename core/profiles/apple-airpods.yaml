@@ -1,0 +1,58 @@
+# Apple AirPods and Beats over the Apple Accessory Protocol (AAP), L2CAP PSM 0x1001.
+# Packet layout as documented by the LibrePods project (GPL-3.0), reimplemented here.
+id: apple-airpods
+name: AirPods and Beats
+vendor: Apple
+verified: false
+notes: >-
+  Noise control, conversation awareness, single-AirPod noise cancellation, per-bud and case
+  battery, and in-ear detection. Renaming and press-and-hold mapping are not in this profile
+  yet. Needs a Linux Hub (BlueZ) for now.
+match:
+  manufacturer_ids: [0x004C]
+  names: ["AirPods*", "Beats*", "Powerbeats*"]
+  services: ["74ec2172-0bad-4d01-8f77-997b2be0722a"]
+transport: { kind: l2cap, psm: 4097 }
+framing: raw
+init:
+  - "00 00 04 00 01 00 02 00 00 00 00 00 00 00 00 00" # handshake
+  - "04 00 04 00 4D 00 FF 00 00 00 00 00 00 00"       # enable features
+  - "04 00 04 00 0F 00 FF FF FE FF"                   # ask for notifications
+controls:
+  - id: anc
+    label: Noise control
+    type: choice
+    options:
+      - { value: "off", label: "Off", send: "04 00 04 00 09 00 0D 01 00 00 00" }
+      - { value: anc, label: "Noise cancellation", send: "04 00 04 00 09 00 0D 02 00 00 00" }
+      - { value: transparency, label: "Transparency", send: "04 00 04 00 09 00 0D 03 00 00 00" }
+      - { value: adaptive, label: "Adaptive", send: "04 00 04 00 09 00 0D 04 00 00 00" }
+  - id: conversation
+    label: Conversation awareness
+    hint: Lowers media and lets voices through when you start speaking.
+    type: toggle
+    on: "04 00 04 00 09 00 28 01 00 00 00"
+    off: "04 00 04 00 09 00 28 02 00 00 00"
+  - id: one_bud_anc
+    label: Noise cancellation with one AirPod
+    type: toggle
+    on: "04 00 04 00 09 00 1B 01 00 00 00"
+    off: "04 00 04 00 09 00 1B 02 00 00 00"
+readings:
+  - { match: "04 00 04 00 04 00", kind: aap_battery }
+  - { match: "04 00 04 00 06 00", kind: aap_ear }
+  - match: "04 00 04 00 09 00 0D"
+    kind: value
+    control: anc
+    byte: 7
+    map: { "1": "off", "2": anc, "3": transparency, "4": adaptive }
+  - match: "04 00 04 00 09 00 28"
+    kind: value
+    control: conversation
+    byte: 7
+    map: { "1": "on", "2": "off" }
+  - match: "04 00 04 00 09 00 1B"
+    kind: value
+    control: one_bud_anc
+    byte: 7
+    map: { "1": "on", "2": "off" }

@@ -1,0 +1,19 @@
+# Nothing Ear (1), Ear (2), Ear (a): the RFCOMM protocol as reverse-engineered by the
+# community (ear-web). Reimplemented here.
+id: nothing-ear
+name: Nothing Ear
+vendor: Nothing
+verified: false
+notes: Noise control. Battery comes from the standard Bluetooth battery report. Needs a Linux Hub (BlueZ) for now.
+match:
+  names: ["Nothing Ear*", "Ear (1)*", "Ear (2)*", "Ear (a)*", "CMF Buds*"]
+transport: { kind: rfcomm, uuid: "aeac4a03-dff5-498f-843a-34487cf133eb" }
+framing: nothing
+controls:
+  - id: anc
+    label: Noise control
+    type: choice
+    options:
+      - { value: "off", label: "Off", send: "0F F0 01 05 00" }
+      - { value: anc, label: "Noise cancellation", send: "0F F0 01 03 00" }
+      - { value: transparency, label: "Transparency", send: "0F F0 01 07 00" }

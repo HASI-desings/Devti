@@ -20,6 +20,7 @@ pub mod secret;
 pub mod store;
 pub mod tls;
 
+pub mod accessory;
 #[cfg(feature = "api")]
 pub mod api;
 pub use error::{Error, Result};

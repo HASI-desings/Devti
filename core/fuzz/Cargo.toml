@@ -36,3 +36,10 @@ path = "fuzz_targets/frame_stream.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "accessory_frames"
+path = "fuzz_targets/accessory_frames.rs"
+test = false
+doc = false
+bench = false

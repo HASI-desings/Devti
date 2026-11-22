@@ -285,6 +285,15 @@ impl super::Node {
         self.inner.store.battery_history(device.unwrap_or(&own), since)
     }
 
+    /// Records an accessory's battery level (Phase 5); accessories are keyed by address.
+    pub fn record_accessory_battery(&self, address: &str, sample: BatterySample) -> Result<bool> {
+        self.inner.store.add_battery_key(&format!("bt:{address}"), sample)
+    }
+
+    pub fn accessory_battery_history(&self, address: &str, since: i64) -> Result<Vec<BatterySample>> {
+        self.inner.store.battery_history_key(&format!("bt:{address}"), since)
+    }
+
     /// Battery level at or below which a low-battery alert fires (5–50 %).
     pub fn set_low_battery_threshold(&self, percent: u8) -> Result<()> {
         let p = percent.clamp(5, 50);

@@ -7,6 +7,7 @@
 //! * [`bluetooth`] — live BLE scan used by onboarding.
 //! * [`system`] — battery polling, OS details, diagnostics export.
 
+mod accessories;
 mod bluetooth;
 mod commands;
 mod continuity;
@@ -106,6 +107,7 @@ pub fn run() {
             let edges = edges::Edges::new(node.clone());
             edges.start();
             app.manage(edges);
+            app.manage(accessories::Accessories::start(&handle, node.clone()));
 
             // Forward every core event to the UI.
             let mut events = node.subscribe();
@@ -208,6 +210,12 @@ pub fn run() {
             commands::stop_screen_viewer,
             commands::screen_layout,
             commands::set_screen_layout,
+            commands::accessories,
+            commands::set_accessory_control,
+            commands::set_accessory_remember,
+            commands::connect_accessory,
+            commands::accessory_battery_history,
+            commands::help_support_accessory,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Devti");

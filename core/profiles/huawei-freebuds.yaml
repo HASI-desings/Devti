@@ -1,0 +1,25 @@
+# Huawei FreeBuds: the SPP protocol over RFCOMM.
+# Commands as reverse-engineered by OpenFreebuds (GPL-3.0); reimplemented here.
+id: huawei-freebuds
+name: Huawei FreeBuds
+vendor: Huawei
+verified: false
+notes: Noise control and battery for each bud and the case. Needs a Linux Hub (BlueZ) for now.
+match:
+  names: ["HUAWEI FreeBuds*", "FreeBuds*", "HONOR Earbuds*"]
+transport: { kind: rfcomm, uuid: "00001101-0000-1000-8000-00805f9b34fb" }
+framing: huawei
+init:
+  - "01 08 01 00 02 00 03 00" # battery
+controls:
+  - id: anc
+    label: Noise control
+    type: choice
+    options:
+      - { value: "off", label: "Off", send: "2B 04 01 01 00" }
+      - { value: anc, label: "Noise cancellation", send: "2B 04 01 01 01" }
+      - { value: awareness, label: "Awareness", send: "2B 04 01 01 02" }
+readings:
+  - match: "01 08 01 01 ?? 02 03"
+    kind: battery
+    components: [{ name: left, byte: 7 }, { name: right, byte: 8 }, { name: case, byte: 9 }]

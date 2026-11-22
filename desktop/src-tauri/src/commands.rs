@@ -572,3 +572,54 @@ pub fn set_screen_layout(
 ) -> CmdResult<()> {
     edges.set_layout(layout).map_err(err)
 }
+
+// ------------------------------------------------------------- Phase 5
+
+fn accessories_of(app: &AppHandle) -> CmdResult<std::sync::Arc<crate::accessories::Accessories>> {
+    crate::accessories::app_state(app).ok_or_else(|| "Bluetooth isn't ready yet".to_string())
+}
+
+#[derive(Serialize)]
+pub struct AccessoryList {
+    status: String,
+    list: Vec<crate::accessories::Accessory>,
+}
+
+#[tauri::command]
+pub fn accessories(app: AppHandle) -> CmdResult<AccessoryList> {
+    let a = accessories_of(&app)?;
+    let status = a.status.read().clone();
+    Ok(AccessoryList { status, list: a.list() })
+}
+
+#[tauri::command]
+pub fn set_accessory_control(app: AppHandle, address: String, control: String, value: String) -> CmdResult<()> {
+    accessories_of(&app)?.set(&address, &control, &value)
+}
+
+#[tauri::command]
+pub fn set_accessory_remember(app: AppHandle, address: String, on: bool) -> CmdResult<()> {
+    accessories_of(&app)?.set_remember(&address, on);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn connect_accessory(address: String, on: bool) -> CmdResult<()> {
+    crate::accessories::connect(&address, on).await
+}
+
+#[tauri::command]
+pub fn accessory_battery_history(
+    state: State<'_, AppState>,
+    address: String,
+    since: i64,
+) -> CmdResult<Vec<devti_core::store::BatterySample>> {
+    state.node.accessory_battery_history(&address, since).map_err(err)
+}
+
+/// "Help support this device": a draft profile (structure only) saved for the user to submit.
+#[tauri::command]
+pub async fn help_support_accessory(app: AppHandle, address: String) -> CmdResult<String> {
+    let a = accessories_of(&app)?;
+    crate::accessories::help_support(&a, &address).await
+}

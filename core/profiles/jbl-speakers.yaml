@@ -1,0 +1,13 @@
+# JBL speakers and headphones (Harman). Party mode and EQ use a closed protocol that
+# nobody has documented, so this profile only names the device; Devti shows its standard
+# features (battery, media, volume).
+id: jbl
+name: JBL
+vendor: Harman
+verified: true
+notes: >-
+  Battery, media controls and volume through standard Bluetooth. Party mode and EQ need
+  JBL's closed protocol and aren't available. If you know it, add it here.
+match:
+  manufacturer_ids: [0x0057, 0x0ECB]
+  names: ["JBL*"]

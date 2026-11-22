@@ -1,0 +1,42 @@
+# Samsung Galaxy Buds+ / Live / Pro / 2: the SPP protocol over RFCOMM.
+# Message ids as reverse-engineered by GalaxyBudsClient (GPL-3.0); reimplemented here.
+id: samsung-galaxy-buds
+name: Galaxy Buds
+vendor: Samsung
+verified: false
+notes: >-
+  Noise controls, equalizer presets, touch lock, and battery for each bud and the case.
+  Needs a Linux Hub (BlueZ) for now.
+match:
+  manufacturer_ids: [0x0075]
+  names: ["Galaxy Buds*", "Buds*"]
+  services: ["2e73a4ad-332d-41fc-90e2-16bef06523f2"]
+transport: { kind: rfcomm, uuid: "2e73a4ad-332d-41fc-90e2-16bef06523f2" }
+framing: galaxy
+controls:
+  - id: noise
+    label: Noise controls
+    type: choice
+    options:
+      - { value: "off", label: "Off", send: "78 00" }
+      - { value: anc, label: "Noise cancelling", send: "78 01" }
+      - { value: ambient, label: "Ambient sound", send: "78 02" }
+  - id: eq
+    label: Equalizer
+    type: choice
+    options:
+      - { value: normal, label: "Normal", send: "86 00" }
+      - { value: bass, label: "Bass boost", send: "86 01" }
+      - { value: soft, label: "Soft", send: "86 02" }
+      - { value: dynamic, label: "Dynamic", send: "86 03" }
+      - { value: clear, label: "Clear", send: "86 04" }
+      - { value: treble, label: "Treble boost", send: "86 05" }
+  - id: touch_lock
+    label: Lock touch controls
+    type: toggle
+    on: "90 01"
+    off: "90 00"
+readings:
+  - match: "60"
+    kind: battery
+    components: [{ name: left, byte: 2 }, { name: right, byte: 3 }, { name: case, byte: 7 }]

@@ -43,6 +43,8 @@ parking_lot.workspace = true
 futures.workspace = true
 bytes.workspace = true
 keyring = { workspace = true, optional = true }
+serde_yaml_ng = "0.10"
+crc = "3.4"
 
 [dev-dependencies]
 tempfile.workspace = true
