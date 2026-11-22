@@ -5,6 +5,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-11-22
+
+### Fixed
+- Linux: crash at startup on desktops with GNOME Keyring or KWallet ("Cannot start a
+  runtime from within a runtime"); keychain calls now run outside the async runtime.
+- Rules that run a saved command could hit the same panic.
+
 ## [1.0.0] — 2026-11-22
 
 The first release: everything from the eight build phases below, on Windows, Linux, Android
