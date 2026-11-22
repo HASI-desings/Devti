@@ -515,3 +515,36 @@ pub fn save_capture(state: State<'_, AppState>, request: Request<'_>) -> CmdResu
     std::fs::write(&path, bytes).map_err(err)?;
     Ok(path.to_string_lossy().into())
 }
+
+// ------------------------------------------------------------- Phase 4
+
+#[derive(Serialize)]
+pub struct ScreenSources {
+    sources: Vec<crate::screens::SourceInfo>,
+    selected: Option<crate::screens::Source>,
+    wayland: bool,
+    viewers: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn screen_sources(app: AppHandle, state: State<'_, AppState>) -> CmdResult<ScreenSources> {
+    let screens = crate::screens::app_state(&app).ok_or("screens aren't ready yet")?;
+    let viewers = state.node.screen_viewers().into_iter().map(|d| d.to_string()).collect();
+    let sources = tauri::async_runtime::spawn_blocking(crate::screens::Screens::sources).await.map_err(err)?;
+    Ok(ScreenSources { sources, selected: screens.source(), wayland: crate::screens::wayland(), viewers })
+}
+
+#[tauri::command]
+pub fn set_screen_source(app: AppHandle, source: Option<crate::screens::Source>) -> CmdResult<()> {
+    crate::screens::app_state(&app).ok_or("screens aren't ready yet")?.set_source(source).map_err(err)
+}
+
+/// The Hub's own "stop" for one device watching its screen.
+#[tauri::command]
+pub fn stop_screen_viewer(app: AppHandle, state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    state.node.screen_stop_sharing(&parse_id(&id)?);
+    if let Some(s) = crate::screens::app_state(&app) {
+        s.ensure_running(Some(&app));
+    }
+    Ok(())
+}

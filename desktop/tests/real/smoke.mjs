@@ -115,7 +115,7 @@ try {
   writeFileSync(payload, Buffer.alloc(3 * 1024 * 1024, 7));
   simProc = spawn(
     sim,
-    ["--uri", snap.window.uri, "--name", "Pixel 8 (sim)", "--seconds", "180", "--send", payload],
+    ["--uri", snap.window.uri, "--name", "Pixel 8 (sim)", "--seconds", "180", "--send", payload, "--watch"],
     { stdio: ["ignore", "pipe", "inherit"] },
   );
   simProc.stdout.on("data", (d) => {
@@ -180,6 +180,11 @@ try {
   });
   await waitSim("run hello ok=true out=hello from the hub", 20000);
   console.log("PASS: phone ran a saved command on the Hub and got its output");
+  // Phase 4: the phone watches the Hub's real screen (captured from the X display).
+  await waitSim("screen frames=5", 30000);
+  const m = simOut.match(/screen frames=5 size=(\d+)x(\d+) jpeg=(true|false)/);
+  if (!m || m[3] !== "true") throw new Error(`bad frames: ${m?.[0]}`);
+  console.log(`PASS: Hub screen streamed to the phone (${m[1]}×${m[2]} JPEG frames)`);
   await click(`//nav//button[contains(., "Control")]`);
   await sleep(900);
   await shot("08b-control");

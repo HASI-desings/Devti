@@ -41,12 +41,19 @@
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.png", "icons/icon.ico"],
     "linux": {
       "deb": {
-        "depends": ["libwebkit2gtk-4.1-0", "libayatana-appindicator3-1", "libxkbcommon0"],
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libayatana-appindicator3-1",
+          "libxkbcommon0",
+          "libpipewire-0.3-0t64 | libpipewire-0.3-0",
+          "libgbm1",
+          "libegl1"
+        ],
         "section": "net",
         "files": { "/usr/bin/devti": "../../target/release/devti" }
       },
       "rpm": {
-        "depends": ["webkit2gtk4.1", "libayatana-appindicator-gtk3", "libxkbcommon"],
+        "depends": ["webkit2gtk4.1", "libayatana-appindicator-gtk3", "libxkbcommon", "pipewire-libs", "mesa-libgbm", "mesa-libEGL"],
         "files": { "/usr/bin/devti": "../../target/release/devti" }
       }
     },

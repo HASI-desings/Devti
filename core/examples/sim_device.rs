@@ -29,6 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut greeted = false;
     let mut hub: Option<devti_core::model::DeviceId> = None;
     let mut ran = false;
+    let watch = args.iter().any(|a| a == "--watch");
 
     let dir = std::env::temp_dir().join(format!("devti-sim-{}", std::process::id()));
     let mut cfg = NodeConfig::new(&dir, &name, kind);
@@ -39,6 +40,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     cfg.discovery = arg("--mdns").is_some();
     let node = Node::start(cfg, Arc::new(MemorySecretStore::new())).await?;
     let mut events = node.subscribe();
+    let mut frames = node.subscribe_frames();
+    let mut frame_count = 0u32;
 
     let pairing_id = if let Some(uri) = arg("--uri") {
         node.pair_with_uri(&uri)?
@@ -74,6 +77,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if peer.online && !greeted {
                         greeted = true;
                         hub = Some(peer.info.id);
+                        if watch {
+                            // Ask to see the Hub's screen, like the phone's second-screen tab does.
+                            match node.screen_start(&peer.info.id, 960, 10) {
+                                Ok(()) => println!("watching {}", peer.info.name),
+                                Err(e) => println!("watch failed: {e}"),
+                            }
+                        }
                         node.publish_notification(NotificationInfo {
                             key: "sim:1".into(),
                             app_id: "org.example.chat".into(),
@@ -118,6 +128,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Ok(_) => {}
                 Err(_) => {}
+            },
+            f = frames.recv() => if let Ok(f) = f {
+                frame_count += 1;
+                if frame_count == 5 {
+                    let jpeg = f.jpeg.len() > 2 && f.jpeg[0] == 0xFF && f.jpeg[1] == 0xD8;
+                    println!("screen frames={frame_count} size={}x{} jpeg={jpeg}", f.w, f.h);
+                }
             },
             _ = tick.tick() => {
                 battery = battery.saturating_sub(1).max(5);

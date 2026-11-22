@@ -11,6 +11,7 @@ mod bluetooth;
 mod commands;
 mod continuity;
 mod remote;
+mod screens;
 mod system;
 mod tray;
 
@@ -99,6 +100,8 @@ pub fn run() {
 
             let remote = remote::Remote::start(&handle, node.clone(), data_dir.clone());
             app.manage(remote.clone());
+            let screens = screens::Screens::new(node.clone());
+            app.manage(screens.clone());
 
             // Forward every core event to the UI.
             let mut events = node.subscribe();
@@ -111,6 +114,9 @@ pub fn run() {
                             tray::on_node_event(&emitter, &ev);
                             continuity::on_node_event(&emitter, &event_node, &ev);
                             remote::on_node_event(&emitter, &remote, &ev);
+                            if matches!(ev, devti_core::NodeEvent::ScreenRequested { .. }) {
+                                screens.ensure_running(Some(&emitter));
+                            }
                             // Input is high-frequency and only for the host; the UI doesn't need it.
                             if matches!(ev, devti_core::NodeEvent::RemoteInput { .. }) {
                                 continue;
@@ -193,6 +199,9 @@ pub fn run() {
             commands::screen_watch,
             commands::screen_unwatch,
             commands::save_capture,
+            commands::screen_sources,
+            commands::set_screen_source,
+            commands::stop_screen_viewer,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Devti");

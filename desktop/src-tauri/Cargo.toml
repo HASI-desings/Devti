@@ -42,6 +42,9 @@ tokio-tungstenite = "0.29"
 base64 = "0.22"
 sha2 = "0.11"
 parking_lot = "0.13"
+xcap = "0.9.10"
+jpeg-encoder = "0.6.1"
+fast_image_resize = "5.1.4"
 
 [features]
 # Tauri uses this to switch between dev server and bundled assets.
