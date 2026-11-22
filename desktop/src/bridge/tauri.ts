@@ -161,5 +161,17 @@ export function createTauriBridge(): Bridge {
     connectAccessory: (address, on) => invoke("connect_accessory", { address, on }),
     accessoryBatteryHistory: (address, since) => invoke("accessory_battery_history", { address, since }),
     helpSupportAccessory: (address) => invoke("help_support_accessory", { address }),
+    requestSmsThreads: (id) => invoke("request_sms_threads", { id }),
+    requestSmsMessages: (id, thread) => invoke("request_sms_messages", { id, thread }),
+    sendSms: (id, to, text) => invoke("send_sms", { id, to, text }),
+    callAction: (id, call, action) => invoke("call_action", { id, call, action }),
+    handoff: (id, item) => invoke("handoff", { id, item }),
+    handoffCurrent: (id) => invoke("handoff_current", { id }),
+    mediaStatus: () => invoke("media_status"),
+    startPhoneCamera: (id) => invoke("use_phone_camera", { id }),
+    stopPhoneCamera: (id) => invoke("stop_phone_camera", { id }),
+    automation: () => invoke("automation"),
+    saveRules: (rules) => invoke("save_rules", { rules }),
+    runRuleNow: (id) => invoke("run_rule_now", { id }),
   };
 }

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   Bridge,
+  CallInfo,
   Catalog,
   DeviceInfo,
   DiscoveredDevice,
@@ -27,7 +28,9 @@ export type Page =
   | "control"
   | "mirror"
   | "screens"
-  | "accessories";
+  | "accessories"
+  | "messages"
+  | "automation";
 
 export type PairingStage =
   | { stage: "waiting" }
@@ -84,6 +87,12 @@ interface State {
   screenStats: Record<string, { sharing: boolean; fps: number; latency_ms: number; kbps: number }>;
   /** Devices watching this computer's screen right now. */
   viewers: Record<string, string>;
+  /** Phone conversations, by phone id. */
+  smsThreads: Record<string, import("../bridge").SmsThread[]>;
+  /** Messages, by `${phone}/${thread}`. */
+  smsMessages: Record<string, import("../bridge").SmsMessage[]>;
+  /** The current or last call per phone. */
+  calls: Record<string, CallInfo & { from_name: string }>;
 }
 
 interface Actions {
@@ -139,6 +148,9 @@ export const useStore = create<State & Actions>((set, get) => ({
   runResults: [],
   screenStats: {},
   viewers: {},
+  smsThreads: {},
+  smsMessages: {},
+  calls: {},
 
   load(s, mode) {
     const peers = Object.fromEntries(s.peers.map((p) => [p.info.id, p]));
@@ -305,6 +317,48 @@ export const useStore = create<State & Actions>((set, get) => ({
         set({ viewers });
         break;
       }
+      case "sms_threads":
+        set({ smsThreads: { ...st.smsThreads, [e.from]: e.threads } });
+        break;
+      case "sms_messages":
+        set({ smsMessages: { ...st.smsMessages, [`${e.from}/${e.thread}`]: e.messages } });
+        break;
+      case "sms": {
+        const key = `${e.from}/${e.message.thread}`;
+        const list = (st.smsMessages[key] ?? []).filter((m) => m.id !== e.message.id);
+        const threads = st.smsThreads[e.from] ?? [];
+        const known = threads.find((t) => t.id === e.message.thread);
+        const thread = {
+          id: e.message.thread,
+          addresses: known?.addresses ?? [e.message.address],
+          names: known?.names ?? (e.message.name ? [e.message.name] : []),
+          snippet: e.message.body,
+          ts: e.message.ts,
+          unread: e.message.outgoing ? 0 : (known?.unread ?? 0) + 1,
+        };
+        set({
+          smsMessages: { ...st.smsMessages, [key]: [...list, e.message] },
+          smsThreads: { ...st.smsThreads, [e.from]: [thread, ...threads.filter((t) => t.id !== thread.id)] },
+        });
+        break;
+      }
+      case "sms_result":
+        if (!e.ok) get().toast(e.error ?? "The text wasn't sent.", "danger");
+        break;
+      case "call":
+        set({ calls: { ...st.calls, [e.from]: { ...e.call, from_name: e.from_name } } });
+        break;
+      case "handoff":
+        get().toast(`Continued from ${e.from_name}${e.item.title ? `: ${e.item.title}` : ""}.`, "info");
+        break;
+      case "camera_offered":
+      case "audio_started":
+      case "audio_ended":
+      case "sms_threads_requested":
+      case "sms_messages_requested":
+      case "sms_send_requested":
+      case "call_action_requested":
+        break;
       case "system_requested":
       case "launch_requested":
       case "run_requested":

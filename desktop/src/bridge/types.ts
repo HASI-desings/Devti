@@ -125,9 +125,110 @@ export type NodeEvent =
   | { type: "run_finished"; from: string; command: string; ok: boolean; output: string }
   | { type: "deck_pressed"; from: string; from_name: string; button: string }
   | { type: "catalog_received"; from: string; catalog: Catalog }
-  | { type: "screen_requested"; from: string; from_name: string; on: boolean }
+  | { type: "screen_requested"; from: string; from_name: string; on: boolean; source?: string }
   | { type: "screen_stats"; peer: string; sharing: boolean; fps: number; latency_ms: number; kbps: number }
-  | { type: "screen_ended"; peer: string };
+  | { type: "screen_ended"; peer: string }
+  | { type: "camera_offered"; from: string; from_name: string }
+  | { type: "sms_threads"; from: string; threads: SmsThread[] }
+  | { type: "sms_messages"; from: string; thread: string; messages: SmsMessage[] }
+  | { type: "sms"; from: string; from_name: string; message: SmsMessage }
+  | { type: "sms_result"; from: string; ok: boolean; error: string | null }
+  | { type: "sms_threads_requested"; from: string }
+  | { type: "sms_messages_requested"; from: string; thread: string }
+  | { type: "sms_send_requested"; from: string; to: string[]; text: string }
+  | { type: "call"; from: string; from_name: string; call: CallInfo }
+  | { type: "call_action_requested"; from: string; id: string; action: string }
+  | { type: "handoff"; from: string; from_name: string; item: HandoffItem }
+  | {
+      type: "audio_started";
+      from: string;
+      from_name: string;
+      kind: string;
+      sample_rate: number;
+      channels: number;
+    }
+  | { type: "audio_ended"; from: string; kind: string };
+
+// ------------------------------------------------------------------ Phase 6
+
+export interface SmsThread {
+  id: string;
+  addresses: string[];
+  names: string[];
+  snippet: string;
+  ts: number;
+  unread: number;
+}
+
+export interface SmsMessage {
+  id: string;
+  thread: string;
+  address: string;
+  name: string;
+  body: string;
+  ts: number;
+  outgoing: boolean;
+}
+
+export interface CallInfo {
+  id: string;
+  state: "ringing" | "active" | "ended" | "missed";
+  number: string;
+  name: string;
+  incoming: boolean;
+  ts: number;
+}
+
+export interface HandoffItem {
+  kind: "url" | "text" | "media";
+  url: string;
+  title: string;
+  text: string;
+  position_ms: number | null;
+}
+
+export type RuleTrigger =
+  | { kind: "device_connected"; device: string }
+  | { kind: "device_disconnected"; device: string }
+  | { kind: "battery_below"; device: string; percent: number }
+  | { kind: "accessory_connected"; name: string }
+  | { kind: "proximity_away"; device: string }
+  | { kind: "proximity_near"; device: string }
+  | { kind: "time"; hour: number; minute: number; days: number[] }
+  | { kind: "app_opened"; app: string }
+  | { kind: "network_changed"; network: string };
+
+export type RuleAction =
+  | { kind: "notify"; title: string; body: string }
+  | { kind: "lock_computer" }
+  | { kind: "set_dnd"; on: boolean }
+  | { kind: "run_command"; command: string }
+  | { kind: "launch_app"; app: string }
+  | { kind: "switch_audio_output"; output: string }
+  | { kind: "accessory_control"; accessory: string; control: string; value: string }
+  | { kind: "ring_device"; device: string };
+
+export interface Rule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  trigger: RuleTrigger;
+  actions: RuleAction[];
+  cooldown_s: number;
+}
+
+export interface AutomationInfo {
+  rules: Rule[];
+  log: { rule: string; name: string; ts: number; ok: boolean; detail: string }[];
+  proximity: Record<string, boolean>;
+}
+
+export interface MediaStatus {
+  audio: [string, string][];
+  cameras: string[];
+  webcam: string;
+  mic: string;
+}
 
 // ------------------------------------------------------------------ Phase 3
 
@@ -470,4 +571,19 @@ export interface Bridge {
   connectAccessory(address: string, on: boolean): Promise<void>;
   accessoryBatteryHistory(address: string, since: number): Promise<BatterySample[]>;
   helpSupportAccessory(address: string): Promise<string>;
+
+  // Phase 6 — communication and automation
+  requestSmsThreads(id: string): Promise<void>;
+  requestSmsMessages(id: string, thread: string): Promise<void>;
+  sendSms(id: string, to: string[], text: string): Promise<void>;
+  callAction(id: string, call: string, action: string): Promise<void>;
+  handoff(id: string, item: HandoffItem): Promise<void>;
+  /** Continue what's playing / the copied link on a device; returns what was sent. */
+  handoffCurrent(id: string): Promise<string>;
+  mediaStatus(): Promise<MediaStatus>;
+  startPhoneCamera(id: string): Promise<void>;
+  stopPhoneCamera(id: string): Promise<void>;
+  automation(): Promise<AutomationInfo>;
+  saveRules(rules: Rule[]): Promise<void>;
+  runRuleNow(id: string): Promise<void>;
 }

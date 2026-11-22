@@ -10,11 +10,14 @@
 }
 
 .brand {
-  margin-bottom: var(--s-6);
+  margin-bottom: var(--s-4);
 }
 
 .items {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  scrollbar-width: none;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -146,5 +149,16 @@
 @keyframes blink {
   50% {
     opacity: 0.3;
+  }
+}
+
+/* Thirteen pages: tighten the rail on shorter windows so every page stays reachable. */
+@media (max-height: 940px) {
+  .items {
+    gap: 2px;
+  }
+
+  .item {
+    padding-block: 6px;
   }
 }

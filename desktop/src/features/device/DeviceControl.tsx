@@ -29,9 +29,15 @@ export function DeviceControl({ peer }: { peer: PeerSnapshot }) {
   const android = peer.info.platform === "android";
   const computer = peer.info.kind === "desktop" || peer.info.kind === "laptop";
 
+  const [usingCamera, setUsingCamera] = useState(false);
   useEffect(() => {
     if (peer.online) void bridge.requestCatalog(id).catch(() => {});
-  }, [bridge, id, peer.online]);
+    if (android)
+      void bridge.mediaStatus().then(
+        (m) => setUsingCamera(m.cameras.includes(id)),
+        () => {},
+      );
+  }, [bridge, id, peer.online, android]);
 
   const act = (fn: () => Promise<unknown>) => {
     fn().catch((e) => toast(String(e instanceof Error ? e.message : e), "danger"));
@@ -66,6 +72,47 @@ export function DeviceControl({ peer }: { peer: PeerSnapshot }) {
           )}
 
           <div className={p.panel}>
+            <div className={p.item}>
+              <div className={p.itemText}>
+                <span className={p.itemTitle}>Continue on {peer.info.name}</span>
+                <span className={p.itemHint}>
+                  Sends what's playing here (at the same second) or the link you copied. Use “Open on
+                  computer” in the phone's share menu for the other way.
+                </span>
+              </div>
+              <Button
+                size="sm"
+                icon="external"
+                onPress={() =>
+                  act(async () => {
+                    const what = await bridge.handoffCurrent(id);
+                    toast(`Sent ${what} to ${peer.info.name}.`, "ok");
+                  })
+                }
+              >
+                Continue there
+              </Button>
+            </div>
+            {android && (
+              <div className={p.item}>
+                <div className={p.itemText}>
+                  <span className={p.itemTitle}>Use its camera as this computer's webcam</span>
+                  <span className={p.itemHint}>
+                    The phone asks before its camera turns on. Its microphone and sound can be shared from the
+                    phone's Screen tab.
+                  </span>
+                </div>
+                {usingCamera ? (
+                  <Button size="sm" variant="danger" onPress={() => act(() => bridge.stopPhoneCamera(id))}>
+                    Stop camera
+                  </Button>
+                ) : (
+                  <Button size="sm" icon="camera" onPress={() => act(() => bridge.startPhoneCamera(id))}>
+                    Use camera
+                  </Button>
+                )}
+              </div>
+            )}
             <div className={p.item}>
               <div className={p.itemText}>
                 <span className={p.itemTitle}>Media</span>

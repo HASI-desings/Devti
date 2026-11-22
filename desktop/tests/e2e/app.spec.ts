@@ -334,3 +334,43 @@ test("accessories: profile-built controls, battery per bud, draft profile for un
   await page.getByRole("button", { name: "Save draft" }).click();
   await expect(page.getByText(/Draft profile saved/)).toBeVisible();
 });
+
+test("messages: read a conversation, reply, and a call card to answer", async ({ page }) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Pair" }).click();
+  await pairPhone(page, "Pixel 8");
+  await page.keyboard.press("Escape");
+
+  await rail(page).getByRole("button", { name: "Messages" }).click();
+  await page.getByRole("button", { name: /Ayesha/ }).click();
+  await expect(page.getByText("Hey! Dinner tonight?")).toBeVisible();
+  await page.getByLabel("Message", { exact: true }).fill("Yes, 7 works");
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel(/Conversation with Ayesha/).getByText("Yes, 7 works")).toBeVisible();
+
+  // An incoming call shows a card with Answer / Decline.
+  await page.evaluate(() => window.__devtiPreview?.callMe?.(true));
+  const card = page.getByRole("alertdialog", { name: "Call from Ayesha" });
+  await expect(card).toBeVisible();
+  await card.getByRole("button", { name: "Answer" }).click();
+  await expect(card.getByText("On a call", { exact: false })).toBeVisible();
+  await card.getByRole("button", { name: "End" }).click();
+  await expect(card).toBeHidden();
+});
+
+test("automation: default rules, switch one on, build a new rule", async ({ page }) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Automation" }).click();
+  const lock = page.getByRole("switch", { name: "Phone walks away → lock this computer" });
+  await expect(lock).not.toBeChecked();
+  await lock.locator("xpath=ancestor::label").click();
+  await expect(lock).toBeChecked();
+
+  await page.getByRole("button", { name: "New rule" }).click();
+  await page.getByLabel("Name").fill("Morning focus");
+  await page.getByLabel("Trigger").selectOption("time");
+  await page.getByLabel("Action 1").selectOption("set_dnd");
+  await page.getByRole("button", { name: "Save rule" }).click();
+  await expect(page.getByText("Morning focus", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("When at a time → do not disturb")).toBeVisible();
+});

@@ -131,6 +131,8 @@ export interface PreviewControls {
   remoteAccept(): void;
   /** Toggles a paired device online/offline. */
   setOnline(id: string, online: boolean): void;
+  /** Simulates an incoming call on the paired phone. */
+  callMe?(on: boolean): void;
   /** Simulates a paired device asking this computer to ring. */
   ringMe(on: boolean): void;
   reset(): void;
@@ -159,6 +161,111 @@ export function createPreviewBridge(): Bridge {
   let screenSource: import("./types").ScreenSource | null = null;
   let layout: import("./types").ScreenLayout = { enabled: false, links: [] };
   const accessories = simulatedAccessories();
+  let rules: import("./types").Rule[] = [
+    {
+      id: "earbuds-audio",
+      name: "Earbuds connect → play this computer's sound through them",
+      enabled: false,
+      trigger: { kind: "accessory_connected", name: "" },
+      actions: [{ kind: "switch_audio_output", output: "" }],
+      cooldown_s: 10,
+    },
+    {
+      id: "phone-low-battery",
+      name: "Phone battery below 15 % → alert on this computer",
+      enabled: true,
+      trigger: { kind: "battery_below", device: "", percent: 15 },
+      actions: [{ kind: "notify", title: "Battery low", body: "Plug it in soon." }],
+      cooldown_s: 600,
+    },
+    {
+      id: "walk-away-lock",
+      name: "Phone walks away → lock this computer",
+      enabled: false,
+      trigger: { kind: "proximity_away", device: "" },
+      actions: [{ kind: "lock_computer" }],
+      cooldown_s: 120,
+    },
+  ];
+  const simThreads = (): import("./types").SmsThread[] => [
+    {
+      id: "t1",
+      addresses: ["+92 300 1234567"],
+      names: ["Ayesha"],
+      snippet: "Are we still on for 7?",
+      ts: now() - 6 * 60_000,
+      unread: 1,
+    },
+    {
+      id: "t2",
+      addresses: ["+92 321 7654321"],
+      names: ["Bilal"],
+      snippet: "Sent you the slides",
+      ts: now() - 3 * 3600_000,
+      unread: 0,
+    },
+    {
+      id: "t3",
+      addresses: ["8287"],
+      names: [],
+      snippet: "Your code is 482913",
+      ts: now() - 26 * 3600_000,
+      unread: 0,
+    },
+  ];
+  const simMessages: Record<string, import("./types").SmsMessage[]> = {
+    t1: [
+      {
+        id: "1",
+        thread: "t1",
+        address: "+92 300 1234567",
+        name: "Ayesha",
+        body: "Hey! Dinner tonight?",
+        ts: now() - 50 * 60_000,
+        outgoing: false,
+      },
+      {
+        id: "2",
+        thread: "t1",
+        address: "+92 300 1234567",
+        name: "",
+        body: "Yes, the usual place",
+        ts: now() - 45 * 60_000,
+        outgoing: true,
+      },
+      {
+        id: "3",
+        thread: "t1",
+        address: "+92 300 1234567",
+        name: "Ayesha",
+        body: "Are we still on for 7?",
+        ts: now() - 6 * 60_000,
+        outgoing: false,
+      },
+    ],
+    t2: [
+      {
+        id: "4",
+        thread: "t2",
+        address: "+92 321 7654321",
+        name: "Bilal",
+        body: "Sent you the slides",
+        ts: now() - 3 * 3600_000,
+        outgoing: false,
+      },
+    ],
+    t3: [
+      {
+        id: "5",
+        thread: "t3",
+        address: "8287",
+        name: "",
+        body: "Your code is 482913",
+        ts: now() - 26 * 3600_000,
+        outgoing: false,
+      },
+    ],
+  };
   const accListeners = new Set<(l: import("./types").AccessoryList) => void>();
   const pushAccessories = () => {
     for (const l of accListeners) l({ status: "", list: structuredClone(accessories) });
@@ -345,6 +452,23 @@ export function createPreviewBridge(): Bridge {
       peers.set(id, next);
       addLog(online ? "connected" : "disconnected", p.info);
       emit({ type: "peer_changed", peer: next });
+    },
+    callMe(on) {
+      const p = [...peers.values()].find((x) => x.online && x.info.kind === "phone");
+      if (!p) return;
+      emit({
+        type: "call",
+        from: p.info.id,
+        from_name: p.info.name,
+        call: {
+          id: "c1",
+          state: on ? "ringing" : "ended",
+          number: "+92 300 1234567",
+          name: "Ayesha",
+          incoming: true,
+          ts: now(),
+        },
+      });
     },
     ringMe(on) {
       const p = [...peers.values()][0];
@@ -891,6 +1015,74 @@ export function createPreviewBridge(): Bridge {
       const a = accessories.find((x) => x.address === address);
       return `~/Downloads/Devti/devti-profile-${(a?.name ?? "device").replace(/\s+/g, "-")}.yaml (simulated)`;
     },
+    async requestSmsThreads(id) {
+      if (!peers.get(id)?.online) throw new Error("That phone is offline.");
+      setTimeout(() => emit({ type: "sms_threads", from: id, threads: simThreads() }), 200);
+    },
+    async requestSmsMessages(id, thread) {
+      setTimeout(
+        () => emit({ type: "sms_messages", from: id, thread, messages: simMessages[thread] ?? [] }),
+        150,
+      );
+    },
+    async sendSms(id, to, text) {
+      const thread = to[0] === "+92 300 1234567" ? "t1" : to[0] === "+92 321 7654321" ? "t2" : "t9";
+      const message = {
+        id: String(Math.random()),
+        thread,
+        address: to[0] ?? "",
+        name: "",
+        body: text,
+        ts: now(),
+        outgoing: true,
+      };
+      simMessages[thread] = [...(simMessages[thread] ?? []), message];
+      setTimeout(() => {
+        emit({ type: "sms_result", from: id, ok: true, error: null });
+        emit({ type: "sms", from: id, from_name: peers.get(id)?.info.name ?? "", message });
+      }, 300);
+    },
+    async callAction(id, call, action) {
+      emit({
+        type: "call",
+        from: id,
+        from_name: peers.get(id)?.info.name ?? "",
+        call: {
+          id: call,
+          state: action === "answer" ? "active" : "ended",
+          number: "+92 300 1234567",
+          name: "Ayesha",
+          incoming: true,
+          ts: now(),
+        },
+      });
+    },
+    async handoff(id) {
+      if (!peers.get(id)?.online) throw new Error("That device is offline.");
+    },
+    async handoffCurrent(id) {
+      if (!peers.get(id)?.online) throw new Error("That device is offline.");
+      return "“Building a design system” (simulated)";
+    },
+    async mediaStatus() {
+      return {
+        audio: [],
+        cameras: [],
+        webcam: "Simulated in the browser preview.",
+        mic: "Shows up as “Devti-phone-microphone” in any app's microphone list.",
+      };
+    },
+    async startPhoneCamera() {
+      throw new Error("The phone camera needs the Devti desktop app.");
+    },
+    async stopPhoneCamera() {},
+    async automation() {
+      return { rules: structuredClone(rules), log: [], proximity: {} };
+    },
+    async saveRules(next) {
+      rules = structuredClone(next);
+    },
+    async runRuleNow() {},
     async saveCapture(name, bytes) {
       // The browser saves it through its own download prompt.
       const url = URL.createObjectURL(new Blob([bytes as BlobPart]));

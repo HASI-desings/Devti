@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import s from "./App.module.css";
 import { Prism } from "./design/Prism";
 import { AccessoriesPage } from "./features/accessories/AccessoriesPage";
+import { AutomationPage } from "./features/automation/AutomationPage";
 import { BatteryPage } from "./features/battery/BatteryPage";
 import { ControlPage } from "./features/control/ControlPage";
 import { DevicePage } from "./features/device/DevicePage";
@@ -10,6 +11,7 @@ import { EcosystemPage } from "./features/ecosystem/EcosystemPage";
 import { FilesPage } from "./features/files/FilesPage";
 import { SendPicker } from "./features/files/SendPicker";
 import { HelpPage } from "./features/help/HelpPage";
+import { MessagesPage } from "./features/messages/MessagesPage";
 import { MirrorPage } from "./features/mirror/MirrorPage";
 import { NotificationsPage } from "./features/notifications/NotificationsPage";
 import { Done, Onboarding } from "./features/onboarding/Onboarding";
@@ -17,6 +19,7 @@ import { PairPanel } from "./features/pairing/PairPanel";
 import { ScreensPage } from "./features/screens/ScreensPage";
 import { SecurityPage } from "./features/security/SecurityPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
+import { CallCard } from "./features/shell/CallCard";
 import { PreviewBanner } from "./features/shell/PreviewBanner";
 import { Rail } from "./features/shell/Rail";
 import { RingOverlay } from "./features/shell/RingOverlay";
@@ -178,6 +181,8 @@ export function App() {
           {page === "mirror" && <MirrorPage />}
           {page === "screens" && <ScreensPage />}
           {page === "accessories" && <AccessoriesPage />}
+          {page === "messages" && <MessagesPage />}
+          {page === "automation" && <AutomationPage />}
           {page === "security" && <SecurityPage onPair={() => setPairOpen(true)} />}
           {page === "settings" && <SettingsPage />}
           {page === "help" && (
@@ -214,6 +219,7 @@ export function App() {
 
       <SendPicker />
       <RingOverlay />
+      <CallCard />
       {tour && (
         <Tour
           onDone={() => {

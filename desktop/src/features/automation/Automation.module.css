@@ -1,0 +1,134 @@
+.rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-bottom: var(--s-4);
+}
+
+.rule {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-4);
+  border-radius: var(--r-sheet);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  opacity: 0.75;
+}
+
+.rule[data-on] {
+  opacity: 1;
+}
+
+.ruleIcon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--text-dim);
+  background: var(--surface-2);
+}
+
+.rule[data-on] .ruleIcon {
+  color: var(--bg);
+  background: var(--text);
+}
+
+.ruleActions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.result {
+  font-size: var(--t-13);
+  color: var(--danger);
+}
+
+.result[data-ok] {
+  color: var(--ok);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  max-width: 720px;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin: 0;
+  padding: var(--s-4);
+  border-radius: var(--r-sheet);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.block legend {
+  padding: 0 var(--s-2);
+  font-family: var(--font-display);
+  font-weight: 640;
+}
+
+.action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.select,
+.num {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  padding: var(--s-2) var(--s-3);
+}
+
+.inline {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-size: var(--t-13);
+  color: var(--text-dim);
+}
+
+.timeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+.days {
+  display: flex;
+  gap: 4px;
+}
+
+.day {
+  all: unset;
+  padding: var(--s-1) var(--s-2);
+  border-radius: 8px;
+  font-size: var(--t-13);
+  cursor: pointer;
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+}
+
+.day[aria-pressed="true"] {
+  color: var(--bg);
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.day:focus-visible {
+  outline: 2px solid var(--focus);
+}
