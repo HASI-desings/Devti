@@ -330,7 +330,8 @@ try {
     console.log(`${ok ? "PASS" : "OVER BUDGET"}: ${k}`);
     // Memory is reported, not gated: about 136 MB of it is WebKitGTK's own libraries and
     // graphics stack (see the breakdown above and docs/QA.md). CPU and latency are gated.
-    if (!ok && k === "memory") console.log(`::warning::Hub memory ${pssMB} MB is over the ${BUDGET.memoryMB} MB target`);
+    if (!ok && k === "memory")
+      console.log(`::warning::Hub memory ${pssMB} MB is over the ${BUDGET.memoryMB} MB target`);
     else if (!ok) failed = true;
   }
 } catch (e) {
