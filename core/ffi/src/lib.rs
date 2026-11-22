@@ -52,6 +52,8 @@ pub trait EventListener: Send + Sync {
 /// Receives frames of a screen this phone is viewing (Phase 4), on a background thread.
 #[uniffi::export(callback_interface)]
 pub trait FrameListener: Send + Sync {
+    // One flat call per frame keeps the generated Kotlin/Swift simple and allocation-free.
+    #[allow(clippy::too_many_arguments)]
     fn on_frame(&self, device_id: String, seq: u64, width: u32, height: u32, latency_ms: u32, fps: u8, jpeg: Vec<u8>);
 }
 
