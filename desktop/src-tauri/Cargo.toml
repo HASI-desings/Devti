@@ -16,7 +16,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
-devti-core = { workspace = true, features = ["keychain"] }
+devti-core = { workspace = true, features = ["api", "keychain"] }
 tauri = { version = "2.12", features = ["tray-icon", "image-png"] }
 tauri-plugin-single-instance = "2.5"
 tauri-plugin-autostart = "2.7"
@@ -37,6 +37,11 @@ uuid = "1"
 starship-battery = "0.12"
 os_info = { version = "3.15", default-features = false }
 gethostname = "1.1"
+enigo = { version = "0.6.1", features = ["wayland", "libei_tokio"] }
+tokio-tungstenite = "0.29"
+base64 = "0.22"
+sha2 = "0.11"
+parking_lot = "0.13"
 
 [features]
 # Tauri uses this to switch between dev server and bundled assets.

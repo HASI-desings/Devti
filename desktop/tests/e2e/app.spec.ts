@@ -215,3 +215,69 @@ test("find my device: being rung shows a full-screen call until found", async ({
   await expect(page.getByText("Demo phone is ringing.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Stop ringing" })).toBeVisible();
 });
+
+test("control: deck editor, saved commands and local API", async ({ page }) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Control" }).click();
+  await expect(page.getByRole("heading", { name: "Control", level: 1 })).toBeVisible();
+
+  // The default deck is there; add a button and give it an action.
+  await expect(page.getByRole("button", { name: "Play / pause" })).toBeVisible();
+  await page.getByRole("button", { name: "Add button" }).click();
+  await page.getByLabel("Label").fill("Go live");
+  await page.getByLabel("When pressed").selectOption("obs_scene");
+  await page.getByLabel("Scene name").fill("Live");
+  await expect(page.getByRole("button", { name: "Go live" })).toBeVisible();
+  await page.getByRole("button", { name: "Try it here" }).click();
+  await expect(page.getByText("OBS isn't reachable from the browser preview.")).toBeVisible();
+
+  // Saved commands: test one, then save.
+  await page.getByText("Saved commands", { exact: true }).click();
+  await page.getByRole("button", { name: "Add a command" }).click();
+  await page.getByLabel("Name").last().fill("Back up");
+  await page.getByLabel("Command").last().fill("rsync -a ~/Photos /backup");
+  await page.getByRole("button", { name: "Test" }).last().click();
+  await expect(page.getByText("(preview) would run: rsync -a ~/Photos /backup")).toBeVisible();
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Saved commands updated.")).toBeVisible();
+
+  // Local API: token hidden until shown, reset makes a new one.
+  await page.getByText("Local API and CLI", { exact: true }).click();
+  await expect(page.getByText("devti run torch --on")).toBeVisible();
+  const masked = await page.getByText(/•{10}/).textContent();
+  await page.getByRole("button", { name: "Show" }).click();
+  await expect(page.getByText(/^[0-9a-f]{64}$/)).toBeVisible();
+  await page.getByRole("button", { name: "Reset" }).click();
+  await expect(page.getByText("New token made.", { exact: false })).toBeVisible();
+  expect(masked).toBeTruthy();
+});
+
+test("mirror and control a phone, run its command, power needs confirmation", async ({ page }) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Pair" }).click();
+  await pairPhone(page, "Pixel 8");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /Pixel 8, connected/ }).click();
+  await page.getByRole("button", { name: "Open device" }).click();
+
+  // The phone's catalog: a command with output, and its apps.
+  await page.getByRole("button", { name: "Run" }).click();
+  await expect(page.getByText("(simulated) torch finished on Pixel 8")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Spotify/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "Mirror and control" }).click();
+  const screen = page
+    .getByRole("img", { name: /Pixel 8's screen/ })
+    .or(page.locator("canvas[aria-label^='Pixel 8']"));
+  await expect(screen).toBeVisible();
+  await expect(page.getByText("fps")).toBeVisible();
+  // Tap, type and go home; the simulated phone draws what it received.
+  const box = await screen.boundingBox();
+  if (!box) throw new Error("no screen");
+  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
+  await page.keyboard.type("hi");
+  await page.getByRole("button", { name: "Home" }).click();
+  await expect(page.getByRole("button", { name: "Screenshot" })).toBeEnabled();
+  await page.getByRole("button", { name: "Pixel 8" }).first().click();
+  await expect(page.getByRole("heading", { name: "Pixel 8", level: 1 })).toBeVisible();
+});

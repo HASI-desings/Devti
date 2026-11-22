@@ -34,3 +34,90 @@
   flex-direction: column;
   gap: var(--s-4);
 }
+
+.mirrorCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-4) var(--s-5);
+  margin-bottom: var(--s-3);
+  border-radius: var(--r-sheet);
+  color: var(--voice);
+  background:
+    radial-gradient(80% 120% at 0% 0%, color-mix(in oklab, var(--voice) 22%, transparent), transparent 70%),
+    var(--surface);
+  border: 1px solid color-mix(in oklab, var(--voice) 35%, var(--line));
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+
+.result {
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--bg-deep);
+  border-left: 3px solid var(--danger);
+}
+
+.result[data-ok] {
+  border-left-color: var(--ok);
+}
+
+.result pre {
+  margin: var(--s-1) 0 0;
+  white-space: pre-wrap;
+  font-size: var(--t-13);
+  max-height: 160px;
+  overflow: auto;
+}
+
+.subhead {
+  font-family: var(--font-display);
+  font-size: var(--t-16, 16px);
+  font-weight: 620;
+  margin: var(--s-5) 0 var(--s-3);
+}
+
+.apps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--s-2);
+}
+
+.app {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-2);
+  border-radius: var(--r-control);
+  font-size: var(--t-13);
+  text-align: center;
+  cursor: pointer;
+}
+
+.app:hover {
+  background: var(--surface-2);
+}
+
+.app:focus-visible {
+  outline: 2px solid var(--focus);
+}
+
+.appGlyph {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  font-weight: 700;
+  color: var(--voice);
+  background: color-mix(in oklab, var(--voice) 16%, var(--surface-2));
+}

@@ -1,20 +1,78 @@
+import { drawSimulatedPhone, type SimScreen } from "./sim-screen";
 import type {
   ActivityEntry,
   BatterySample,
   BluetoothEvent,
   Bridge,
+  Catalog,
   ClipboardEntry,
+  DeckPageDef,
   DeviceInfo,
   DiscoveredDevice,
+  InputEvent,
   LocalSnapshot,
   MirroredNotification,
   NodeEvent,
   PairingWindowInfo,
   PeerSnapshot,
   Permissions,
+  SavedCommand,
   Snapshot,
   TransferRecord,
 } from "./types";
+
+/** The deck a new Hub starts with (same as the Rust default in remote.rs). */
+export const DEFAULT_DECK: DeckPageDef[] = [
+  {
+    name: "Everyday",
+    buttons: [
+      {
+        id: "d-play",
+        label: "Play / pause",
+        icon: "play",
+        voice: "iris",
+        action: { kind: "media", value: "play_pause" },
+      },
+      {
+        id: "d-prev",
+        label: "Previous",
+        icon: "previous",
+        voice: "iris",
+        action: { kind: "media", value: "previous" },
+      },
+      { id: "d-next", label: "Next", icon: "next", voice: "iris", action: { kind: "media", value: "next" } },
+      { id: "d-mute", label: "Mute", icon: "mute", voice: "aqua", action: { kind: "media", value: "mute" } },
+      {
+        id: "d-tab",
+        label: "Switch window",
+        icon: "windows",
+        voice: "mint",
+        action: { kind: "hotkey", value: "alt+tab" },
+      },
+      {
+        id: "d-desk",
+        label: "Show desktop",
+        icon: "desktop",
+        voice: "mint",
+        action: { kind: "hotkey", value: "meta+d" },
+      },
+      {
+        id: "d-copy",
+        label: "Copy",
+        icon: "copy",
+        voice: "marigold",
+        action: { kind: "hotkey", value: "ctrl+c" },
+      },
+      {
+        id: "d-paste",
+        label: "Paste",
+        icon: "paste",
+        voice: "marigold",
+        action: { kind: "hotkey", value: "ctrl+v" },
+      },
+    ],
+  },
+];
 
 /**
  * Preview mode — used only when the UI runs in a plain browser (design review and the
@@ -39,6 +97,23 @@ function randomDigits(n: number) {
   let s = "";
   for (let i = 0; i < n; i++) s += Math.floor(Math.random() * 10);
   return s;
+}
+
+function randomHex(n: number) {
+  const b = new Uint8Array(n / 2);
+  crypto.getRandomValues(b);
+  return [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+
+/** Lets the simulated screen react to taps and typing, so the mirror demo is honest about what it shows. */
+function applySimInput(sim: SimScreen, e: InputEvent) {
+  if (e.k === "tap" || e.k === "long_press")
+    sim.touches.push({ x: e.x, y: e.y, t: Date.now(), long: e.k === "long_press" });
+  if (e.k === "swipe") sim.touches.push({ x: e.x2, y: e.y2, t: Date.now(), long: false });
+  if (e.k === "text") sim.typed = (sim.typed + e.text).slice(-40);
+  if (e.k === "key" && e.key === "backspace") sim.typed = sim.typed.slice(0, -1);
+  if (e.k === "nav" && e.action === "home") sim.app = null;
+  sim.touches = sim.touches.filter((t) => Date.now() - t.t < 900);
 }
 
 function randomId() {
@@ -73,6 +148,13 @@ export function createPreviewBridge(): Bridge {
   };
 
   let paused = false;
+  let savedCommands: SavedCommand[] = [
+    { id: "c-hello", name: "Say hello", command: "notify-send 'Hello from Devti'", confirm: false },
+  ];
+  let deck: DeckPageDef[] = structuredClone(DEFAULT_DECK);
+  let obsUrl = "ws://127.0.0.1:4455";
+  let api = { enabled: true, port: 47811 as number | null, token: randomHex(64) };
+  const screens = new Map<string, SimScreen>();
   const settings: Record<string, string> = {};
   try {
     Object.assign(settings, JSON.parse(localStorage.getItem("devti-preview-settings") ?? "{}"));
@@ -567,6 +649,156 @@ export function createPreviewBridge(): Bridge {
     },
     async takeUiAction() {
       return null;
+    },
+    // ---------------------------------------------------------- Phase 3 (simulated)
+    async sendInput(id, events) {
+      const p = peers.get(id);
+      if (!p?.online) throw new Error("That device is offline.");
+      const sim = screens.get(id);
+      if (sim) for (const e of events) applySimInput(sim, e);
+    },
+    async systemAction(id, action) {
+      const p = peers.get(id);
+      if (!p?.online) throw new Error("That device is offline.");
+      addLog("system_action_sent", p.info, action.a);
+    },
+    async launchApp(id, app) {
+      const p = peers.get(id);
+      if (!p?.online) throw new Error("That device is offline.");
+      const sim = screens.get(id);
+      if (sim) sim.app = app;
+    },
+    async runRemoteCommand(id, command) {
+      const p = peers.get(id);
+      if (!p?.online) throw new Error("That device is offline.");
+      setTimeout(
+        () =>
+          emit({
+            type: "run_finished",
+            from: id,
+            command,
+            ok: true,
+            output: `(simulated) ${command} finished on ${p.info.name}`,
+          }),
+        600,
+      );
+    },
+    async deckPress(id) {
+      if (!peers.get(id)?.online) throw new Error("That device is offline.");
+    },
+    async requestCatalog(id) {
+      const p = peers.get(id);
+      if (!p?.online) return;
+      const phone = p.info.kind === "phone" || p.info.kind === "tablet";
+      const catalog: Catalog = phone
+        ? {
+            apps: ["Camera", "Chrome", "Clock", "Maps", "Messages", "Photos", "Spotify"].map((n) => ({
+              id: `org.example.${n.toLowerCase()}`,
+              name: n,
+            })),
+            commands: [{ id: "torch", name: "Flashlight", confirm: false }],
+            deck: [],
+            system: ["lock", "set_volume"],
+          }
+        : {
+            apps: [],
+            commands: [{ id: "backup", name: "Back up photos", confirm: true }],
+            deck: [],
+            system: ["lock", "sleep", "shutdown", "restart", "set_volume", "set_brightness"],
+          };
+      setTimeout(() => emit({ type: "catalog_received", from: id, catalog }), 150);
+    },
+    async remoteSettings() {
+      return {
+        commands: [...savedCommands],
+        deck: structuredClone(deck),
+        apps: [
+          { id: "firefox.desktop", name: "Firefox" },
+          { id: "org.gnome.Nautilus.desktop", name: "Files" },
+          { id: "code.desktop", name: "Visual Studio Code" },
+          { id: "obs.desktop", name: "OBS Studio" },
+          { id: "spotify.desktop", name: "Spotify" },
+        ],
+        obs_url: obsUrl,
+        obs_password_set: false,
+        api: { ...api },
+      };
+    },
+    async saveCommands(list) {
+      savedCommands = list.filter((c) => c.name.trim() && c.command.trim());
+    },
+    async saveDeck(pages) {
+      deck = structuredClone(pages);
+    },
+    async testCommand(command) {
+      return [true, `(preview) would run: ${command}`];
+    },
+    async tryDeckAction(action) {
+      if (action.kind === "obs_scene") throw new Error("OBS isn't reachable from the browser preview.");
+    },
+    async setObs(url) {
+      obsUrl = url;
+    },
+    async setLocalApi(enabled) {
+      api = { ...api, enabled, port: enabled ? 47811 : null };
+      return { ...api };
+    },
+    async resetApiToken() {
+      api = { ...api, token: randomHex(64) };
+      return { ...api };
+    },
+    async screenWatch(id, maxWidth, fps, onFrame) {
+      const p = peers.get(id);
+      if (!p?.online) throw new Error("That device is offline.");
+      const canvas = typeof document !== "undefined" ? document.createElement("canvas") : null;
+      if (!canvas?.getContext("2d")) throw new Error("This browser can't draw the simulated screen.");
+      const sim: SimScreen = screens.get(id) ?? {
+        name: p.info.name,
+        touches: [],
+        typed: "",
+        app: null,
+        timer: 0,
+      };
+      screens.set(id, sim);
+      let seq = 0;
+      const tick = () => {
+        drawSimulatedPhone(canvas, sim, Math.min(maxWidth, 405));
+        canvas.toBlob(
+          async (blob) => {
+            if (!blob || !screens.has(id)) return;
+            const jpeg = new Uint8Array(await blob.arrayBuffer());
+            onFrame({ seq: ++seq, w: canvas.width, h: canvas.height, latencyMs: 18, fps, jpeg });
+          },
+          "image/jpeg",
+          0.8,
+        );
+      };
+      window.clearInterval(sim.timer);
+      sim.timer = window.setInterval(tick, 1000 / Math.min(fps, 15));
+      tick();
+      emit({
+        type: "screen_stats",
+        peer: id,
+        sharing: false,
+        fps: Math.min(fps, 15),
+        latency_ms: 18,
+        kbps: 2400,
+      });
+    },
+    async screenUnwatch(id) {
+      const sim = screens.get(id);
+      if (sim) window.clearInterval(sim.timer);
+      screens.delete(id);
+    },
+    async saveCapture(name, bytes) {
+      // The browser saves it through its own download prompt.
+      const url = URL.createObjectURL(new Blob([bytes as BlobPart]));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      return name;
     },
   };
 }

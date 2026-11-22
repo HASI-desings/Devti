@@ -339,3 +339,174 @@ pub fn battery_history(
 pub fn set_low_battery_threshold(state: State<'_, AppState>, percent: u8) -> CmdResult<()> {
     state.node.set_low_battery_threshold(percent).map_err(err)
 }
+
+// ------------------------------------------------------------- Phase 3
+
+use devti_core::protocol::{InputEvent, SystemAction};
+use tauri::ipc::{Channel, InvokeResponseBody, Request};
+
+use crate::remote::{self, AppEntry, DeckAction, DeckPageDef, SavedCommand};
+
+fn remote_of(app: &AppHandle) -> CmdResult<std::sync::Arc<remote::Remote>> {
+    remote::app_state(app).ok_or_else(|| "remote control isn't ready yet".to_string())
+}
+
+#[tauri::command]
+pub fn send_input(state: State<'_, AppState>, id: String, events: Vec<InputEvent>) -> CmdResult<()> {
+    state.node.send_input(&parse_id(&id)?, events).map_err(err)
+}
+
+#[tauri::command]
+pub fn system_action(state: State<'_, AppState>, id: String, action: SystemAction) -> CmdResult<()> {
+    state.node.system_action(&parse_id(&id)?, action).map_err(err)
+}
+
+#[tauri::command]
+pub fn launch_app(state: State<'_, AppState>, id: String, app: String) -> CmdResult<()> {
+    state.node.launch_app(&parse_id(&id)?, &app).map_err(err)
+}
+
+#[tauri::command]
+pub fn run_remote_command(state: State<'_, AppState>, id: String, command: String) -> CmdResult<()> {
+    state.node.run_command(&parse_id(&id)?, &command).map_err(err)
+}
+
+#[tauri::command]
+pub fn deck_press(state: State<'_, AppState>, id: String, button: String) -> CmdResult<()> {
+    state.node.deck_press(&parse_id(&id)?, &button).map_err(err)
+}
+
+#[tauri::command]
+pub fn request_catalog(state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    state.node.request_catalog(&parse_id(&id)?).map_err(err)
+}
+
+#[derive(Serialize)]
+pub struct RemoteSettings {
+    commands: Vec<SavedCommand>,
+    deck: Vec<DeckPageDef>,
+    apps: Vec<AppEntry>,
+    obs_url: String,
+    obs_password_set: bool,
+    api: serde_json::Value,
+}
+
+#[tauri::command]
+pub fn remote_settings(app: AppHandle, state: State<'_, AppState>) -> CmdResult<RemoteSettings> {
+    let r = remote_of(&app)?;
+    Ok(RemoteSettings {
+        commands: r.commands(),
+        deck: r.deck(),
+        apps: r.apps(),
+        obs_url: state.node.setting(remote::SETTING_OBS_URL).ok().flatten().unwrap_or_else(|| "ws://127.0.0.1:4455".into()),
+        obs_password_set: state.node.setting(remote::SETTING_OBS_PASSWORD).ok().flatten().is_some_and(|p| !p.is_empty()),
+        api: r.api_info(),
+    })
+}
+
+#[tauri::command]
+pub fn save_commands(app: AppHandle, commands: Vec<SavedCommand>) -> CmdResult<()> {
+    remote_of(&app)?.save_commands(commands).map_err(err)
+}
+
+#[tauri::command]
+pub fn save_deck(app: AppHandle, pages: Vec<DeckPageDef>) -> CmdResult<()> {
+    remote_of(&app)?.save_deck(pages).map_err(err)
+}
+
+/// Runs a command line from the editor's "Test" button; returns `(ok, output)`.
+#[tauri::command]
+pub async fn test_command(command: String) -> (bool, String) {
+    remote::run_shell(&command).await
+}
+
+/// Tries a deck action on this computer (the editor's "Try it").
+#[tauri::command]
+pub async fn try_deck_action(app: AppHandle, action: DeckAction) -> CmdResult<()> {
+    remote_of(&app)?.do_action(&action).await.map_err(err)
+}
+
+#[tauri::command]
+pub fn set_obs(state: State<'_, AppState>, url: String, password: Option<String>) -> CmdResult<()> {
+    state.node.set_setting(remote::SETTING_OBS_URL, url.trim()).map_err(err)?;
+    if let Some(p) = password {
+        state.node.set_setting(remote::SETTING_OBS_PASSWORD, &p).map_err(err)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_local_api(app: AppHandle, state: State<'_, AppState>, enabled: bool) -> CmdResult<serde_json::Value> {
+    state.node.set_setting(remote::SETTING_LOCAL_API, if enabled { "true" } else { "false" }).map_err(err)?;
+    let r = remote_of(&app)?;
+    r.apply_api_setting();
+    Ok(r.api_info())
+}
+
+#[tauri::command]
+pub fn reset_api_token(app: AppHandle) -> CmdResult<serde_json::Value> {
+    let r = remote_of(&app)?;
+    r.reset_api_token().map_err(err)?;
+    Ok(r.api_info())
+}
+
+/// Starts watching a device's screen. Frames arrive on `frames` as raw bytes:
+/// a 12-byte header (seq u32, width u16, height u16, latency ms u16, fps u8, 0) + JPEG.
+#[tauri::command]
+pub fn screen_watch(
+    state: State<'_, AppState>,
+    id: String,
+    max_width: u32,
+    fps: u8,
+    frames: Channel<InvokeResponseBody>,
+) -> CmdResult<()> {
+    let peer = parse_id(&id)?;
+    let mut rx = state.node.subscribe_frames();
+    state.node.screen_start(&peer, max_width, fps).map_err(err)?;
+    tauri::async_runtime::spawn(async move {
+        loop {
+            match rx.recv().await {
+                Ok(f) if f.from == peer => {
+                    let mut buf = Vec::with_capacity(12 + f.jpeg.len());
+                    buf.extend_from_slice(&(f.seq as u32).to_le_bytes());
+                    buf.extend_from_slice(&(f.w.min(65535) as u16).to_le_bytes());
+                    buf.extend_from_slice(&(f.h.min(65535) as u16).to_le_bytes());
+                    buf.extend_from_slice(&(f.latency_ms.min(65535) as u16).to_le_bytes());
+                    buf.push(f.fps);
+                    buf.push(0);
+                    buf.extend_from_slice(&f.jpeg);
+                    if frames.send(InvokeResponseBody::Raw(buf)).is_err() {
+                        break;
+                    }
+                }
+                Ok(_) => {}
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                Err(_) => break,
+            }
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn screen_unwatch(state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    state.node.screen_stop(&parse_id(&id)?).map_err(err)
+}
+
+/// Saves a screenshot or recording of a mirrored device into the received-files folder.
+/// Body: raw bytes; header `x-devti-name`: file name.
+#[tauri::command]
+pub fn save_capture(state: State<'_, AppState>, request: Request<'_>) -> CmdResult<String> {
+    let name = request
+        .headers()
+        .get("x-devti-name")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("capture.png")
+        .to_string();
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("expected file bytes".into());
+    };
+    let path = remote::capture_path(&state.node, &name);
+    std::fs::write(&path, bytes).map_err(err)?;
+    Ok(path.to_string_lossy().into())
+}

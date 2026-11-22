@@ -1,0 +1,318 @@
+.pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-bottom: var(--s-4);
+}
+
+.pageTab,
+.pageAdd {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: var(--s-2) var(--s-4);
+  border-radius: 999px;
+  font-weight: 560;
+  font-size: var(--t-13);
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.pageTab[aria-selected="true"] {
+  color: var(--bg);
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.pageAdd {
+  border-style: dashed;
+}
+
+.pageTab:focus-visible,
+.pageAdd:focus-visible,
+.deckButton:focus-visible,
+.deckAdd:focus-visible,
+.swatch:focus-visible,
+.iconPick:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.deckLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--s-6);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .deckLayout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.deckGrid {
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border-radius: var(--r-sheet);
+  background: var(--bg-deep);
+  border: 1px solid var(--line);
+}
+
+.deckButton,
+.deckAdd {
+  all: unset;
+  box-sizing: border-box;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border-radius: 20px;
+  text-align: center;
+  font-size: var(--t-13);
+  font-weight: 560;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    transform var(--d-fast),
+    box-shadow var(--d-fast),
+    background var(--d-fast);
+}
+
+.deckButton {
+  color: var(--text);
+  background:
+    radial-gradient(120% 90% at 30% 0%, color-mix(in oklab, var(--voice) 34%, transparent), transparent 70%),
+    color-mix(in oklab, var(--voice) 10%, var(--surface));
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 14%, transparent),
+    0 0 0 1px color-mix(in oklab, var(--voice) 30%, transparent);
+}
+
+.deckButton :global(svg) {
+  color: var(--voice);
+}
+
+.deckButton:hover {
+  transform: translateY(-2px);
+}
+
+.deckButton[aria-pressed="true"] {
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 14%, transparent),
+    0 0 0 2px var(--voice),
+    0 10px 30px -12px var(--voice);
+}
+
+.deckAdd {
+  color: var(--text-dim);
+  border: 1.5px dashed var(--line-strong);
+}
+
+.deckAdd:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.inspector {
+  position: sticky;
+  top: var(--s-4);
+  padding: var(--s-5);
+  border-radius: var(--r-sheet);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.inspectorEmpty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  color: var(--text-dim);
+}
+
+.inspectorBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.fieldset legend {
+  font-size: var(--t-13);
+  font-weight: 560;
+  color: var(--text-dim);
+  margin-bottom: var(--s-2);
+}
+
+.swatches,
+.icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.swatch {
+  all: unset;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--voice);
+  cursor: pointer;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.swatch[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--voice);
+}
+
+.iconPick {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.iconPick:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.iconPick[aria-pressed="true"] {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.selectLabel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  font-size: var(--t-13);
+  font-weight: 560;
+  color: var(--text-dim);
+}
+
+.select {
+  font: inherit;
+  font-size: var(--t-15);
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  padding: var(--s-2) var(--s-3);
+}
+
+.obs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+}
+
+.commands {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.command {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border-radius: var(--r-sheet);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.commandFields {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--s-3);
+}
+
+.commandFields :global(input) {
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.commandFields > :first-child :global(input) {
+  font-family: inherit;
+}
+
+.commandActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.output {
+  margin: 0;
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--bg-deep);
+  color: var(--danger);
+  font-size: var(--t-13);
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.output[data-ok] {
+  color: var(--text-dim);
+}
+
+.subhead {
+  font-family: var(--font-display);
+  font-size: var(--t-20);
+  font-weight: 620;
+  font-stretch: 88%;
+  margin: var(--s-6) 0 var(--s-2);
+}
+
+.code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.92em;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+
+.codeBlock {
+  margin: 0;
+  padding: var(--s-4);
+  border-radius: var(--r-control);
+  background: var(--bg-deep);
+  border: 1px solid var(--line);
+  font-family: ui-monospace, monospace;
+  font-size: var(--t-13);
+  line-height: 1.6;
+  overflow-x: auto;
+  color: var(--text);
+}

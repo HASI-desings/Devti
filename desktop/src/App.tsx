@@ -3,11 +3,13 @@ import { useCallback, useEffect, useState } from "react";
 import s from "./App.module.css";
 import { Prism } from "./design/Prism";
 import { BatteryPage } from "./features/battery/BatteryPage";
+import { ControlPage } from "./features/control/ControlPage";
 import { DevicePage } from "./features/device/DevicePage";
 import { EcosystemPage } from "./features/ecosystem/EcosystemPage";
 import { FilesPage } from "./features/files/FilesPage";
 import { SendPicker } from "./features/files/SendPicker";
 import { HelpPage } from "./features/help/HelpPage";
+import { MirrorPage } from "./features/mirror/MirrorPage";
 import { NotificationsPage } from "./features/notifications/NotificationsPage";
 import { Done, Onboarding } from "./features/onboarding/Onboarding";
 import { PairPanel } from "./features/pairing/PairPanel";
@@ -170,6 +172,8 @@ export function App() {
           {page === "files" && <FilesPage />}
           {page === "notifications" && <NotificationsPage />}
           {page === "battery" && <BatteryPage />}
+          {page === "control" && <ControlPage />}
+          {page === "mirror" && <MirrorPage />}
           {page === "security" && <SecurityPage onPair={() => setPairOpen(true)} />}
           {page === "settings" && <SettingsPage />}
           {page === "help" && (

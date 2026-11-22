@@ -9,6 +9,7 @@ import { useStore } from "../../state/store";
 import { BatteryMeter, Button, Segmented, Sheet, Switch } from "../../ui";
 import p from "../shell/page.module.css";
 import { DeviceActions } from "./DeviceActions";
+import { DeviceControl } from "./DeviceControl";
 import s from "./DevicePage.module.css";
 
 export const PERMISSION_COPY: { key: keyof Permissions; title: string; hint: string }[] = [
@@ -158,6 +159,8 @@ export function DevicePage() {
             </div>
           </div>
         </section>
+
+        <DeviceControl peer={peer} />
 
         <section className={p.section} aria-labelledby="access">
           <h2 id="access" className={p.sectionTitle}>

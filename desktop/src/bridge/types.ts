@@ -117,7 +117,99 @@ export type NodeEvent =
   | { type: "notification_dismiss_requested"; from: string; key: string }
   | { type: "dnd_changed"; on: boolean; by: string | null }
   | { type: "low_battery"; id: string; name: string; percent: number }
-  | { type: "transfer"; transfer: TransferRecord; rate_bps: number };
+  | { type: "transfer"; transfer: TransferRecord; rate_bps: number }
+  | { type: "remote_input"; from: string; events: InputEvent[] }
+  | { type: "system_requested"; from: string; from_name: string; action: SystemAction }
+  | { type: "launch_requested"; from: string; from_name: string; app: string }
+  | { type: "run_requested"; from: string; from_name: string; command: string }
+  | { type: "run_finished"; from: string; command: string; ok: boolean; output: string }
+  | { type: "deck_pressed"; from: string; from_name: string; button: string }
+  | { type: "catalog_received"; from: string; catalog: Catalog }
+  | { type: "screen_requested"; from: string; from_name: string; on: boolean }
+  | { type: "screen_stats"; peer: string; sharing: boolean; fps: number; latency_ms: number; kbps: number }
+  | { type: "screen_ended"; peer: string };
+
+// ------------------------------------------------------------------ Phase 3
+
+export type MouseButton = "left" | "right" | "middle";
+
+/** Input for another device to perform. Coordinates in move_to/tap/swipe are 0..1. */
+export type InputEvent =
+  | { k: "move"; dx: number; dy: number }
+  | { k: "move_to"; x: number; y: number }
+  | { k: "button"; button: MouseButton; down: boolean }
+  | { k: "click"; button: MouseButton; count: number }
+  | { k: "scroll"; dx: number; dy: number }
+  | { k: "text"; text: string }
+  | { k: "key"; key: string; mods: string[] }
+  | { k: "media"; action: string }
+  | { k: "tap"; x: number; y: number }
+  | { k: "long_press"; x: number; y: number }
+  | { k: "swipe"; x1: number; y1: number; x2: number; y2: number; ms: number }
+  | { k: "nav"; action: string };
+
+export type SystemAction =
+  | { a: "lock" }
+  | { a: "sleep" }
+  | { a: "shutdown" }
+  | { a: "restart" }
+  | { a: "sign_out" }
+  | { a: "set_volume"; percent: number }
+  | { a: "set_brightness"; percent: number };
+
+export interface Catalog {
+  apps: { id: string; name: string }[];
+  commands: { id: string; name: string; confirm: boolean }[];
+  deck: { name: string; buttons: { id: string; label: string; icon: string; voice: string }[] }[];
+  system: string[];
+}
+
+export interface SavedCommand {
+  id: string;
+  name: string;
+  command: string;
+  confirm: boolean;
+}
+
+export type DeckActionKind = "hotkey" | "launch" | "command" | "media" | "text" | "url" | "obs_scene";
+
+export interface DeckButtonDef {
+  id: string;
+  label: string;
+  icon: string;
+  voice: string;
+  action: { kind: DeckActionKind; value: string };
+}
+
+export interface DeckPageDef {
+  name: string;
+  buttons: DeckButtonDef[];
+}
+
+export interface ApiInfo {
+  enabled: boolean;
+  port: number | null;
+  token: string;
+}
+
+export interface RemoteSettings {
+  commands: SavedCommand[];
+  deck: DeckPageDef[];
+  apps: { id: string; name: string }[];
+  obs_url: string;
+  obs_password_set: boolean;
+  api: ApiInfo;
+}
+
+/** One decoded screen frame header + JPEG bytes. */
+export interface ScreenFrame {
+  seq: number;
+  w: number;
+  h: number;
+  latencyMs: number;
+  fps: number;
+  jpeg: Uint8Array;
+}
 
 export interface NotifAction {
   id: string;
@@ -265,4 +357,25 @@ export interface Bridge {
   setLowBatteryThreshold(percent: number): Promise<void>;
   /** Native drag and drop of files onto the window (paths + drop point). */
   onFileDrop(cb: (paths: string[], x: number, y: number) => void): () => void;
+
+  // Phase 3 — control
+  sendInput(id: string, events: InputEvent[]): Promise<void>;
+  systemAction(id: string, action: SystemAction): Promise<void>;
+  launchApp(id: string, app: string): Promise<void>;
+  runRemoteCommand(id: string, command: string): Promise<void>;
+  deckPress(id: string, button: string): Promise<void>;
+  requestCatalog(id: string): Promise<void>;
+  remoteSettings(): Promise<RemoteSettings>;
+  saveCommands(commands: SavedCommand[]): Promise<void>;
+  saveDeck(pages: DeckPageDef[]): Promise<void>;
+  testCommand(command: string): Promise<[boolean, string]>;
+  tryDeckAction(action: DeckButtonDef["action"]): Promise<void>;
+  setObs(url: string, password: string | null): Promise<void>;
+  setLocalApi(enabled: boolean): Promise<ApiInfo>;
+  resetApiToken(): Promise<ApiInfo>;
+  /** Starts a device's screen; frames arrive on `onFrame` until `screenUnwatch`. */
+  screenWatch(id: string, maxWidth: number, fps: number, onFrame: (f: ScreenFrame) => void): Promise<void>;
+  screenUnwatch(id: string): Promise<void>;
+  /** Saves a screenshot/recording into the received-files folder; returns its path. */
+  saveCapture(name: string, bytes: Uint8Array): Promise<string>;
 }

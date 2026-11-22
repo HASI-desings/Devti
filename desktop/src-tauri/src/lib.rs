@@ -10,6 +10,7 @@
 mod bluetooth;
 mod commands;
 mod continuity;
+mod remote;
 mod system;
 mod tray;
 
@@ -96,6 +97,9 @@ pub fn run() {
             let secrets = devti_core::secret::best_available("app.devti.hub", data_dir.join("secrets"))?;
             let node = tauri::async_runtime::block_on(Node::start(cfg, Arc::from(secrets)))?;
 
+            let remote = remote::Remote::start(&handle, node.clone(), data_dir.clone());
+            app.manage(remote.clone());
+
             // Forward every core event to the UI.
             let mut events = node.subscribe();
             let emitter = handle.clone();
@@ -106,6 +110,11 @@ pub fn run() {
                         Ok(ev) => {
                             tray::on_node_event(&emitter, &ev);
                             continuity::on_node_event(&emitter, &event_node, &ev);
+                            remote::on_node_event(&emitter, &remote, &ev);
+                            // Input is high-frequency and only for the host; the UI doesn't need it.
+                            if matches!(ev, devti_core::NodeEvent::RemoteInput { .. }) {
+                                continue;
+                            }
                             let _ = emitter.emit("devti://event", ev);
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
@@ -167,6 +176,23 @@ pub fn run() {
             commands::choose_downloads_dir,
             commands::battery_history,
             commands::set_low_battery_threshold,
+            commands::send_input,
+            commands::system_action,
+            commands::launch_app,
+            commands::run_remote_command,
+            commands::deck_press,
+            commands::request_catalog,
+            commands::remote_settings,
+            commands::save_commands,
+            commands::save_deck,
+            commands::test_command,
+            commands::try_deck_action,
+            commands::set_obs,
+            commands::set_local_api,
+            commands::reset_api_token,
+            commands::screen_watch,
+            commands::screen_unwatch,
+            commands::save_capture,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Devti");

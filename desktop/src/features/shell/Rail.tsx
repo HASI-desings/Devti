@@ -8,6 +8,7 @@ const ITEMS: { page: Page; label: string; icon: IconName }[] = [
   { page: "files", label: "Files", icon: "folder" },
   { page: "notifications", label: "Alerts", icon: "bell" },
   { page: "battery", label: "Battery", icon: "battery" },
+  { page: "control", label: "Control", icon: "deck" },
   { page: "security", label: "Security", icon: "shield" },
   { page: "settings", label: "Settings", icon: "settings" },
   { page: "help", label: "Help", icon: "help" },
@@ -20,7 +21,7 @@ export function Rail({ onPair }: { onPair: () => void }) {
   const mode = useStore((st) => st.mode);
   const unread = useStore((st) => st.notifications.length);
   const active_ = useStore((st) => Object.values(st.transfers).filter((t) => t.state === "active").length);
-  const active = page === "device" ? "ecosystem" : page;
+  const active = page === "device" || page === "mirror" ? "ecosystem" : page;
   return (
     <nav className={s.rail} aria-label="Main">
       <div className={s.brand} title="Devti">

@@ -30,6 +30,7 @@ use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
 
 pub use events::*;
+pub use transfer::safe_file_name;
 
 use crate::discovery::{Advertisement, DiscoveredDevice, Discovery, DiscoveryEvent};
 use crate::error::{Error, Result};

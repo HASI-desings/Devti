@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   Bridge,
+  Catalog,
   DeviceInfo,
   DiscoveredDevice,
   LocalSnapshot,
@@ -22,7 +23,9 @@ export type Page =
   | "battery"
   | "security"
   | "settings"
-  | "help";
+  | "help"
+  | "control"
+  | "mirror";
 
 export type PairingStage =
   | { stage: "waiting" }
@@ -71,6 +74,14 @@ interface State {
   ringing: { from: string; name: string } | null;
   /** Files waiting for the user to pick a device (drag and drop, Send to Devti). */
   sendPaths: string[] | null;
+  /** What other devices offer (apps, saved commands, deck, system actions). */
+  catalogs: Record<string, Catalog>;
+  /** Latest results of commands this computer ran on other devices. */
+  runResults: { id: number; from: string; command: string; ok: boolean; output: string; ts: number }[];
+  /** Live screen stats per device (viewing or sharing). */
+  screenStats: Record<string, { sharing: boolean; fps: number; latency_ms: number; kbps: number }>;
+  /** Devices watching this computer's screen right now. */
+  viewers: Record<string, string>;
 }
 
 interface Actions {
@@ -122,6 +133,10 @@ export const useStore = create<State & Actions>((set, get) => ({
   transfers: {},
   ringing: null,
   sendPaths: null,
+  catalogs: {},
+  runResults: [],
+  screenStats: {},
+  viewers: {},
 
   load(s, mode) {
     const peers = Object.fromEntries(s.peers.map((p) => [p.info.id, p]));
@@ -255,6 +270,44 @@ export const useStore = create<State & Actions>((set, get) => ({
       }
       case "notification_action_requested":
       case "notification_dismiss_requested":
+        break;
+      case "catalog_received":
+        set({ catalogs: { ...st.catalogs, [e.from]: e.catalog } });
+        break;
+      case "run_finished": {
+        const r = {
+          id: toastSeq++,
+          from: e.from,
+          command: e.command,
+          ok: e.ok,
+          output: e.output,
+          ts: Date.now(),
+        };
+        set({ runResults: [r, ...st.runResults].slice(0, 30) });
+        break;
+      }
+      case "screen_stats":
+        set({ screenStats: { ...st.screenStats, [e.peer]: e } });
+        break;
+      case "screen_ended": {
+        const screenStats = { ...st.screenStats };
+        delete screenStats[e.peer];
+        set({ screenStats });
+        if (st.page === "mirror" && st.deviceId === e.peer) get().toast("The screen stopped.", "info");
+        break;
+      }
+      case "screen_requested": {
+        const viewers = { ...st.viewers };
+        if (e.on) viewers[e.from] = e.from_name;
+        else delete viewers[e.from];
+        set({ viewers });
+        break;
+      }
+      case "system_requested":
+      case "launch_requested":
+      case "run_requested":
+      case "deck_pressed":
+      case "remote_input":
         break;
     }
   },

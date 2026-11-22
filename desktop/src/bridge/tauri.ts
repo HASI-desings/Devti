@@ -1,8 +1,22 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { BluetoothEvent, Bridge, NodeEvent } from "./types";
+import type { BluetoothEvent, Bridge, NodeEvent, ScreenFrame } from "./types";
+
+/** 12-byte header (seq u32, w u16, h u16, latency u16, fps u8, 0) + JPEG; see commands.rs. */
+export function decodeFrame(buf: ArrayBuffer): ScreenFrame | null {
+  if (buf.byteLength < 12) return null;
+  const v = new DataView(buf);
+  return {
+    seq: v.getUint32(0, true),
+    w: v.getUint16(4, true),
+    h: v.getUint16(6, true),
+    latencyMs: v.getUint16(8, true),
+    fps: v.getUint8(10),
+    jpeg: new Uint8Array(buf, 12),
+  };
+}
 
 /** The real bridge: every call goes to the Rust core running inside the Hub. */
 export function createTauriBridge(): Bridge {
@@ -99,5 +113,29 @@ export function createTauriBridge(): Bridge {
         unlisten?.();
       };
     },
+    sendInput: (id, events) => invoke("send_input", { id, events }),
+    systemAction: (id, action) => invoke("system_action", { id, action }),
+    launchApp: (id, app) => invoke("launch_app", { id, app }),
+    runRemoteCommand: (id, command) => invoke("run_remote_command", { id, command }),
+    deckPress: (id, button) => invoke("deck_press", { id, button }),
+    requestCatalog: (id) => invoke("request_catalog", { id }),
+    remoteSettings: () => invoke("remote_settings"),
+    saveCommands: (commands) => invoke("save_commands", { commands }),
+    saveDeck: (pages) => invoke("save_deck", { pages }),
+    testCommand: (command) => invoke("test_command", { command }),
+    tryDeckAction: (action) => invoke("try_deck_action", { action }),
+    setObs: (url, password) => invoke("set_obs", { url, password }),
+    setLocalApi: (enabled) => invoke("set_local_api", { enabled }),
+    resetApiToken: () => invoke("reset_api_token"),
+    async screenWatch(id, maxWidth, fps, onFrame) {
+      const frames = new Channel<ArrayBuffer>();
+      frames.onmessage = (buf) => {
+        const f = decodeFrame(buf);
+        if (f) onFrame(f);
+      };
+      await invoke("screen_watch", { id, maxWidth, fps, frames });
+    },
+    screenUnwatch: (id) => invoke("screen_unwatch", { id }),
+    saveCapture: (name, bytes) => invoke("save_capture", bytes, { headers: { "x-devti-name": name } }),
   };
 }
