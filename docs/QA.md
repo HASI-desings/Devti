@@ -5,6 +5,59 @@ the results recorded here. A phase is only marked done when all of this passes.
 
 ---
 
+## Phase 6 — Communication and automation
+
+**Date:** 2026-11-22
+
+### Automated results
+
+| Suite | Result | Where it runs |
+|---|---|---|
+| Core unit tests | 81 / 81 pass; new: rules (battery fires once on the way down, cooldowns and disabled rules, device matching by id or name, JSON round trip) and proximity (tokens rotate per epoch and differ per device; smoothing and hysteresis) | local + CI (Linux, Windows) |
+| Core end-to-end | 25 / 25 pass; new `tests/comms.rs`: conversations, messages and sending (with permission refusals), calls and handoff (unsafe links refused), live audio and the camera as a webcam over real QUIC | local + CI |
+| Mobile bindings (JVM) | 7 / 7 pass; the pairing test now drives Phase 6 through the generated Kotlin API with the app's own models (a text, conversations, a failed send, a call, handoffs both ways, a `file:` link refused, the proximity token, a microphone stream, a camera offer). New `PureCommsTest`: shared-link detection, YouTube resume time, call-state folding (Android 9's double broadcasts), NV21 rotation | local + CI |
+| Android unit tests + APK | pass; release APK built with the Phase 6 services, receivers and permissions | CI |
+| Hub host unit tests | 18 / 18 pass (adds the v4l2 format struct size, YUYV conversion and YouTube time links) | local + CI |
+| Desktop UI unit tests (Vitest) | 18 / 18 pass | local + CI |
+| Desktop UI flows (Playwright) | 18 / 18 pass (adds messages + reply + call card, and automation defaults + a new rule) | CI |
+| Real-app smoke test | pass (unchanged flows on the real WebKitGTK binary) | CI |
+
+### Bugs found and fixed during Phase 6 QA
+- **The walk-away beacon was invisible to the Hub's scanner.** The scan filtered on service UUIDs,
+  but the phone's advert carries the UUID only as service data (a UUID list doesn't fit next to
+  the token in 31 bytes). The Hub now scans unfiltered, re-reads only addresses it has seen with
+  the beacon, and handles BlueZ's property updates, which carry the signal strength.
+- **Two call cards per call on Android 9+.** Android sends each call-state change twice (first
+  without the number). `Pure.nextCall` keeps one call and fills the number in. Covered by
+  `callStatesFoldIntoOneCall`.
+- **New texts landed in a separate conversation** on the computer, because the receiver
+  invented a thread id. It now uses Android's own thread id for the number.
+- **The beacon never started if Bluetooth was off** when it was turned on. It now retries every
+  minute.
+- **Audio kept recording after the computer left.** The share now stops after 5 seconds of
+  audio the computer can't take.
+- **Windows build**: `cpal` 0.18 takes the stream configuration by value; CI caught it.
+- **Camera frames were encoded twice** to rotate them (JPEG → bitmap → JPEG). They're now
+  rotated in NV21 before the only encode; covered by `nv21RotationKeepsEveryPixel`.
+
+### Not verifiable in the build environment
+- No Android device, SIM, camera or Bluetooth adapter is available here. That covers real texts
+  and calls, `TelecomManager` answering, playback capture, CameraX, BLE advertising and scanning,
+  and v4l2loopback. Each path is unit-tested where the logic is pure, compiled in CI, and
+  exercised end to end through the core with simulated payloads. The manual checklist for
+  Phase 6 is pending hardware:
+  1. Allow texts and calls; a received text appears in Messages within a second; a reply from
+     the Hub arrives from the phone's number.
+  2. A call rings the Hub; Answer, Mute and End act on the phone.
+  3. Share a YouTube link to Devti; it opens on the computer. "Continue there" opens a playing
+     video on the phone at the same second.
+  4. Microphone → *Devti-phone-microphone* records in a computer app; Phone sound plays music
+     on the computer's earbuds.
+  5. Webcam → "Devti Camera" shows the phone camera upright in a browser.
+  6. Turn on walk-away and the lock rule; walk away → the computer locks within ~30 s.
+
+---
+
 ## Phase 5 — Bluetooth
 
 **Date:** 2026-11-22

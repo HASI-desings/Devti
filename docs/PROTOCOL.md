@@ -116,7 +116,7 @@ CatalogRequest = { "t": "catalog_request" }                      ; needs `contro
 Catalog = { "t": "catalog", "catalog": {
   "apps": [* { "id", "name" }], "commands": [* { "id", "name", "confirm": bool }],
   "deck": [* { "name", "buttons": [* { "id", "label", "icon", "voice" }] }], "system": [* tstr] } }
-ScreenStart = { "t": "screen_start", "max_width": 320..3840, "fps": 1..60 }   ; needs `screen_view`
+ScreenStart = { "t": "screen_start", "max_width": 320..3840, "fps": 1..60, ? "source": "screen" / "camera" }   ; needs `screen_view`
 ScreenStop  = { "t": "screen_stop" }
 ```
 
@@ -125,6 +125,49 @@ ScreenStop  = { "t": "screen_stop" }
   volume and brightness system actions.
 - Command lines and deck actions never leave the device that defines them: remotes only see ids,
   names and labels.
+
+### Phase 6 — communication
+
+```cddl
+CameraOffer = { "t": "camera_offer" }                      ; "use my camera as your webcam"; the viewer answers with ScreenStart{source:"camera"}
+SmsThreadsRequest = { "t": "sms_threads_request" }         ; needs `notifications` on the phone
+SmsThreads  = { "t": "sms_threads", "threads": [* SmsThread] }            ; the receiver keeps ≤ 200
+SmsMessagesRequest = { "t": "sms_messages_request", "thread": tstr }
+SmsMessages = { "t": "sms_messages", "thread": tstr, "messages": [* SmsMessage] }   ; oldest first, the receiver keeps ≤ 500
+SmsSend     = { "t": "sms_send", "to": [1*20 tstr], "text": tstr .size (1..10000) }   ; needs `notifications` and `commands`
+SmsResult   = { "t": "sms_result", "ok": bool, ? "error": tstr }
+Sms         = { "t": "sms", "message": SmsMessage }        ; a new text, pushed by the phone
+Call        = { "t": "call", "call": CallInfo }            ; pushed by the phone on every state change
+CallAction  = { "t": "call_action", "id": tstr, "action": "answer" / "decline" / "end" / "mute" / "unmute" }   ; needs `notifications` and `commands`
+Handoff     = { "t": "handoff", "item": HandoffItem }      ; needs `clipboard`; links must be http(s)
+
+SmsThread  = { "id": tstr, "addresses": [* tstr], "names": [* tstr], "snippet": tstr, "ts": uint, "unread": uint }
+SmsMessage = { "id": tstr, "thread": tstr, "address": tstr, "name": tstr, "body": tstr, "ts": uint, "outgoing": bool }
+CallInfo   = { "id": tstr, "state": "ringing" / "active" / "ended" / "missed", "number": tstr, "name": tstr, "incoming": bool, "ts": uint }
+HandoffItem = { "kind": "url" / "text" / "media", ? "url": tstr, ? "title": tstr, ? "text": tstr, ? "position_ms": uint }
+```
+
+- Every text field is trimmed of control characters and capped (numbers 64, names 80,
+  snippets 200 characters) before it is shown.
+- Texts and calls only flow *from* a device that has them (a phone) *to* devices it allowed
+  `notifications`; acting on them also needs `commands`. The phone does the sending itself, so
+  texts go from its own number.
+- A handoff that isn't an http(s) link or plain text is refused on both ends (no `file:`,
+  `javascript:` or app schemes).
+
+### Audio stream (`"stream": "audio"`, opened by the device that has the sound)
+
+```cddl
+StreamOpen = { "stream": "audio", "kind": "relay" / "mic", "sample_rate": 8000..96000, "channels": 1..2 }
+Chunk      = { "seq": uint, "pcm": bstr .size (1..65472) }   ; interleaved signed 16-bit little-endian
+```
+
+`relay` is what the sender is playing (it comes out of the receiver's speakers or earbuds);
+`mic` is its microphone (the receiver exposes it as a microphone). The receiver needs
+`bluetooth` permission for the sender (the audio-routing permission) and resets the stream
+otherwise. The sender queues at most 8 chunks (160 ms of 20 ms chunks) and drops new ones
+when the network is behind, so delay never builds up. The Hub plays with an 80 ms buffer on
+Linux (`pacat`) and drops anything older than half a second on Windows.
 
 ### Screen stream (`"stream": "screen"`, opened by the sharer after `ScreenStart`)
 

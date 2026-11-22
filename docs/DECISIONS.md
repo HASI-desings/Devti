@@ -461,6 +461,74 @@ hardware in this project yet, so they are `verified: false` and the UI says **"U
 hardware"**. JBL's party mode and EQ use a closed protocol nobody has documented, so the JBL
 profile only names the device and says why.
 
+## Phase 6 — final decisions
+
+### D-42 · Texts and calls — Decided: **the phone's own SMS store and telephony APIs**
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Read Android's SMS provider, send with `SmsManager`, watch `PHONE_STATE`, act with `TelecomManager`** | Works next to the user's messaging app; texts go from their number | Needs SMS, contacts and phone permissions (the app asks, and says why); no MMS or RCS |
+| Become the default SMS app | Full control, MMS | Replaces the user's messaging app — far too invasive |
+| Pair with Google Messages for Web / RCS | Rich chats | Closed, undocumented protocol; account-bound |
+
+Call **audio** stays on the phone: Android only lets the default dialer (`InCallService`) or VoIP
+apps (`ConnectionService`) touch a carrier call's audio. Devti shows the call card and its
+buttons (answer, decline, end, mute); to talk through the computer, the user also pairs the
+phone with it as a Bluetooth headset (Hands-Free Profile, handled by the OS). Said in the app,
+the Hub and the README.
+
+### D-43 · Live audio — Decided: **raw 16-bit PCM over a QUIC stream** (revises D-27)
+
+| Option | Pros | Cons |
+|---|---|---|
+| **PCM s16le, 48 kHz, 20 ms chunks** | No codec to build for three platforms; zero codec delay; easy to verify | ~1.5 Mbit/s stereo — fine on a LAN, too much over the internet |
+| Opus (`libopus`) | ~10× smaller | C library cross-compiled for Android ABIs and Windows; adds a codec to fuzz |
+| WebRTC audio | Echo cancellation, FEC | Heavy dependency, its own transport and identity |
+
+Devti is LAN-first, so PCM wins for now; Opus stays the upgrade path for Phase 7's remote
+access. The Hub plays through `pacat` (PipeWire/PulseAudio) on Linux and `cpal` (WASAPI) on
+Windows. The phone-as-microphone on Linux is a PipeWire/PulseAudio null sink plus a
+remapped source named "Devti-phone-microphone", which any app can choose.
+
+### D-44 · Phone camera as a webcam — Decided: **reuse the screen frame path; v4l2loopback on Linux** (refines D-29)
+
+The phone sends CameraX frames through the same adaptive JPEG stream as screen sharing
+(`ScreenStart.source = "camera"`), so latency handling and tests are shared. On Linux the Hub
+writes them to a `v4l2loopback` device as YUYV, so browsers and video apps see a camera.
+Windows has no free virtual-camera driver Devti can ship unsigned, so the camera shows in the
+Hub window and the app explains how to pass it on with OBS's free virtual camera.
+
+### D-45 · Automation — Decided: **a small declarative rules engine in core**
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Triggers + actions as JSON rules, edge-triggered, with cooldowns** | Easy to edit in a form, to test and to explain; can't run arbitrary code | Only what we built in |
+| Embedded scripting (Rhai / Lua) | Unlimited | A sandbox to secure, and a language to learn |
+| Home Assistant / Node-RED integration | Huge ecosystem | Requires running another server |
+
+Arbitrary code is Phase 7's job (Wasm plugins with permissions). Rules fire on the *edge*
+(battery crossing below a level, not every report below it) and wait out a cooldown.
+
+### D-46 · Proximity — Decided: **the phone advertises a rotating token; the Hub listens**
+
+| Option | Pros | Cons |
+|---|---|---|
+| **BLE service data with an 8-byte HMAC token that changes every 15 minutes** | Low power; nobody else can recognise or follow the phone; no connection | Signal strength is noisy (smoothed, with hysteresis) |
+| Wi-Fi presence (connection drops) | No Bluetooth | Takes tens of seconds; phones sleep their Wi-Fi |
+| RSSI of a connected Bluetooth link | Accurate | Needs a permanent connection |
+
+The token is HMAC-SHA256(the phone's certificate fingerprint, "devti-proximity" ‖ 15-minute
+epoch), first 8 bytes. Only paired computers know the fingerprint; they accept the current and
+the previous epoch. Near ≥ −65 dBm, away ≤ −80 dBm (smoothed), and "away" after 30 s silent.
+The Hub scans without a service filter because the UUID only travels as service data.
+
+### D-47 · Handoff — Decided: **links (with media time) and text, nothing else**
+
+A handoff opens a web link (http/https only — checked on both ends) or puts text on the
+clipboard. YouTube links carry `t=` so a video resumes at the same second. On Linux, "continue on
+phone" reads the playing media's URL and position over MPRIS; elsewhere it sends the link on the
+clipboard.
+
 ---
 
 ## Deviation log
@@ -477,3 +545,6 @@ profile only names the device and says why.
 | D-20: windows-capture + PipeWire by hand | xcap 0.9 (D-36) | One API for X11, Windows and Wayland (portal) |
 | "One keyboard and mouse" on every desktop | X11 and Windows; not Wayland (D-38) | Wayland has no stable input-capture API yet |
 | Vendor controls on Windows and Linux | Linux (BlueZ) now; Windows BLE + standard battery (D-40) | No free, stable RFCOMM/L2CAP binding on Windows yet |
+| D-27: Opus audio over datagrams | PCM over a QUIC stream (D-43) | No codec to cross-compile; LAN bandwidth is plentiful; Opus kept for remote access |
+| D-29: Windows virtual camera | Camera shown in the Hub; OBS virtual camera documented (D-44) | A camera driver must be signed to install; no free signed one Devti can ship |
+| Calls on the computer | Call card and controls; audio via Bluetooth Hands-Free (D-42) | Android gives carrier-call audio only to the default dialer |

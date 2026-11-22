@@ -60,6 +60,32 @@ const MATRIX: { feature: string; cells: [Support, Support, Support, Support, Sup
     cells: ["yes", "yes", "no", "no", "no"],
     note: "Wayland doesn't let apps capture the pointer yet.",
   },
+  {
+    feature: "Texts from an Android phone: read, reply, new",
+    cells: ["yes", "yes", "yes", "yes", "no"],
+    note: "The phone sends from its own number. iPhone doesn't let apps read texts.",
+  },
+  {
+    feature: "Calls: who's calling, answer, decline, mute, end",
+    cells: ["yes", "yes", "yes", "yes", "no"],
+    note: "Call audio stays on the phone; pair it as a Bluetooth headset to talk here.",
+  },
+  { feature: "Continue on another device", cells: ["yes", "yes", "yes", "yes", "no"] },
+  {
+    feature: "Phone sound and microphone on this computer",
+    cells: ["partial", "yes", "yes", "yes", "no"],
+    note: "Windows needs the free VB-Audio Virtual Cable for the microphone. Phone sound needs Android 10.",
+  },
+  {
+    feature: "Phone camera as a webcam",
+    cells: ["no", "yes", "yes", "yes", "no"],
+    note: "Linux uses v4l2loopback. On Windows the camera shows in Devti.",
+  },
+  {
+    feature: "Rules, and locking when your phone walks away",
+    cells: ["yes", "yes", "yes", "yes", "no"],
+    note: "Walk-away needs Bluetooth on this computer.",
+  },
 ];
 const COLUMNS = ["Windows", "Linux X11", "Linux Wayland", "Android", "iPhone and iPad"];
 

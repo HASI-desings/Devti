@@ -5,6 +5,31 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Phase 6 — Communication and automation
+#### Added
+- Core: texts (conversations, messages, send, new-text push), calls (state, answer, decline,
+  end, mute), handoff (http(s) links with media time, or text), live PCM audio streams (relay
+  and microphone), the camera as a screen source, a rules engine (9 triggers, 8 actions,
+  edge-triggered with cooldowns) and the rotating proximity token with a smoothed tracker.
+- Hub: **Messages** page, call card on every page, **Automation** page with a rule builder and
+  run history, "Continue there" and "Use camera" on a phone's page; native notifications for
+  calls and texts; phone sound and microphone playback (virtual microphone on Linux);
+  v4l2loopback webcam on Linux; MPRIS "what's playing" on Linux; a BLE scanner for the
+  walk-away beacon.
+- Android: texts and calls bridged to the computer (with the permissions asked on Home),
+  links shared to Devti open on the computer, the phone's microphone, sound (Android 10+) and
+  camera shared with the computer, and the walk-away beacon.
+- Tests: core end-to-end for texts, calls, handoff, audio and the camera; rules and proximity
+  unit tests; Phase 6 binding round trips and the app's pure decisions on the JVM; UI flows for
+  messages, the call card and automation.
+
+#### Changed
+- Live audio is PCM instead of Opus for now (D-43); the camera reuses the screen frame path
+  (D-44).
+
+#### Fixed
+- Windows build: `cpal` 0.18 takes the stream configuration by value.
+
 ### Phase 5 — Bluetooth
 #### Added
 - Device profile library in core: YAML profiles with matching, channels (L2CAP, RFCOMM, GATT),

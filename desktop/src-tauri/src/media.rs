@@ -315,7 +315,7 @@ mod player {
             let b = buf.clone();
             let stream = device
                 .build_output_stream(
-                    &config,
+                    config,
                     move |out: &mut [i16], _| {
                         let mut q = b.lock().unwrap();
                         for s in out.iter_mut() {

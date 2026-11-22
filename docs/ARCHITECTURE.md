@@ -124,8 +124,28 @@ than corrupted, and an unreadable peer row is skipped and logged, never fatal.
   payload templates, readers for values and per-component batteries, vendor framers, and the
   draft-profile exporter. It's pure and has no radio code, so every platform shares it; it is
   unit-tested and fuzzed.
+- **`comms`** (Phase 6): texts, calls and handoffs. The phone answers requests for its
+  conversations and messages and performs sends and call actions; computers keep a cleaned,
+  capped copy (control characters stripped, numbers 64 / names 80 / snippets 200 characters,
+  200 threads, 500 messages per thread). Handoffs that aren't http(s) links or text are refused
+  on both ends.
+- **`audio`** (Phase 6): live PCM on an `audio` stream. `start_audio` returns an `AudioSender`
+  whose `push` never blocks: a queue of 8 chunks drops new audio when the network is behind,
+  so delay can't build up. Receivers get `AudioPacket`s on their own broadcast channel.
+- **`screen` sources** (Phase 6): a viewer can ask for the `camera` instead of the screen. The
+  frame path, flow control and adaptation are the same, so the phone's camera inherits
+  them.
 - **`api`** (feature `api`, Hub only): the local HTTP + WebSocket API (axum on 127.0.0.1, bearer
   token, loopback-Host check). The `cli/` crate is its client: `devti send|ring|clip|run|watch`.
+
+### `rules` — automation (Phase 6)
+Pure, platform-free: triggers (device connected/disconnected, battery below, accessory
+connected, phone near/away, time of day, app opened, network changed), actions (notify, lock,
+DND, run a command, open an app, switch audio output, set an accessory control, ring a device),
+and an `Engine` that turns *signals* into actions. Battery rules fire on the edge, every rule
+has a cooldown, and disabled rules never fire. The proximity half is here too: the rotating
+token (HMAC-SHA256 of the phone's fingerprint and the 15-minute epoch) and a tracker that
+smooths signal strength with hysteresis. The Hub feeds signals in and performs the actions.
 
 ---
 
@@ -199,6 +219,23 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
   - The Windows backend uses low-level hooks.
   - Either way, Scroll Lock or moving back past the edge returns control.
 
+- **`comms_host.rs`** (Phase 6): incoming calls and texts become native notifications (the UI
+  shows the call card and the conversations); handoffs open in the default browser or land on
+  the clipboard. "Continue on phone" sends what's playing (Linux: MPRIS URL + position, so a
+  video resumes at the same second) or the link on the clipboard.
+- **`media.rs`** (Phase 6): audio and video other devices send here.
+  - *Relay*: the phone's sound plays on the current output — Bluetooth earbuds included —
+    through `pacat` (Linux, 80 ms buffer) or `cpal`/WASAPI (Windows).
+  - *Microphone*: on Linux a PipeWire/PulseAudio null sink plus remapped source, "Devti-phone-microphone", that any app can pick. On Windows it plays into VB-Audio's free "CABLE Input"
+    when installed, and says so otherwise.
+  - *Webcam*: on Linux, camera frames are decoded and written to a `v4l2loopback` device as
+    YUYV (format set with `VIDIOC_S_FMT`). Without the module, the UI shows the one command
+    needed; on Windows it explains the OBS virtual-camera route.
+- **`automation.rs`** (Phase 6) runs the rules. Each signal source starts only when some rule
+  needs it: node events, the accessory manager, a minute clock, a process watcher (`sysinfo`), a
+  Wi-Fi watcher (NetworkManager or `netsh`) and a BLE scanner for the phone's beacon. Actions
+  reuse the remote and accessory code paths, and every run is logged with its outcome.
+
 ### React UI (`src/`)
 - **`bridge/`**: one `Bridge` interface with two implementations. `tauri.ts` (the real one) is
   `invoke` plus `listen`. `preview.ts` is a clearly labelled simulation used only in a plain
@@ -224,6 +261,15 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
   - **accessories**: the list and a detail panel generated from the profile (choices,
     toggles, sliders, equalizer), battery rings per bud, health, memory and "Help support this
     device". Accessories also appear on the battery dashboard.
+
+  Phase 6 adds:
+  - **messages**: an Android phone's conversations (unread first, newest first), a thread as
+    bubbles, reply with Enter, and new texts to any numbers.
+  - **call card**: a floating card on every page while the phone rings (answer, decline), then
+    mute and end, saying where the call audio is.
+  - **automation**: the rules with switches and "Try it", a builder for every trigger and
+    action, and the recent runs with failures explained.
+  - **device page**: "Continue there" and "Use camera" for phones.
 - **`ui/`**: React Aria primitives restyled with Devti tokens.
 
 ---
@@ -271,6 +317,26 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
     core's target width, then compresses JPEGs at the target quality and rate.
   - `PhoneCommands` builds the phone's catalog (launchable apps, flashlight, screenshot, camera)
     and runs it.
+- **`comms/`** (Phase 6):
+  - `SmsBridge` reads conversations and messages from Android's SMS store (contact names via
+    `PhoneLookup`), sends with `SmsManager` (multipart when long), and `SmsReceiver` forwards new
+    texts as they arrive. Thread ids come from `Telephony.Threads`, so live texts land in the
+    right conversation on the computer.
+  - `PhoneStateReceiver` + `Pure.nextCall` fold Android's three call states (sent twice on
+    Android 9+) into one call that goes ringing → active → ended, or ringing → missed.
+    `CallBridge` answers and ends with `TelecomManager` and mutes with `AudioManager`.
+  - `AudioShareService` streams the microphone, or the phone's sound (`AudioPlaybackCapture`,
+    Android 10+), as 48 kHz PCM in 20 ms chunks; it stops itself if the computer stops taking
+    audio for 5 seconds.
+  - `CameraShareService` binds CameraX analysis (latest frame only), turns YUV_420_888 into
+    NV21, rotates it upright in place (`Pure.rotateNv21`, unit-tested), and sends JPEGs through
+    the screen-frame path.
+  - `Beacon` advertises the proximity token as non-connectable BLE service data, refreshed every
+    minute (and retried if Bluetooth was off).
+  - `Handoff` opens links (YouTube at the same second) or puts text on the clipboard.
+  - Consent: `ScreenShareActivity` asks before anything leaves the phone. For the camera, Devti
+    asks (skipped right after the user offered it), then Android. For the microphone, Android
+    asks; for the phone's sound, Android's casting dialog asks too.
 - **Screen tab and `ScreenViewerActivity`** (Phase 4): a computer's screen shown full screen.
   Frames come through the `FrameListener` callback into a conflated `StateFlow` and are decoded
   off the main thread. Touch maps to mouse: tap is a click, hold is a right-click, one finger
@@ -290,9 +356,9 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
 | Layer | How | Where |
 |---|---|---|
 | Core logic | Unit tests per module | `core/src/**` |
-| Core end-to-end | Real nodes over loopback QUIC: QR and code pairing, wrong-code lockout, MITM pin refusal, revoke, reconnect after restart, kill switch, off-runtime calls | `core/tests/node.rs` |
+| Core end-to-end | Real nodes over loopback QUIC: QR and code pairing, wrong-code lockout, MITM pin refusal, revoke, reconnect after restart, kill switch, off-runtime calls; control, screens, texts, calls, handoff, live audio and the camera | `core/tests/*.rs` |
 | Parsers | libFuzzer (frames, messages, QR links) | `core/fuzz` |
-| Mobile bridge | Kotlin bindings + reducer against real Rust nodes on the JVM | `android/jvm-check` |
+| Mobile bridge | Kotlin bindings + reducer against real Rust nodes on the JVM; the app's pure decisions (`Pure.kt`) | `android/jvm-check` |
 | UI logic | Vitest (store, voices, formatting, icons) | `desktop/src/**/*.test.ts` |
 | UI flows | Playwright on the built UI (preview mode) | `desktop/tests/e2e` |
 | Real app | WebDriver drives the actual WebKitGTK binary to pair with `sim_device` over real QUIC | `desktop/tests/real/smoke.mjs` |

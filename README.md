@@ -15,14 +15,17 @@ Free, open-source, local-first. Your laptops, phones, tablets and Bluetooth acce
 
 ## Where Devti is today
 
-Devti is being built in eight phases. **Phases 1–5 are complete**: the secure core, pairing,
+Devti is being built in eight phases. **Phases 1–6 are complete**: the secure core, pairing,
 automatic reconnection, the desktop Hub with its first-run wizard and ecosystem map, the Android
 companion app, continuity (clipboard, files, notifications, find my device, battery history) and
 control (phone as touchpad, keyboard, remote and shortcuts deck; mirror and control an Android
 phone from the Hub; a local API and the `devti` CLI) and screens (show a computer's screen or a
 window on a phone, tablet or another computer, with touch or mouse control, and one keyboard and
 mouse across computers) and Bluetooth accessories (recognised automatically, with control panels
-built from community device profiles). Everything listed under "What works now" is real and tested; everything
+built from community device profiles) and communication and automation (texts and calls from an
+Android phone on the computer, continue-where-you-left-off, the phone as the computer's
+microphone, speaker source and webcam, and rules that react to your devices — including locking
+the computer when you walk away). Everything listed under "What works now" is real and tested; everything
 else is shown as planned, never faked.
 
 | Phase | Scope | Status |
@@ -32,8 +35,8 @@ else is shown as planned, never faked.
 | 3. Control | Phone → laptop remote, laptop → Android mirror and control, shortcuts deck, local API + CLI | **Done** |
 | 4. Screens | Mirror, single-window cast, extended displays, multi-screen layout, one keyboard and mouse | **Done** |
 | 5. Bluetooth | Accessory manager, automatic feature detection, device profiles, audio relay | **Done** (audio relay ships with Phase 6's audio streams) |
-| 6. Communication + automation | SMS, calls, rules engine, proximity, handoff, webcam and mic sharing, audio relay | Next |
-| 7. Reach + extensibility | Remote access, plugin SDK, shared storage browser | Planned |
+| 6. Communication + automation | SMS, calls, rules engine, proximity, handoff, webcam and mic sharing, audio relay | **Done** |
+| 7. Reach + extensibility | Remote access, plugin SDK, shared storage browser | Next |
 | 8. iOS + release | iPhone and iPad app, final polish, v1.0.0 | Planned |
 
 ## What works now
@@ -51,7 +54,20 @@ else is shown as planned, never faked.
   clipboard, notifications, commands, Bluetooth), read the activity log, or pause the whole
   ecosystem in one click.
 - **Accessories detected.** The setup wizard shows nearby Bluetooth accessories live (names,
-  makers, signal). Controlling them arrives in Phase 5.
+  makers, signal), and the Accessories page controls them.
+- **Texts and calls on the computer.** Read your Android phone's conversations, reply, and start
+  new ones from the Hub; texts go from your phone's number. When the phone rings, a call card
+  lets you answer, decline, mute or end. (The call audio stays on the phone — see below.)
+- **Continue where you left off.** Send what's playing (a video resumes at the same second) or
+  a link from the computer to the phone, or share a link to Devti on the phone to open it on the
+  computer.
+- **The phone as microphone, speaker source and webcam.** Use the phone's microphone in any
+  computer app, play the phone's sound through the computer (and earbuds connected to it), or
+  use the phone's camera as a webcam (Linux, via v4l2loopback).
+- **Automation.** Rules react to devices connecting, battery levels, accessories, the time, apps
+  you open, the network you join, and your phone walking away or coming back. They can notify,
+  lock, set Do Not Disturb, run commands, open apps, switch audio output, change accessory
+  settings or ring a device. Locking on walk-away is off until you turn it on.
 - **Clipboard everywhere.** Copy on one device, paste on another. The Hub keeps a history of 50
   clips. On Android, text copied on the computer arrives instantly. Going the other way, Android
   only lets apps read the clipboard while they're open, so Devti sends it when you open the app,
@@ -131,6 +147,14 @@ else is shown as planned, never faked.
 | One keyboard and mouse across computers | ✅ | ✅ | — ⁷ | — | — |
 | Accessories: battery, signal, health | ✅ (BLE) | ✅ | ✅ | — | — |
 | Accessories: vendor controls (ANC, EQ…) | — ⁸ | ✅ | ✅ | — | — |
+| Texts: read, reply, new | ✅ shows | ✅ shows | ✅ shows | ✅ sends | — ³ |
+| Calls: who's calling, answer, decline, mute, end | ✅ shows | ✅ shows | ✅ shows | ✅ ⁹ | — ³ |
+| Continue on another device (links, media time) | ✅ | ✅ (+ what's playing) | ✅ (+ what's playing) | ✅ | Phase 8 |
+| Phone sound out of the computer | ✅ | ✅ | ✅ | ✅ sends (Android 10+) | — |
+| Phone as the computer's microphone | ✅ ¹⁰ | ✅ | ✅ | ✅ sends | — |
+| Phone camera as a webcam | — ¹¹ | ✅ | ✅ | ✅ sends | — |
+| Rules (automation) | ✅ | ✅ | ✅ | via Hub | via Hub |
+| Lock when the phone walks away | ✅ | ✅ | ✅ | ✅ beacon | — |
 
 ¹ Uses the Wayland data-control protocol where the compositor offers it (KDE, wlroots-based),
 otherwise the XWayland clipboard bridge. ² Android 10+ allows reading the
@@ -141,7 +165,13 @@ Hub tells you. ⁵ Android asks you to allow screen sharing each time. Tapping a
 **Devti control** turned on in Settings → Accessibility, which Android requires to be done by you. ⁶ The system asks which screen or window to share
 each time (the ScreenCast portal). ⁷ Wayland doesn't let apps capture the pointer and keyboard
 yet. ⁸ Windows has no free, stable way for apps to open the Classic Bluetooth channels these
-use yet. On Windows, Devti shows BLE accessories and their batteries.
+use yet. On Windows, Devti shows BLE accessories and their batteries. ⁹ Android gives call audio
+only to the phone's own dialer, so the conversation stays on the phone. To talk through the
+computer, also pair the phone with it as a Bluetooth headset in the system's Bluetooth settings.
+¹⁰ Windows has no free virtual-microphone driver: install VB-Audio's free Virtual Cable and pick
+"CABLE Output" as the microphone; otherwise the phone's mic plays on the speakers. ¹¹ Windows has
+no free virtual-camera driver Devti can ship; the camera shows in the Hub, and OBS's free
+virtual camera can pass it on (Window Capture → Start Virtual Camera).
 
 **iPhone and iPad honesty box:** Apple doesn't allow any app to remote-control an iPhone, read SMS
 or calls, or mirror other apps' notifications. When the iOS app arrives it will do everything Apple
@@ -302,6 +332,41 @@ controls go live. An *Untested on real hardware* badge means the profile follows
 documentation but nobody has confirmed it on that model yet. Please tell us if it works.
 **Remember settings** restores your choices on every reconnect.
 
+### Messages and calls (Android)
+On the phone, open **Home → Calls, texts and sharing → Allow texts and calls**. Android asks for
+SMS, contacts and phone permissions. The Hub's **Messages** page then shows your conversations:
+reply with Enter, or start a new text to any numbers. When the phone rings, a call card appears on
+every page of the Hub. The call's audio stays on the phone (Android's rule); pair the phone with
+the computer as a Bluetooth headset to talk through it. MMS and RCS chats aren't included.
+
+### Continue on another device
+On the computer, a phone's page has **Continue there**. On Linux it sends what's playing when the
+player shares its link (MPRIS; some browsers and players do), so a video resumes at the same
+second; otherwise it sends the link you copied. On the phone, share a
+link to **Devti**: it opens on the computer. Only web links and text are ever handed over.
+
+### The phone as microphone, speaker source or webcam
+On the phone, **Home → Calls, texts and sharing**:
+- **Microphone**: the computer gets a microphone called *Devti-phone-microphone* (Linux). On
+  Windows, see note ¹⁰ above.
+- **Phone sound** (Android 10+): music and video from the phone play on the computer — and on
+  earbuds connected to it. Apps can opt out of this, and calls never play.
+- **Webcam**: accept the offer on the computer; the phone's camera appears as *Devti Camera* in
+  any video app. On Linux, load the loopback module once:
+
+```bash
+sudo modprobe v4l2loopback card_label="Devti Camera" exclusive_caps=1
+```
+
+Each share shows a notification with **Stop** on the phone.
+
+### Automation
+**Automation** lists your rules with switches and **Try it**. Three come ready: a low-battery
+alert (on), earbuds taking over the computer's sound (off) and locking when your phone walks away
+(off). **New rule** offers every trigger and action. For walk-away, turn on **Let your computer
+sense when you walk away** on the phone: it sends a tiny Bluetooth signal only your paired
+computers recognise, and it changes every 15 minutes so nobody can follow you by it.
+
 ### Command line and API
 `devti` comes with the Linux packages (`/usr/bin/devti`) and sits next to the Windows installers.
 It finds the API token by itself:
@@ -334,6 +399,9 @@ to open Devti, pair, pause or quit. Turn this off in **Settings → Startup and 
 | Wayland asks for permission | Expected: screen sharing and remote input on Wayland always go through your desktop's dialog. |
 | Android disconnects with the screen off | Set Devti's battery usage to *Unrestricted*. |
 | Bluetooth accessories don't appear | Bluetooth on? Accessory in pairing mode? On Linux: `systemctl status bluetooth`. |
+| Texts or calls don't show on the computer | On the phone: Home → *Allow texts and calls*, and check that the computer still has *Notifications* permission on the phone. |
+| No "Devti Camera" in video apps (Linux) | Load the module: `sudo modprobe v4l2loopback card_label="Devti Camera" exclusive_caps=1`. |
+| Walk-away never triggers | The computer needs Bluetooth on, and the phone the *Nearby devices* permission. Move a few metres further: Devti waits for a clearly weak signal before saying "away". |
 | Need logs for a bug report | **Settings → Diagnostics → Export** saves a redacted report to Downloads. |
 
 ## Privacy and security model
