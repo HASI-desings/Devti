@@ -4,7 +4,7 @@ members = ["core", "core/ffi", "desktop/src-tauri", "cli"]
 default-members = ["core", "core/ffi", "cli"]
 
 [workspace.package]
-version = "1.0.1"
+version = "1.0.2"
 edition = "2024"
 rust-version = "1.85"
 license = "GPL-3.0-or-later"

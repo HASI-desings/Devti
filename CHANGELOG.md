@@ -5,15 +5,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.2] — 2026-11-22
+
+### Fixed
+- The window was taller than many laptop screens, and the bottom of the sidebar and pages was
+  cut off without scrolling. The window now fits the screen and the layout is held to the
+  window's height.
+
 ## [1.0.1] — 2026-11-22
 
 ### Fixed
 - Linux: crash at startup on desktops with GNOME Keyring or KWallet ("Cannot start a
   runtime from within a runtime"); keychain calls now run outside the async runtime.
 - Rules that run a saved command could hit the same panic.
-- The window was taller than many laptop screens, and the bottom of the sidebar and pages was
-  cut off without scrolling. The window now fits the screen and the layout is held to the
-  window's height.
 
 ## [1.0.0] — 2026-11-22
 

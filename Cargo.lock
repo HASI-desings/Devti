@@ -1834,7 +1834,7 @@ dependencies = [
 
 [[package]]
 name = "devti-cli"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "devti-core",
  "dirs 6.0.0",
@@ -1847,7 +1847,7 @@ dependencies = [
 
 [[package]]
 name = "devti-core"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "axum",
  "bytes",
@@ -1884,7 +1884,7 @@ dependencies = [
 
 [[package]]
 name = "devti-desktop"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "anyhow",
  "arboard",
@@ -1932,7 +1932,7 @@ dependencies = [
 
 [[package]]
 name = "devti-ffi"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "devti-core",
  "parking_lot 0.13.0",
