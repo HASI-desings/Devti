@@ -183,7 +183,7 @@ try {
   // Phase 4: the phone watches the Hub's real screen (captured from the X display).
   await waitSim("screen frames=5", 30000);
   const m = simOut.match(/screen frames=5 size=(\d+)x(\d+) jpeg=(true|false)/);
-  if (!m || m[3] !== "true") throw new Error(`bad frames: ${m?.[0]}`);
+  if (m?.[3] !== "true") throw new Error(`bad frames: ${m?.[0]}`);
   console.log(`PASS: Hub screen streamed to the phone (${m[1]}×${m[2]} JPEG frames)`);
   // Phase 4: one keyboard and mouse — the phone stands in for a laptop to the right.
   await invoke("set_screen_layout", {

@@ -155,6 +155,8 @@ export function createPreviewBridge(): Bridge {
   let obsUrl = "ws://127.0.0.1:4455";
   let api = { enabled: true, port: 47811 as number | null, token: randomHex(64) };
   const screens = new Map<string, SimScreen>();
+  let screenSource: import("./types").ScreenSource | null = null;
+  let layout: import("./types").ScreenLayout = { enabled: false, links: [] };
   const settings: Record<string, string> = {};
   try {
     Object.assign(settings, JSON.parse(localStorage.getItem("devti-preview-settings") ?? "{}"));
@@ -789,6 +791,66 @@ export function createPreviewBridge(): Bridge {
       const sim = screens.get(id);
       if (sim) window.clearInterval(sim.timer);
       screens.delete(id);
+    },
+    async screenSources() {
+      // Simulated: a laptop panel with an external monitor to its right, and two windows.
+      return {
+        sources: [
+          {
+            source: { kind: "monitor", id: 1 },
+            name: "Built-in display",
+            detail: "1920 × 1200",
+            width: 1920,
+            height: 1200,
+            x: 0,
+            y: 0,
+            primary: true,
+          },
+          {
+            source: { kind: "monitor", id: 2 },
+            name: "DELL U2723QE",
+            detail: "2560 × 1440",
+            width: 2560,
+            height: 1440,
+            x: 1920,
+            y: -120,
+            primary: false,
+          },
+          {
+            source: { kind: "window", id: 11 },
+            name: "Quarterly review — Slides",
+            detail: "firefox",
+            width: 1600,
+            height: 1000,
+            x: 0,
+            y: 0,
+            primary: false,
+          },
+          {
+            source: { kind: "window", id: 12 },
+            name: "Terminal",
+            detail: "gnome-terminal",
+            width: 900,
+            height: 600,
+            x: 0,
+            y: 0,
+            primary: false,
+          },
+        ],
+        selected: screenSource,
+        wayland: false,
+        viewers: [],
+      };
+    },
+    async setScreenSource(source) {
+      screenSource = source;
+    },
+    async stopScreenViewer() {},
+    async screenLayout() {
+      return { layout: structuredClone(layout), supported: true, active: false };
+    },
+    async setScreenLayout(next) {
+      layout = structuredClone(next);
     },
     async saveCapture(name, bytes) {
       // The browser saves it through its own download prompt.

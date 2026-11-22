@@ -13,6 +13,7 @@ import { MirrorPage } from "./features/mirror/MirrorPage";
 import { NotificationsPage } from "./features/notifications/NotificationsPage";
 import { Done, Onboarding } from "./features/onboarding/Onboarding";
 import { PairPanel } from "./features/pairing/PairPanel";
+import { ScreensPage } from "./features/screens/ScreensPage";
 import { SecurityPage } from "./features/security/SecurityPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { PreviewBanner } from "./features/shell/PreviewBanner";
@@ -174,6 +175,7 @@ export function App() {
           {page === "battery" && <BatteryPage />}
           {page === "control" && <ControlPage />}
           {page === "mirror" && <MirrorPage />}
+          {page === "screens" && <ScreensPage />}
           {page === "security" && <SecurityPage onPair={() => setPairOpen(true)} />}
           {page === "settings" && <SettingsPage />}
           {page === "help" && (

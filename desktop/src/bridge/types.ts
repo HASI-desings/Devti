@@ -201,6 +201,41 @@ export interface RemoteSettings {
   api: ApiInfo;
 }
 
+// ------------------------------------------------------------------ Phase 4
+
+export type ScreenSource = { kind: "monitor"; id: number } | { kind: "window"; id: number };
+
+export interface SourceInfo {
+  source: ScreenSource;
+  name: string;
+  detail: string;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  primary: boolean;
+}
+
+export interface ScreenSources {
+  sources: SourceInfo[];
+  selected: ScreenSource | null;
+  wayland: boolean;
+  viewers: string[];
+}
+
+export type Edge = "left" | "right" | "top" | "bottom";
+
+export interface ScreenLayout {
+  enabled: boolean;
+  links: { device: string; edge: Edge }[];
+}
+
+export interface ScreenLayoutInfo {
+  layout: ScreenLayout;
+  supported: boolean;
+  active: boolean;
+}
+
 /** One decoded screen frame header + JPEG bytes. */
 export interface ScreenFrame {
   seq: number;
@@ -378,4 +413,11 @@ export interface Bridge {
   screenUnwatch(id: string): Promise<void>;
   /** Saves a screenshot/recording into the received-files folder; returns its path. */
   saveCapture(name: string, bytes: Uint8Array): Promise<string>;
+
+  // Phase 4 — screens
+  screenSources(): Promise<ScreenSources>;
+  setScreenSource(source: ScreenSource | null): Promise<void>;
+  stopScreenViewer(id: string): Promise<void>;
+  screenLayout(): Promise<ScreenLayoutInfo>;
+  setScreenLayout(layout: ScreenLayout): Promise<void>;
 }

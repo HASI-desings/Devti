@@ -281,3 +281,28 @@ test("mirror and control a phone, run its command, power needs confirmation", as
   await page.getByRole("button", { name: "Pixel 8" }).first().click();
   await expect(page.getByRole("heading", { name: "Pixel 8", level: 1 })).toBeVisible();
 });
+
+test("screens: choose what to show and place a computer at an edge", async ({ page }) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Pair" }).click();
+  await page.evaluate(() => window.__devtiPreview?.join("Studio Desktop", "desktop"));
+  await page.getByRole("button", { name: "The codes match" }).click();
+  await expect(page.getByRole("heading", { name: "Studio Desktop joined your ecosystem" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await rail(page).getByRole("button", { name: "Screens" }).click();
+  await expect(page.getByRole("heading", { name: "Screens", level: 1 })).toBeVisible();
+  const slides = page.getByRole("button", { name: /Quarterly review/ });
+  await slides.click();
+  await expect(slides).toHaveAttribute("aria-pressed", "true");
+
+  const kvm = page.getByRole("switch", { name: "Move the pointer between computers" });
+  await kvm.locator("xpath=ancestor::label").click();
+  await expect(kvm).toBeChecked();
+  await page.getByLabel("Computer right this one").selectOption({ label: "Studio Desktop" });
+  await expect(page.locator("[data-edge='right']")).toContainText("Studio Desktop");
+  // Reload: the arrangement was saved.
+  await rail(page).getByRole("button", { name: "Ecosystem" }).click();
+  await rail(page).getByRole("button", { name: "Screens" }).click();
+  await expect(page.locator("[data-edge='right']")).toContainText("Studio Desktop");
+});

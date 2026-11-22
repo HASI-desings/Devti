@@ -137,5 +137,10 @@ export function createTauriBridge(): Bridge {
     },
     screenUnwatch: (id) => invoke("screen_unwatch", { id }),
     saveCapture: (name, bytes) => invoke("save_capture", bytes, { headers: { "x-devti-name": name } }),
+    screenSources: () => invoke("screen_sources"),
+    setScreenSource: (source) => invoke("set_screen_source", { source }),
+    stopScreenViewer: (id) => invoke("stop_screen_viewer", { id }),
+    screenLayout: () => invoke("screen_layout"),
+    setScreenLayout: (layout) => invoke("set_screen_layout", { layout }),
   };
 }
