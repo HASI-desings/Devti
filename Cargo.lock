@@ -1921,6 +1921,7 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "uuid",
+ "webkit2gtk",
  "windows 0.62.2",
  "x11rb",
  "xcap",

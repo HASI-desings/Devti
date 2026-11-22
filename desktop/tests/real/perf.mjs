@@ -290,6 +290,28 @@ try {
     `PERF: idle CPU ${idleCpuPercent} % of one core over 60 s; memory ${pssMB} MB PSS (${rssMB} MB RSS) across ${now.length} processes`,
   );
   for (const p of processes) console.log(`      ${p.cmd} ${p.pssMB} MB`);
+  // Where each process's memory goes (largest mappings by PSS), to see what's reducible.
+  for (const p of now) {
+    const by = new Map();
+    let name = "[anon]";
+    try {
+      for (const line of readFileSync(`/proc/${p}/smaps`, "utf8").split("\n")) {
+        const head = line.match(/^[0-9a-f]+-[0-9a-f]+ \S+ \S+ \S+ \S+\s*(.*)$/);
+        if (head)
+          name =
+            head[1]
+              ?.split("/")
+              .pop()
+              ?.replace(/\.so.*/, "") || "[anon]";
+        else if (line.startsWith("Pss:")) by.set(name, (by.get(name) ?? 0) + Number(line.split(/\s+/)[1]));
+      }
+    } catch {}
+    const top = [...by]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([k, v]) => `${k} ${(v / 1024).toFixed(1)}`);
+    console.log(`      ${cmdline(p).split(" ")[0].split("/").pop()}: ${top.join(", ")} MB`);
+  }
 
   const results = {
     date: new Date().toISOString(),

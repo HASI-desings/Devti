@@ -47,10 +47,25 @@ pub(crate) fn show_main_window(app: &AppHandle) {
     let Some(cfg) = app.config().app.windows.iter().find(|w| w.label == "main").cloned() else { return };
     match WebviewWindowBuilder::from_config(app, &cfg).and_then(|b| b.build()) {
         Ok(w) => {
+            tune_webview(&w);
             let _ = w.set_focus();
         }
         Err(e) => tracing::error!(error = %e, "could not open the Devti window"),
     }
+}
+
+/// Devti's window is one app, not a browser: WebKit's "document viewer" cache model turns off
+/// the page and memory caches meant for browsing many sites, so the window holds less memory.
+pub(crate) fn tune_webview(w: &tauri::WebviewWindow) {
+    #[cfg(target_os = "linux")]
+    let _ = w.with_webview(|wv| {
+        use webkit2gtk::{WebContextExt, WebViewExt};
+        if let Some(ctx) = wv.inner().context() {
+            ctx.set_cache_model(webkit2gtk::CacheModel::DocumentViewer);
+        }
+    });
+    #[cfg(not(target_os = "linux"))]
+    let _ = w;
 }
 
 fn init_logging(log_dir: &std::path::Path) -> Option<tracing_appender::non_blocking::WorkerGuard> {
@@ -88,6 +103,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .setup(move |app| {
+            if let Some(w) = app.get_webview_window("main") {
+                tune_webview(&w);
+            }
             let handle = app.handle().clone();
             let data_dir = handle.path().app_data_dir()?;
             let log_dir = handle.path().app_log_dir()?;

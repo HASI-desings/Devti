@@ -1,25 +1,10 @@
 import { MotionConfig } from "motion/react";
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import s from "./App.module.css";
 import { Prism } from "./design/Prism";
-import { AccessoriesPage } from "./features/accessories/AccessoriesPage";
-import { AutomationPage } from "./features/automation/AutomationPage";
-import { BatteryPage } from "./features/battery/BatteryPage";
-import { ControlPage } from "./features/control/ControlPage";
-import { DevicePage } from "./features/device/DevicePage";
 import { EcosystemPage } from "./features/ecosystem/EcosystemPage";
-import { FilesPage } from "./features/files/FilesPage";
 import { SendPicker } from "./features/files/SendPicker";
-import { HelpPage } from "./features/help/HelpPage";
-import { MessagesPage } from "./features/messages/MessagesPage";
-import { MirrorPage } from "./features/mirror/MirrorPage";
-import { NotificationsPage } from "./features/notifications/NotificationsPage";
-import { Done, Onboarding } from "./features/onboarding/Onboarding";
 import { PairPanel } from "./features/pairing/PairPanel";
-import { PluginsPage } from "./features/plugins/PluginsPage";
-import { ScreensPage } from "./features/screens/ScreensPage";
-import { SecurityPage } from "./features/security/SecurityPage";
-import { SettingsPage } from "./features/settings/SettingsPage";
 import { CallCard } from "./features/shell/CallCard";
 import { PreviewBanner } from "./features/shell/PreviewBanner";
 import { Rail } from "./features/shell/Rail";
@@ -29,6 +14,50 @@ import { useBridge } from "./lib/bridge-context";
 import { trackIdle } from "./lib/idle";
 import { useStore } from "./state/store";
 import { Button, Sheet, Toasts } from "./ui";
+
+// Pages load when first opened, so an idle Hub keeps only the dashboard in memory.
+const AccessoriesPage = lazy(() =>
+  import("./features/accessories/AccessoriesPage").then((m) => ({ default: m.AccessoriesPage })),
+);
+const AutomationPage = lazy(() =>
+  import("./features/automation/AutomationPage").then((m) => ({ default: m.AutomationPage })),
+);
+const BatteryPage = lazy(() =>
+  import("./features/battery/BatteryPage").then((m) => ({ default: m.BatteryPage })),
+);
+const ControlPage = lazy(() =>
+  import("./features/control/ControlPage").then((m) => ({ default: m.ControlPage })),
+);
+const DevicePage = lazy(() =>
+  import("./features/device/DevicePage").then((m) => ({ default: m.DevicePage })),
+);
+const FilesPage = lazy(() => import("./features/files/FilesPage").then((m) => ({ default: m.FilesPage })));
+const HelpPage = lazy(() => import("./features/help/HelpPage").then((m) => ({ default: m.HelpPage })));
+const MessagesPage = lazy(() =>
+  import("./features/messages/MessagesPage").then((m) => ({ default: m.MessagesPage })),
+);
+const MirrorPage = lazy(() =>
+  import("./features/mirror/MirrorPage").then((m) => ({ default: m.MirrorPage })),
+);
+const NotificationsPage = lazy(() =>
+  import("./features/notifications/NotificationsPage").then((m) => ({ default: m.NotificationsPage })),
+);
+const PluginsPage = lazy(() =>
+  import("./features/plugins/PluginsPage").then((m) => ({ default: m.PluginsPage })),
+);
+const ScreensPage = lazy(() =>
+  import("./features/screens/ScreensPage").then((m) => ({ default: m.ScreensPage })),
+);
+const SecurityPage = lazy(() =>
+  import("./features/security/SecurityPage").then((m) => ({ default: m.SecurityPage })),
+);
+const SettingsPage = lazy(() =>
+  import("./features/settings/SettingsPage").then((m) => ({ default: m.SettingsPage })),
+);
+const Onboarding = lazy(() =>
+  import("./features/onboarding/Onboarding").then((m) => ({ default: m.Onboarding })),
+);
+const Done = lazy(() => import("./features/onboarding/Onboarding").then((m) => ({ default: m.Done })));
 
 export function App() {
   const bridge = useBridge();
@@ -153,15 +182,17 @@ export function App() {
     return (
       <MotionConfig reducedMotion={reducedMotion}>
         <PreviewBanner />
-        <Onboarding
-          onFinish={finishOnboarding}
-          onFinishWithTour={() => {
-            finishOnboarding();
-            setDoneAfterTour(true);
-            navigate("ecosystem");
-            setTour(true);
-          }}
-        />
+        <Suspense fallback={null}>
+          <Onboarding
+            onFinish={finishOnboarding}
+            onFinishWithTour={() => {
+              finishOnboarding();
+              setDoneAfterTour(true);
+              navigate("ecosystem");
+              setTour(true);
+            }}
+          />
+        </Suspense>
         <Toasts />
       </MotionConfig>
     );
@@ -173,28 +204,30 @@ export function App() {
       <div className={s.app}>
         <Rail onPair={() => setPairOpen(true)} />
         <main className={s.main} id="main">
-          {page === "ecosystem" && <EcosystemPage onPair={() => setPairOpen(true)} />}
-          {page === "device" && <DevicePage />}
-          {page === "files" && <FilesPage />}
-          {page === "notifications" && <NotificationsPage />}
-          {page === "battery" && <BatteryPage />}
-          {page === "control" && <ControlPage />}
-          {page === "mirror" && <MirrorPage />}
-          {page === "screens" && <ScreensPage />}
-          {page === "accessories" && <AccessoriesPage />}
-          {page === "messages" && <MessagesPage />}
-          {page === "automation" && <AutomationPage />}
-          {page === "plugins" && <PluginsPage />}
-          {page === "security" && <SecurityPage onPair={() => setPairOpen(true)} />}
-          {page === "settings" && <SettingsPage />}
-          {page === "help" && (
-            <HelpPage
-              onRerunSetup={() => {
-                setSetting("onboarding_done", "false");
-                void bridge.setSetting("onboarding_done", "false");
-              }}
-            />
-          )}
+          <Suspense fallback={null}>
+            {page === "ecosystem" && <EcosystemPage onPair={() => setPairOpen(true)} />}
+            {page === "device" && <DevicePage />}
+            {page === "files" && <FilesPage />}
+            {page === "notifications" && <NotificationsPage />}
+            {page === "battery" && <BatteryPage />}
+            {page === "control" && <ControlPage />}
+            {page === "mirror" && <MirrorPage />}
+            {page === "screens" && <ScreensPage />}
+            {page === "accessories" && <AccessoriesPage />}
+            {page === "messages" && <MessagesPage />}
+            {page === "automation" && <AutomationPage />}
+            {page === "plugins" && <PluginsPage />}
+            {page === "security" && <SecurityPage onPair={() => setPairOpen(true)} />}
+            {page === "settings" && <SettingsPage />}
+            {page === "help" && (
+              <HelpPage
+                onRerunSetup={() => {
+                  setSetting("onboarding_done", "false");
+                  void bridge.setSetting("onboarding_done", "false");
+                }}
+              />
+            )}
+          </Suspense>
         </main>
       </div>
 
@@ -209,13 +242,15 @@ export function App() {
 
       <Sheet isOpen={doneOpen} onClose={() => setDoneOpen(false)} label="Devti is ready">
         <div className={s.doneSheet}>
-          <Done
-            onFinish={(next) => {
-              setDoneOpen(false);
-              if (next === "pair") setPairOpen(true);
-              if (next === "security") navigate("security");
-            }}
-          />
+          <Suspense fallback={null}>
+            <Done
+              onFinish={(next) => {
+                setDoneOpen(false);
+                if (next === "pair") setPairOpen(true);
+                if (next === "security") navigate("security");
+              }}
+            />
+          </Suspense>
         </div>
       </Sheet>
 

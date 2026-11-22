@@ -61,6 +61,7 @@ bluer = { version = "0.17.4", features = ["bluetoothd", "l2cap", "rfcomm"] }
 libc = "0.2"
 x11rb = "0.13"
 zbus = "5"
+webkit2gtk = "2.0"
 
 [target."cfg(windows)".dependencies]
 cpal = "0.18"

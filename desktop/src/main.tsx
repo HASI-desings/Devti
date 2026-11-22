@@ -5,12 +5,12 @@ import { createBridge } from "./bridge";
 import { BridgeProvider } from "./lib/bridge-context";
 import "./styles/base.css";
 
-const bridge = createBridge();
-
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <BridgeProvider bridge={bridge}>
-      <App />
-    </BridgeProvider>
-  </StrictMode>,
+void createBridge().then((bridge) =>
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <BridgeProvider bridge={bridge}>
+        <App />
+      </BridgeProvider>
+    </StrictMode>,
+  ),
 );
