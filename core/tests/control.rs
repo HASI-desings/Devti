@@ -18,7 +18,7 @@ const WAIT: Duration = Duration::from_secs(20);
 struct T {
     node: Node,
     ev: Receiver<NodeEvent>,
-    dir: tempfile::TempDir,
+    _dir: tempfile::TempDir,
 }
 
 async fn spawn(name: &str, kind: DeviceKind) -> T {
@@ -30,7 +30,7 @@ async fn spawn(name: &str, kind: DeviceKind) -> T {
     cfg.downloads_dir = dir.path().join("downloads");
     let node = Node::start(cfg, Arc::new(MemorySecretStore::new())).await.unwrap();
     let ev = node.subscribe();
-    T { node, ev, dir }
+    T { node, ev, _dir: dir }
 }
 
 async fn wait_for<R>(rx: &mut Receiver<NodeEvent>, what: &str, mut f: impl FnMut(&NodeEvent) -> Option<R>) -> R {
