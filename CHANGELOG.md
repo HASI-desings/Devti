@@ -5,6 +5,20 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Phase 5 — Bluetooth
+#### Added
+- Device profile library in core: YAML profiles with matching, channels (L2CAP, RFCOMM, GATT),
+  vendor framings (Sony, Galaxy, Huawei, Nothing; raw for AAP), controls and readings.
+  Profiles are validated on load, unit-tested and fuzzed.
+- Built-in profiles: AirPods/Beats, Sony WH/WF, Galaxy Buds, Huawei FreeBuds, Nothing Ear, JBL
+  and generic. Untested ones are labelled.
+- Hub accessory manager: BlueZ on Linux, with vendor sessions, remembered settings, dropped
+  connection counts and battery history; BLE and standard battery elsewhere.
+- **Accessories** page: generated control panels (choices, toggles, sliders, equalizer),
+  battery per bud and case, health, and "Help support this device" (a draft profile saved
+  locally, never sent). Accessories also appear on the **Battery** dashboard.
+- docs/PLUGINS.md: the device profile format and how to contribute.
+
 ### Phase 4 — Screens
 #### Added
 - Hub:

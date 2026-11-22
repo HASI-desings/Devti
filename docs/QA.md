@@ -5,6 +5,35 @@ the results recorded here. A phase is only marked done when all of this passes.
 
 ---
 
+## Phase 5 — Bluetooth
+
+**Date:** 2026-11-22
+
+### Automated results
+
+| Suite | Result | Where it runs |
+|---|---|---|
+| Profile library unit tests | 12 / 12 pass — every built-in profile validates; matching by maker, name and service (user profiles win); AirPods payloads and battery/ear/noise readings; Sony equalizer with offset and clamping; Huawei and Galaxy battery readings; template and pattern parsing; all four framings round-trip through chunked, noisy streams; corrupted frames are rejected and the next good frame is recovered; Sony escaping; validation errors; the draft profile re-parses with a GATT channel | local + CI |
+| Fuzzing | new target `accessory_frames` (all framers + all profile readers), 0 crashes | local + CI |
+| Hub host unit tests | 15 / 15 pass (adds accessory kind detection) | local + CI |
+| Desktop UI flows (Playwright) | 16 / 16 pass (adds the accessories page: controls, per-bud battery, untested badge, connect, draft) | local + CI |
+
+### Bugs found and fixed during Phase 5 QA
+- **A corrupted length byte stalled the Nothing framer**: it waited for bytes that would never
+  come. Framers now check a frame before consuming it, resynchronise one byte at a time after
+  a bad CRC, and cap implausible lengths. Accessory sessions also reset the framer after
+  2 seconds of silence. Covered by `framings_reject_corruption`.
+- **The Windows build** lacked tokio's `process` feature (Linux got it through another crate)
+  and used the Linux-only `xkeysym` crate in shared code. CI caught both; both are fixed.
+
+### Not verifiable in the build environment
+- No Bluetooth adapter is available here. That covers vendor sessions with real accessories,
+  BlueZ's Profile API, L2CAP to AirPods, and BLE batteries. Hence every vendor profile is
+  marked **untested on real hardware** in the UI, and the manual checklist for Phase 5 is
+  pending hardware.
+
+---
+
 ## Phase 4 — Screens
 
 **Date:** 2026-11-22

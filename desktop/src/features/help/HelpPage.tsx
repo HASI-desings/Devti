@@ -46,6 +46,16 @@ const MATRIX: { feature: string; cells: [Support, Support, Support, Support, Sup
     note: "On Wayland the system asks which screen or window each time. Android shows it.",
   },
   {
+    feature: "Bluetooth accessories: battery, signal, health",
+    cells: ["partial", "yes", "yes", "no", "no"],
+    note: "Windows shows BLE accessories and standard batteries.",
+  },
+  {
+    feature: "Accessory controls (noise control, EQ…)",
+    cells: ["no", "yes", "yes", "no", "no"],
+    note: "Needs Linux (BlueZ) for the accessories' own channels for now.",
+  },
+  {
     feature: "One keyboard and mouse across computers",
     cells: ["yes", "yes", "no", "no", "no"],
     note: "Wayland doesn't let apps capture the pointer yet.",

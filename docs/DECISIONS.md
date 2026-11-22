@@ -432,6 +432,35 @@ control, parking the real pointer in the middle. The Windows version uses low-le
 Geometry, the return condition and key translation are platform-free and unit-tested. Wayland
 is listed as unsupported, with the reason.
 
+## Phase 5 — final decisions
+
+### D-39 · Accessory protocols — Decided: **declarative YAML profiles + a small set of framings in core**
+
+| Option | Pros | Cons |
+|---|---|---|
+| **YAML profiles + built-in framings** | Contributors add devices without writing code; profiles need no sandbox; the UI is generated | Unusual protocols need a new framing in Rust |
+| Code per device (like most clients) | Anything is possible | Every device is a code review; nothing generated |
+| Plugins (Wasm) per device | Sandboxed code | Heavier for what is mostly byte templates |
+
+Profiles hold byte templates (`{v}` / `{bands}` placeholders), wildcard match patterns, and
+battery/value readers. Framers handle Sony, Galaxy, Huawei and Nothing packets. They
+resynchronise after corruption and are fuzzed.
+
+### D-40 · Classic Bluetooth channels — Decided: **BlueZ via `bluer` on Linux; BLE via `btleplug` elsewhere** (D-26 refined)
+
+`bluer` is BlueZ's official Rust binding. It gives L2CAP sockets, GATT, device properties
+including `Battery1`, and RFCOMM through BlueZ's Profile API, so Devti never needs the SDP
+channel number. Windows has no free, stable Rust binding for RFCOMM/L2CAP yet (WinRT RFCOMM
+needs app-container capabilities). So on Windows the Hub shows BLE accessories and standard
+batteries, and it says that Classic vendor controls need a Linux Hub for now.
+
+### D-41 · Honesty about untested protocols
+
+The built-in profiles reimplement community documentation. None has been run against real
+hardware in this project yet, so they are `verified: false` and the UI says **"Untested on real
+hardware"**. JBL's party mode and EQ use a closed protocol nobody has documented, so the JBL
+profile only names the device and says why.
+
 ---
 
 ## Deviation log
@@ -447,3 +476,4 @@ is listed as unsupported, with the reason.
 | D-25b: ADB mode for Android control | Deferred (D-33) | Needs developer options; the wireless mode covers the features |
 | D-20: windows-capture + PipeWire by hand | xcap 0.9 (D-36) | One API for X11, Windows and Wayland (portal) |
 | "One keyboard and mouse" on every desktop | X11 and Windows; not Wayland (D-38) | Wayland has no stable input-capture API yet |
+| Vendor controls on Windows and Linux | Linux (BlueZ) now; Windows BLE + standard battery (D-40) | No free, stable RFCOMM/L2CAP binding on Windows yet |

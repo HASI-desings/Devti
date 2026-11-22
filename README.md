@@ -15,13 +15,14 @@ Free, open-source, local-first. Your laptops, phones, tablets and Bluetooth acce
 
 ## Where Devti is today
 
-Devti is being built in eight phases. **Phases 1–4 are complete**: the secure core, pairing,
+Devti is being built in eight phases. **Phases 1–5 are complete**: the secure core, pairing,
 automatic reconnection, the desktop Hub with its first-run wizard and ecosystem map, the Android
 companion app, continuity (clipboard, files, notifications, find my device, battery history) and
 control (phone as touchpad, keyboard, remote and shortcuts deck; mirror and control an Android
 phone from the Hub; a local API and the `devti` CLI) and screens (show a computer's screen or a
 window on a phone, tablet or another computer, with touch or mouse control, and one keyboard and
-mouse across computers). Everything listed under "What works now" is real and tested; everything
+mouse across computers) and Bluetooth accessories (recognised automatically, with control panels
+built from community device profiles). Everything listed under "What works now" is real and tested; everything
 else is shown as planned, never faked.
 
 | Phase | Scope | Status |
@@ -30,8 +31,8 @@ else is shown as planned, never faked.
 | 2. Continuity | Clipboard, file transfer, drag and drop, notifications, find my device, battery dashboard | **Done** |
 | 3. Control | Phone → laptop remote, laptop → Android mirror and control, shortcuts deck, local API + CLI | **Done** |
 | 4. Screens | Mirror, single-window cast, extended displays, multi-screen layout, one keyboard and mouse | **Done** |
-| 5. Bluetooth | Accessory manager, automatic feature detection, device profiles, audio relay | Next |
-| 6. Communication + automation | SMS, calls, rules engine, proximity, handoff, webcam and mic sharing | Planned |
+| 5. Bluetooth | Accessory manager, automatic feature detection, device profiles, audio relay | **Done** (audio relay ships with Phase 6's audio streams) |
+| 6. Communication + automation | SMS, calls, rules engine, proximity, handoff, webcam and mic sharing, audio relay | Next |
 | 7. Reach + extensibility | Remote access, plugin SDK, shared storage browser | Planned |
 | 8. iOS + release | iPhone and iPad app, final polish, v1.0.0 | Planned |
 
@@ -90,6 +91,13 @@ else is shown as planned, never faked.
   mouse and keyboard control.
 - **One keyboard and mouse.** In **Screens**, drag a paired computer to an edge, then push the
   pointer past that edge to control it with this mouse and keyboard (X11 and Windows).
+- **Bluetooth accessories.** The **Accessories** page lists paired earbuds, headphones, speakers,
+  keyboards and mice. Each shows its battery, per bud and case where available, and its signal
+  and health. Devti recognises the device and builds its controls: noise control,
+  conversation awareness, equalizer, touch lock and more for AirPods/Beats, Sony WH/WF, Galaxy
+  Buds, Huawei FreeBuds and Nothing Ear. These profiles are marked *untested* until verified on
+  real hardware. Settings are remembered per accessory. For unknown devices, **Help support this
+  device** saves a draft profile you can contribute; see [docs/PLUGINS.md](docs/PLUGINS.md).
 - **Script everything.** A local API (127.0.0.1 only, token-protected) and the `devti` command:
   `devti send`, `devti ring`, `devti clip`, `devti run`, `devti watch`.
 
@@ -121,6 +129,8 @@ else is shown as planned, never faked.
 | Show this screen / a window on other devices | ✅ | ✅ | ✅ ⁶ | ✅ (views) | Phase 8 (views) |
 | Mirror and control another computer | ✅ | ✅ | ✅ | — | — |
 | One keyboard and mouse across computers | ✅ | ✅ | — ⁷ | — | — |
+| Accessories: battery, signal, health | ✅ (BLE) | ✅ | ✅ | — | — |
+| Accessories: vendor controls (ANC, EQ…) | — ⁸ | ✅ | ✅ | — | — |
 
 ¹ Uses the Wayland data-control protocol where the compositor offers it (KDE, wlroots-based),
 otherwise the XWayland clipboard bridge. ² Android 10+ allows reading the
@@ -130,7 +140,8 @@ Wayland virtual-keyboard/pointer protocols. Compositors with neither can't be co
 Hub tells you. ⁵ Android asks you to allow screen sharing each time. Tapping and typing also need
 **Devti control** turned on in Settings → Accessibility, which Android requires to be done by you. ⁶ The system asks which screen or window to share
 each time (the ScreenCast portal). ⁷ Wayland doesn't let apps capture the pointer and keyboard
-yet.
+yet. ⁸ Windows has no free, stable way for apps to open the Classic Bluetooth channels these
+use yet. On Windows, Devti shows BLE accessories and their batteries.
 
 **iPhone and iPad honesty box:** Apple doesn't allow any app to remote-control an iPhone, read SMS
 or calls, or mirror other apps' notifications. When the iOS app arrives it will do everything Apple
@@ -283,6 +294,13 @@ On the Hub:
 - **One keyboard and mouse:** **Screens → One keyboard and mouse**. Turn it on, then drag a
   computer to an edge. Push the pointer past that edge to move onto it, and come back the same
   way or press Scroll Lock.
+
+### Accessories
+Pair the accessory in your system's Bluetooth settings as usual; it appears in **Accessories**.
+On Linux, Devti opens the accessory's control channel while it's connected, and the panel's
+controls go live. An *Untested on real hardware* badge means the profile follows public
+documentation but nobody has confirmed it on that model yet. Please tell us if it works.
+**Remember settings** restores your choices on every reconnect.
 
 ### Command line and API
 `devti` comes with the Linux packages (`/usr/bin/devti`) and sits next to the Windows installers.

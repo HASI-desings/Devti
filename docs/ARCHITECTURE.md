@@ -119,6 +119,11 @@ than corrupted, and an unreadable peer row is skipped and logged, never fatal.
   acks, and adapts the target quality and width the host encoder reads (`screen_target`).
   Viewers receive frames on their own broadcast channel (`subscribe_frames`), kept separate from
   the JSON event bus.
+- **`accessory`** (Phase 5): the device profile library. It holds YAML profiles and
+  validation, matching (maker ID 4 / name glob 3 / service 2, with a generic fallback),
+  payload templates, readers for values and per-component batteries, vendor framers, and the
+  draft-profile exporter. It's pure and has no radio code, so every platform shares it; it is
+  unit-tested and fuzzed.
 - **`api`** (feature `api`, Hub only): the local HTTP + WebSocket API (axum on 127.0.0.1, bearer
   token, loopback-Host check). The `cli/` crate is its client: `devti send|ring|clip|run|watch`.
 
@@ -177,6 +182,15 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
   - It starts with the first viewer and stops with the last. A sampled hash skips frames that
     haven't changed.
   - On Wayland, frames come from the ScreenCast portal (PipeWire) after the system dialog.
+- **`accessories.rs`** (Phase 5) handles each paired accessory:
+  - It reads BlueZ properties (kind, services, maker IDs, `Battery1`, RSSI) and matches a
+    profile.
+  - When the profile has a vendor channel, it runs a session over an L2CAP seqpacket socket,
+    RFCOMM via BlueZ's Profile API (`connect_profile` + `NewConnection`), or GATT. The session
+    sends the handshake, re-applies remembered settings, reads values and batteries, and
+    resets the framer after quiet periods.
+  - It counts dropped connections and records battery history (key `bt:<address>`).
+  - On other platforms the BLE path (`btleplug`) gives the standard battery and GATT profiles.
 - **`edges.rs`** (Phase 4), one keyboard and mouse:
   - A platform-free core handles edge hits, entry and return points, the return condition and
     key translation.
@@ -207,6 +221,9 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
     desktop: absolute pointer, buttons, wheel and shortcuts.
   - **screens**: what to show (monitors and windows), who is watching with live stats, and the
     edge arrangement for one keyboard and mouse.
+  - **accessories**: the list and a detail panel generated from the profile (choices,
+    toggles, sliders, equalizer), battery rings per bud, health, memory and "Help support this
+    device". Accessories also appear on the battery dashboard.
 - **`ui/`**: React Aria primitives restyled with Devti tokens.
 
 ---
