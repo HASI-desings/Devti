@@ -376,7 +376,33 @@ two UIs from drifting apart. The node runs on its own 2-thread Tokio runtime ins
 
 ---
 
-## 5. Testing strategy
+## 5. iPhone and iPad app (`ios/`)
+
+- **Build**: `build-core.sh` compiles `devti-ffi` as a static library for the iPhone and the
+  simulator, wraps it in `DevtiCore.xcframework` (headers + module map) and generates
+  `devti_ffi.swift` with `uniffi-bindgen`. `project.yml` (XcodeGen) produces the Xcode project.
+- **`Core`** (`@MainActor ObservableObject`): owns the `DevtiMobile` node, folds core events into
+  published state (decoded type by type with `Decodable`, so 64-bit ids stay exact), and offers
+  the actions the views use. `CoreListener` receives events and screen frames on the core's
+  threads and hops to the main actor.
+- **`KeychainStore`**: the node's secrets in the Keychain, `AfterFirstUnlockThisDeviceOnly`
+  (never in backups or on a new phone).
+- **Lifecycle**: iOS suspends apps soon after they leave the screen, so the node runs while
+  Devti is open; `scenePhase == .active` calls `reconnectNow`. Discovery is off (Apple
+  restricts multicast); the QR link's addresses, the last address and reach addresses do the
+  connecting.
+- **Views**: Welcome and pairing (AVFoundation QR scanner → six-digit check), Home (Prism,
+  quick actions, transfers, devices, settings, what works on iPhone), Remote (touchpad with
+  acceleration and batching, invisible text field for the keyboard, media, power), Deck,
+  Screen (frames as `UIImage`, tap → `move_to` + click), Browse. The theme carries Devti's
+  tokens, fonts and voices (FNV-1a, identical to Android).
+- **Tests** (`DevtiTests`, on the simulator in CI): two real nodes pair through the Swift
+  bindings and exchange a clipboard and a shared-folder listing; input JSON, model decoding and
+  voice parity.
+
+---
+
+## 6. Testing strategy
 
 | Layer | How | Where |
 |---|---|---|

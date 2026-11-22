@@ -330,10 +330,16 @@ impl super::Node {
 
     /// Sharer side: the host hands over its newest encoded frame.
     pub fn push_screen_frame(&self, w: u32, h: u32, jpeg: Vec<u8>) -> Result<()> {
+        self.push_screen_frame_captured(w, h, jpeg, Instant::now())
+    }
+
+    /// Like `push_screen_frame`, with the moment the picture was captured, so the latency
+    /// viewers see includes capture and encoding (capture → shown → acknowledged).
+    pub fn push_screen_frame_captured(&self, w: u32, h: u32, jpeg: Vec<u8>, captured: Instant) -> Result<()> {
         if jpeg.len() > SCREEN_FRAME_LIMIT - 1024 {
             return Err(Error::InvalidInput("frame too large".into()));
         }
-        self.inner.screen.latest.send_replace(Some(Arc::new(EncodedFrame { w, h, jpeg, captured: Instant::now() })));
+        self.inner.screen.latest.send_replace(Some(Arc::new(EncodedFrame { w, h, jpeg, captured })));
         Ok(())
     }
 

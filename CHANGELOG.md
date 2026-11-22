@@ -5,6 +5,27 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-11-22
+
+The first release: everything from the eight build phases below, on Windows, Linux, Android
+and (built yourself) iPhone and iPad.
+
+### Phase 8 — iPhone, polish and release
+#### Added
+- iPhone and iPad companion (SwiftUI over the shared Rust core): QR pairing with the six-digit
+  check, battery, files both ways, paste to the computer, remote (touchpad, keyboard, media,
+  power), deck and commands, the computer's screen with tap-to-click, shared-folder browsing,
+  find my iPhone, Do Not Disturb, Reach from anywhere; build-it-yourself guide with exactly
+  what Apple allows.
+- Performance budget checked in CI on the release build: idle CPU, memory across the app and
+  its WebKit processes, and capture-to-display screen latency.
+- Release pipeline: a version tag builds every installer, the Android APK and the example
+  plugin, and publishes them with checksums (docs/RELEASING.md).
+
+#### Changed
+- Screen latency now includes capture and encoding (frames are stamped when captured).
+- Version 1.0.0 everywhere.
+
 ### Phase 7 — Reach and extensibility
 #### Added
 - Reach from anywhere: devices exchange the addresses they have on private networks

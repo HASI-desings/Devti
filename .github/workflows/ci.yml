@@ -147,6 +147,18 @@ jobs:
         run: cargo build --release -p devti-cli
       - name: Build installers
         run: pnpm tauri build --bundles ${{ matrix.bundles }}
+      - name: Performance budget (release build, real screen, simulated phone)
+        if: runner.os == 'Linux'
+        run: |
+          cargo build --release -p devti-core --example sim_device
+          WEBKIT_DISABLE_DMABUF_RENDERER=1 xvfb-run -a -s "-screen 0 1440x900x24" \
+            node tests/real/perf.mjs "$PWD/../target/release/devti-desktop" ../target/release/examples/sim_device perf.json
+      - uses: actions/upload-artifact@v5
+        if: always() && runner.os == 'Linux'
+        with:
+          name: performance
+          path: desktop/perf.json
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v5
         with:
           name: devti-desktop-${{ runner.os }}

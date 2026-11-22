@@ -30,6 +30,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut hub: Option<devti_core::model::DeviceId> = None;
     let mut ran = false;
     let watch = args.iter().any(|a| a == "--watch");
+    // Performance runs: how the phone watches, and after how many frames it reports the
+    // capture-to-display latency and stops (so the Hub can go idle).
+    let watch_width: u32 = arg("--watch-width").and_then(|s| s.parse().ok()).unwrap_or(960);
+    let watch_fps: u8 = arg("--watch-fps").and_then(|s| s.parse().ok()).unwrap_or(10);
+    let watch_frames: Option<u32> = arg("--watch-frames").and_then(|s| s.parse().ok());
+    let mut latencies: Vec<u32> = Vec::new();
+    let mut watch_started: Option<std::time::Instant> = None;
 
     let dir = std::env::temp_dir().join(format!("devti-sim-{}", std::process::id()));
     let mut cfg = NodeConfig::new(&dir, &name, kind);
@@ -79,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         hub = Some(peer.info.id);
                         if watch {
                             // Ask to see the Hub's screen, like the phone's second-screen tab does.
-                            match node.screen_start(&peer.info.id, 960, 10) {
+                            match node.screen_start(&peer.info.id, watch_width, watch_fps) {
                                 Ok(()) => println!("watching {}", peer.info.name),
                                 Err(e) => println!("watch failed: {e}"),
                             }
@@ -141,6 +148,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if frame_count == 5 {
                     let jpeg = f.jpeg.len() > 2 && f.jpeg[0] == 0xFF && f.jpeg[1] == 0xD8;
                     println!("screen frames={frame_count} size={}x{} jpeg={jpeg}", f.w, f.h);
+                }
+                // Skip the first frames (the encoder and the rate adapter settle).
+                if frame_count == 10 {
+                    watch_started = Some(std::time::Instant::now());
+                }
+                if frame_count > 10 {
+                    latencies.push(f.latency_ms);
+                    if watch_frames.is_some() && frame_count % 30 == 0 {
+                        println!("screen frames={frame_count} latency={} fps={}", f.latency_ms, f.fps);
+                    }
+                }
+                if let (Some(n), Some(h)) = (watch_frames, hub)
+                    && frame_count == n + 10
+                {
+                    latencies.sort_unstable();
+                    let pct = |p: f64| latencies[((latencies.len() as f64 - 1.0) * p).round() as usize];
+                    let secs = watch_started.map(|t| t.elapsed().as_secs_f64()).unwrap_or(1.0);
+                    println!(
+                        "screen latency median={} p95={} fps={:.1} frames={} size={}x{} kb={}",
+                        pct(0.5),
+                        pct(0.95),
+                        latencies.len() as f64 / secs,
+                        latencies.len(),
+                        f.w,
+                        f.h,
+                        f.jpeg.len() / 1024
+                    );
+                    let _ = node.screen_stop(&h);
+                    println!("stopped watching");
                 }
             },
             _ = tick.tick() => {

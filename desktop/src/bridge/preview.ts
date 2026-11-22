@@ -356,7 +356,7 @@ export function createPreviewBridge(): Bridge {
       platform: "linux",
       os_version: "Linux Mint 22",
       model: null,
-      app_version: "0.1.0",
+      app_version: "1.0.0",
       capabilities: ["battery"],
     },
     fingerprint: "3f9a 11c2 8be0 77d4 0a5e 9c31 ffa2 4b81 9d0e 2c47 6a18 b3f5 0e9d 7c21 54aa 03be",
@@ -493,7 +493,7 @@ export function createPreviewBridge(): Bridge {
         platform: "android",
         os_version: "Android 15",
         model: name,
-        app_version: "0.1.0",
+        app_version: "1.0.0",
         capabilities: ["battery"],
       };
       pending = { id: Math.floor(Math.random() * 1e9), peer, local: false, remote: false };
@@ -600,7 +600,7 @@ export function createPreviewBridge(): Bridge {
       os_version: "Linux Mint 22",
       session: "x11",
       autostart: settings.autostart === "true",
-      app_version: "0.1.0",
+      app_version: "1.0.0",
       data_dir: "~/.local/share/app.devti.hub",
       log_dir: "~/.local/share/app.devti.hub/logs",
     }),

@@ -196,18 +196,18 @@ needs a paid Apple account, so it will be a build-it-yourself app.
 
 ## Install
 
-> Pre-built installers are produced by every CI run (see the latest **Actions** run → *Artifacts*).
-> The first tagged release comes with Phase 8; until then use the CI artifacts or build from source.
+> Download installers from the [Releases](https://github.com/hasi-desings/devti/releases) page, with
+> `SHA256SUMS.txt` to check them. Every CI run also builds them (latest **Actions** run → *Artifacts*).
 
 ### Windows 10 / 11
-1. Download `devti-desktop-Windows` and unzip it.
-2. Run `Devti_x.y.z_x64-setup.exe` (or the `.msi`).
+1. Download `Devti_1.0.0_x64-setup.exe` (or the `.msi`).
+2. Run it. The `devti` command-line tool is the separate `devti-cli-…-windows-x64.exe`.
 3. **"Windows protected your PC"?** Devti isn't signed with a paid certificate yet. Click
    **More info → Run anyway**.
 4. When Windows Firewall asks, allow Devti on **private networks**.
 
 ### Linux (Ubuntu, Mint, Fedora, Arch…)
-Download `devti-desktop-Linux` and pick your format:
+Download the package for your distribution:
 
 - **Debian, Ubuntu, Mint:** `sudo apt install ./Devti_*_amd64.deb`
 - **Fedora, openSUSE:** `sudo dnf install ./Devti-*.x86_64.rpm`
@@ -218,19 +218,20 @@ Notes: the tray icon needs `libayatana-appindicator` (installed by the .deb/.rpm
 is on, allow UDP port 47810 on your home network (`sudo ufw allow 47810/udp`).
 
 ### Android 8+
-1. Download `devti-android-apk` and copy `app-release.apk` to your phone.
+1. Download `devti-v1.0.0-android.apk` on your phone (or copy it over).
 2. Open it. Android asks to allow installs from this source — allow it once.
 3. Open Devti and follow the setup.
 4. Recommended: **Settings → Apps → Devti → Battery → Unrestricted**, so Android doesn't cut the
    connection when the screen is off (some brands add their own battery savers; see
    [dontkillmyapp.com](https://dontkillmyapp.com)).
 
-> **Updating a CI build:** until the first tagged release (which uses a permanent signing key),
-> each CI build is signed with a temporary key. Android refuses to update across different keys,
-> so uninstall the old build first (you'll need to pair again).
+> **Updating:** Android only installs an update signed with the same key. CI builds use a temporary
+> key, and a release says in its notes which key it uses. When the key differs, uninstall the old
+> app first (you'll pair again).
 
 ### iPhone / iPad
-Arrives in Phase 8 as build-it-yourself instructions.
+Build it yourself with a Mac and Xcode (a free Apple ID is enough) — see [ios/README.md](ios/README.md),
+which also lists exactly what works on iPhone and what Apple doesn't allow.
 
 ---
 

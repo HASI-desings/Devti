@@ -21,7 +21,11 @@ done
 
 # Swift bindings come from the host build of the same crate.
 cargo build -p devti-ffi --lib
-HOST_LIB=$(ls target/debug/libdevti_ffi.dylib target/debug/libdevti_ffi.so 2>/dev/null | head -1)
+HOST_LIB=""
+for f in target/debug/libdevti_ffi.dylib target/debug/libdevti_ffi.so; do
+  if [ -f "$f" ]; then HOST_LIB="$f"; break; fi
+done
+[ -n "$HOST_LIB" ] || { echo "host build of devti-ffi not found" >&2; exit 1; }
 GEN=ios/Generated
 rm -rf "$GEN" ios/Frameworks/DevtiCore.xcframework
 mkdir -p "$GEN" ios/build/headers ios/Frameworks

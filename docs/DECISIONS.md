@@ -566,6 +566,40 @@ Browsing needs a new `browse` permission, on for trusted devices; records saved 
 existed read as off. On Android, sharing the phone's folders needs "All files access"
 (Android 11+), asked only when the person turns sharing on.
 
+## Phase 8 — final decisions
+
+### D-51 · iPhone and iPad — Decided: **SwiftUI over the same Rust core (UniFFI), built by each person**
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Native SwiftUI + UniFFI Swift bindings to the shared core** | One protocol and crypto implementation everywhere; native feel; small | Needs a Mac to build |
+| A Tauri 2 mobile build of the Hub UI | Reuses the React UI | A desktop-shaped UI on a phone; the same Mac requirement |
+| A web app (PWA) | No install | Can't do QUIC, local network or Keychain — not Devti |
+
+App Store distribution needs a paid developer account; Devti asks nobody to pay, so the iPhone
+app is build-it-yourself (a free Apple ID signs it for 7 days). Apple's limits are stated in
+the app and in ios/README.md. Discovery is off on iOS: mDNS needs Apple's multicast
+entitlement, which only App Store apps can request. Pairing therefore uses the QR code
+(which carries the addresses), reconnection uses the last address and reach addresses
+(D-48). CI builds the core for the simulator and runs the Swift tests against it.
+
+### D-52 · Proving the performance targets — Decided: **measure the release build in CI, every run**
+
+The brief sets idle CPU < 2 %, Hub RAM < 250 MB and screen latency < 50 ms. A script drives
+the release-built Hub under a virtual display with a simulated phone over real QUIC: the phone
+watches the real screen (1280 px, 30 fps, a constantly changing clock on screen) and reports
+capture-to-acknowledged latency; then, connected but idle, the Hub's CPU is sampled for 60 s
+and its memory summed as PSS across the app and its WebKit processes. Frames are stamped
+when the screen is captured, so capture and JPEG encoding count towards latency. CI fails
+when a budget is exceeded, and uploads the numbers (QA.md records them).
+
+### D-53 · Releases — Decided: **tag-triggered GitHub Actions builds, checksums, optional signing key**
+
+Every installer is built by CI from the tag, never on a laptop; `SHA256SUMS.txt` sits next to
+the files. Android uses a stable release key when the repository has one (docs/RELEASING.md);
+otherwise the release notes say it's a debug-signed build. Windows and Linux builds are
+unsigned — code-signing certificates cost money — and the README says how to proceed.
+
 ---
 
 ## Deviation log
@@ -586,3 +620,5 @@ existed read as off. On Android, sharing the phone's folders needs "All files ac
 | D-29: Windows virtual camera | Camera shown in the Hub; OBS virtual camera documented (D-44) | A camera driver must be signed to install; no free signed one Devti can ship |
 | Calls on the computer | Call card and controls; audio via Bluetooth Hands-Free (D-42) | Android gives carrier-call audio only to the default dialer |
 | D-28: "Tailscale looks like a LAN" | Devices exchange reach addresses (D-48) | mDNS doesn't cross overlay networks, so peers must be told the addresses |
+| iOS app in the App Store | Build-it-yourself (D-51) | App Store distribution needs a paid account; Devti costs nothing |
+| mDNS discovery on every platform | Not on iOS (D-51) | Apple restricts multicast to apps granted its entitlement |

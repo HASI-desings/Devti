@@ -200,7 +200,7 @@ impl Screens {
             };
             let (w, h) = (image.width(), image.height());
             if let Some((ow, oh, jpeg)) = encoder.encode(image.as_raw(), w, h, target.max_width, target.quality)? {
-                let _ = self.node.push_screen_frame(ow, oh, jpeg);
+                let _ = self.node.push_screen_frame_captured(ow, oh, jpeg, started);
             }
             pace(started, target.fps);
         }
@@ -223,7 +223,7 @@ impl Screens {
             if let Some((ow, oh, jpeg)) =
                 encoder.encode(&frame.raw, frame.width, frame.height, target.max_width, target.quality)?
             {
-                let _ = self.node.push_screen_frame(ow, oh, jpeg);
+                let _ = self.node.push_screen_frame_captured(ow, oh, jpeg, last);
             }
         }
         let _ = recorder.stop();
