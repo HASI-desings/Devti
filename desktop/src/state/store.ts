@@ -26,7 +26,8 @@ export type Page =
   | "help"
   | "control"
   | "mirror"
-  | "screens";
+  | "screens"
+  | "accessories";
 
 export type PairingStage =
   | { stage: "waiting" }

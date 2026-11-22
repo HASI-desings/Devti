@@ -1,3 +1,4 @@
+import { simulatedAccessories } from "./sim-accessories";
 import { drawSimulatedPhone, type SimScreen } from "./sim-screen";
 import type {
   ActivityEntry,
@@ -157,6 +158,11 @@ export function createPreviewBridge(): Bridge {
   const screens = new Map<string, SimScreen>();
   let screenSource: import("./types").ScreenSource | null = null;
   let layout: import("./types").ScreenLayout = { enabled: false, links: [] };
+  const accessories = simulatedAccessories();
+  const accListeners = new Set<(l: import("./types").AccessoryList) => void>();
+  const pushAccessories = () => {
+    for (const l of accListeners) l({ status: "", list: structuredClone(accessories) });
+  };
   const settings: Record<string, string> = {};
   try {
     Object.assign(settings, JSON.parse(localStorage.getItem("devti-preview-settings") ?? "{}"));
@@ -851,6 +857,39 @@ export function createPreviewBridge(): Bridge {
     },
     async setScreenLayout(next) {
       layout = structuredClone(next);
+    },
+    async accessories() {
+      return { status: "", list: structuredClone(accessories) };
+    },
+    onAccessories(cb) {
+      accListeners.add(cb);
+      return () => accListeners.delete(cb);
+    },
+    async setAccessoryControl(address, control, value) {
+      const a = accessories.find((x) => x.address === address);
+      if (!a?.connected) throw new Error("The accessory isn't connected to Devti.");
+      a.values[control] = value;
+      pushAccessories();
+    },
+    async setAccessoryRemember(address, on) {
+      const a = accessories.find((x) => x.address === address);
+      if (a) a.remember = on;
+      pushAccessories();
+    },
+    async connectAccessory(address, on) {
+      const a = accessories.find((x) => x.address === address);
+      if (!a) return;
+      a.connected = on;
+      a.session = on ? (a.profile.has_channel ? "connected" : "not needed") : "idle";
+      if (on) a.last_connected = now();
+      pushAccessories();
+    },
+    async accessoryBatteryHistory(address, since) {
+      return this.batteryHistory(`acc-${address}`, since);
+    },
+    async helpSupportAccessory(address) {
+      const a = accessories.find((x) => x.address === address);
+      return `~/Downloads/Devti/devti-profile-${(a?.name ?? "device").replace(/\s+/g, "-")}.yaml (simulated)`;
     },
     async saveCapture(name, bytes) {
       // The browser saves it through its own download prompt.

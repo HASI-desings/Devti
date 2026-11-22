@@ -306,3 +306,31 @@ test("screens: choose what to show and place a computer at an edge", async ({ pa
   await rail(page).getByRole("button", { name: "Screens" }).click();
   await expect(page.locator("[data-edge='right']")).toContainText("Studio Desktop");
 });
+
+test("accessories: profile-built controls, battery per bud, draft profile for unknown devices", async ({
+  page,
+}) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Accessories" }).click();
+  await expect(page.getByRole("heading", { name: "Accessories", level: 1 })).toBeVisible();
+
+  // AirPods: generated noise control, per-bud and case battery, an honest "untested" badge.
+  await expect(page.getByRole("heading", { name: "AirPods Pro" })).toBeVisible();
+  await expect(page.getByText("Untested on real hardware")).toBeVisible();
+  for (const part of ["Left", "Right", "Case"])
+    await expect(page.getByText(part, { exact: true })).toBeVisible();
+  await page.getByText("Transparency", { exact: true }).click();
+  await expect(page.getByRole("radio", { name: "Transparency" })).toBeChecked();
+
+  // Sony while disconnected: controls are shown but tell you to connect.
+  await page.getByRole("button", { name: /WH-1000XM5/ }).click();
+  await expect(page.getByText("Connect it to change its settings.")).toBeVisible();
+  await expect(page.getByRole("group", { name: "Equalizer" })).toBeVisible();
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
+
+  // A generic keyboard offers "Help support this device".
+  await page.getByRole("button", { name: /MX Keys/ }).click();
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page.getByText(/Draft profile saved/)).toBeVisible();
+});

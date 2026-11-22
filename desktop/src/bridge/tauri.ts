@@ -2,7 +2,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { BluetoothEvent, Bridge, NodeEvent, ScreenFrame } from "./types";
+import type { AccessoryList, BluetoothEvent, Bridge, NodeEvent, ScreenFrame } from "./types";
 
 /** 12-byte header (seq u32, w u16, h u16, latency u16, fps u8, 0) + JPEG; see commands.rs. */
 export function decodeFrame(buf: ArrayBuffer): ScreenFrame | null {
@@ -142,5 +142,24 @@ export function createTauriBridge(): Bridge {
     stopScreenViewer: (id) => invoke("stop_screen_viewer", { id }),
     screenLayout: () => invoke("screen_layout"),
     setScreenLayout: (layout) => invoke("set_screen_layout", { layout }),
+    accessories: () => invoke("accessories"),
+    onAccessories(cb) {
+      let unlisten: (() => void) | undefined;
+      let cancelled = false;
+      listen<AccessoryList>("devti://accessories", (e) => cb(e.payload)).then((u) => {
+        if (cancelled) u();
+        else unlisten = u;
+      });
+      return () => {
+        cancelled = true;
+        unlisten?.();
+      };
+    },
+    setAccessoryControl: (address, control, value) =>
+      invoke("set_accessory_control", { address, control, value }),
+    setAccessoryRemember: (address, on) => invoke("set_accessory_remember", { address, on }),
+    connectAccessory: (address, on) => invoke("connect_accessory", { address, on }),
+    accessoryBatteryHistory: (address, since) => invoke("accessory_battery_history", { address, since }),
+    helpSupportAccessory: (address) => invoke("help_support_accessory", { address }),
   };
 }

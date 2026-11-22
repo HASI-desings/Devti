@@ -9,6 +9,7 @@ const ITEMS: { page: Page; label: string; icon: IconName }[] = [
   { page: "notifications", label: "Alerts", icon: "bell" },
   { page: "battery", label: "Battery", icon: "battery" },
   { page: "screens", label: "Screens", icon: "monitor" },
+  { page: "accessories", label: "Accessories", icon: "bluetooth" },
   { page: "control", label: "Control", icon: "deck" },
   { page: "security", label: "Security", icon: "shield" },
   { page: "settings", label: "Settings", icon: "settings" },

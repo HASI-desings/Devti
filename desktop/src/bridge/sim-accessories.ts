@@ -1,0 +1,157 @@
+import type { Accessory } from "./types";
+
+/** Browser preview only: accessories that look like real ones, marked as simulated by the banner. */
+export function simulatedAccessories(): Accessory[] {
+  const base = { paired: true, services: [], manufacturer_ids: [], drops: 0, remember: true };
+  return [
+    {
+      ...base,
+      address: "4C:11:22:33:44:01",
+      name: "AirPods Pro",
+      kind: "headphones",
+      connected: true,
+      rssi: -52,
+      battery: {
+        left: { percent: 82, charging: false },
+        right: { percent: 78, charging: false },
+        case: { percent: 46, charging: true },
+      },
+      profile: {
+        id: "apple-airpods",
+        name: "AirPods and Beats",
+        vendor: "Apple",
+        verified: false,
+        has_channel: true,
+        notes:
+          "Noise control, conversation awareness, single-AirPod noise cancellation, per-bud and case battery, and in-ear detection.",
+        controls: [
+          {
+            id: "anc",
+            label: "Noise control",
+            type: "choice",
+            options: [
+              { value: "off", label: "Off", send: "" },
+              { value: "anc", label: "Noise cancellation", send: "" },
+              { value: "transparency", label: "Transparency", send: "" },
+              { value: "adaptive", label: "Adaptive", send: "" },
+            ],
+          },
+          {
+            id: "conversation",
+            label: "Conversation awareness",
+            hint: "Lowers media and lets voices through when you start speaking.",
+            type: "toggle",
+            on: "",
+            off: "",
+          },
+          { id: "one_bud_anc", label: "Noise cancellation with one AirPod", type: "toggle", on: "", off: "" },
+        ],
+      },
+      values: {
+        anc: "anc",
+        conversation: "on",
+        one_bud_anc: "off",
+        ear_primary: "in ear",
+        ear_secondary: "in ear",
+      },
+      session: "connected",
+      last_connected: Date.now() - 40 * 60_000,
+    },
+    {
+      ...base,
+      address: "AC:80:0A:55:66:02",
+      name: "WH-1000XM5",
+      kind: "headphones",
+      connected: false,
+      rssi: null,
+      battery: { battery: { percent: 64, charging: false } },
+      profile: {
+        id: "sony-headphones",
+        name: "Sony WH / WF headphones",
+        vendor: "Sony",
+        verified: false,
+        has_channel: true,
+        notes: "Noise cancelling and ambient sound, equalizer, and battery for each bud and the case.",
+        controls: [
+          {
+            id: "ambient",
+            label: "Noise control",
+            type: "choice",
+            options: [
+              { value: "off", label: "Off", send: "" },
+              { value: "nc", label: "Noise cancelling", send: "" },
+              { value: "ambient", label: "Ambient sound", send: "" },
+            ],
+          },
+          {
+            id: "ambient_level",
+            label: "Ambient sound level",
+            type: "slider",
+            min: 1,
+            max: 20,
+            step: 1,
+            send: "",
+          },
+          {
+            id: "eq",
+            label: "Equalizer",
+            type: "equalizer",
+            bands: ["Clear Bass", "400", "1k", "2.5k", "6.3k", "16k"],
+            min: -10,
+            max: 10,
+            offset: 10,
+            send: "",
+          },
+        ],
+      },
+      values: { ambient: "nc", ambient_level: "12", eq: "3,1,0,0,1,2" },
+      session: "idle",
+      drops: 2,
+      last_connected: Date.now() - 26 * 3600_000,
+    },
+    {
+      ...base,
+      address: "D4:9A:20:77:88:03",
+      name: "MX Keys",
+      kind: "keyboard",
+      connected: true,
+      rssi: -61,
+      battery: { battery: { percent: 91, charging: false } },
+      profile: {
+        id: "generic",
+        name: "Standard Bluetooth device",
+        vendor: "",
+        verified: true,
+        has_channel: false,
+        notes:
+          'Shows every standard feature Devti finds. Use "Help support this device" to start a profile for its extras.',
+        controls: [],
+      },
+      values: {},
+      session: "not needed",
+      last_connected: Date.now() - 3 * 3600_000,
+    },
+    {
+      ...base,
+      address: "B8:F6:53:99:AA:04",
+      name: "JBL Flip 6",
+      kind: "speaker",
+      connected: false,
+      rssi: null,
+      battery: { battery: { percent: 37, charging: false } },
+      profile: {
+        id: "jbl",
+        name: "JBL",
+        vendor: "Harman",
+        verified: true,
+        has_channel: false,
+        notes:
+          "Battery, media controls and volume through standard Bluetooth. Party mode and EQ need JBL's closed protocol and aren't available.",
+        controls: [],
+      },
+      values: {},
+      session: "idle",
+      last_connected: Date.now() - 4 * 24 * 3600_000,
+    },
+  ];
+}

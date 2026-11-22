@@ -1,6 +1,6 @@
 import { type CSSProperties, useEffect, useState } from "react";
-import type { BatterySample } from "../../bridge";
-import { deviceIcon, Icon } from "../../design/icons";
+import type { Accessory, BatterySample } from "../../bridge";
+import { deviceIcon, Icon, type IconName } from "../../design/icons";
 import { useBridge } from "../../lib/bridge-context";
 import { orderedPeers, useStore } from "../../state/store";
 import { BatteryMeter, Segmented } from "../../ui";
@@ -18,8 +18,17 @@ export function BatteryPage() {
   const voices = useStore((st) => st.voices);
   const threshold = useStore((st) => st.lowBatteryThreshold);
   const [range, setRange] = useState<Range>("day");
+  const [accessories, setAccessories] = useState<Accessory[]>([]);
   const until = Date.now();
   const since = until - RANGE_MS[range];
+
+  useEffect(() => {
+    void bridge.accessories().then(
+      (a) => setAccessories(a.list),
+      () => {},
+    );
+    return bridge.onAccessories((a) => setAccessories(a.list));
+  }, [bridge]);
 
   const devices = [
     {
@@ -30,6 +39,8 @@ export function BatteryPage() {
       color: "var(--hub)",
       online: true,
       self: true,
+      icon: "hub" as IconName,
+      load: (from: number) => bridge.batteryHistory(null, from),
     },
     ...peers.map((x) => ({
       id: x.info.id as string | null,
@@ -39,7 +50,34 @@ export function BatteryPage() {
       color: `var(--chart-${voices[x.info.id] ?? "iris"})`,
       online: x.online,
       self: false,
+      icon: deviceIcon(x.info.kind),
+      load: (from: number) => bridge.batteryHistory(x.info.id, from),
     })),
+    // Accessories: the lowest bud (or the device's one battery) — the one that runs out first.
+    ...accessories
+      .filter((a) => Object.keys(a.battery).length > 0)
+      .map((a) => {
+        const parts = Object.entries(a.battery).filter(([k]) => k !== "case");
+        const low = parts.reduce(
+          (m, [, v]) => (v.percent < m.percent ? v : m),
+          parts[0]?.[1] ?? { percent: 0, charging: false },
+        );
+        return {
+          id: `bt:${a.address}` as string | null,
+          name: a.name,
+          kind: "accessory" as import("../../bridge").DeviceKind,
+          battery: { percent: low.percent, charging: low.charging },
+          color: "var(--chart-mint)",
+          online: a.connected,
+          self: false,
+          icon: (a.kind === "headphones"
+            ? "headphones"
+            : a.kind === "speaker"
+              ? "speaker"
+              : "bluetooth") as IconName,
+          load: (from: number) => bridge.accessoryBatteryHistory(a.address, from),
+        };
+      }),
   ];
 
   return (
@@ -67,14 +105,7 @@ export function BatteryPage() {
         </div>
         <div className={s.cards}>
           {devices.map((d) => (
-            <DeviceCard
-              key={d.id ?? "self"}
-              d={d}
-              since={since}
-              until={until}
-              threshold={threshold}
-              bridge={bridge}
-            />
+            <DeviceCard key={d.id ?? "self"} d={d} since={since} until={until} threshold={threshold} />
           ))}
         </div>
       </div>
@@ -87,7 +118,6 @@ function DeviceCard({
   since,
   until,
   threshold,
-  bridge,
 }: {
   d: {
     id: string | null;
@@ -97,23 +127,25 @@ function DeviceCard({
     color: string;
     online: boolean;
     self: boolean;
+    icon: IconName;
+    load: (since: number) => Promise<BatterySample[]>;
   };
   since: number;
   until: number;
   threshold: number;
-  bridge: ReturnType<typeof useBridge>;
 }) {
   const [samples, setSamples] = useState<BatterySample[] | null>(null);
   const [table, setTable] = useState(false);
   const battery = d.battery;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `load` is recreated every render; the id identifies it
   useEffect(() => {
     let alive = true;
-    void bridge.batteryHistory(d.id, since).then((h) => alive && setSamples(h));
+    void d.load(since).then((h) => alive && setSamples(h));
     return () => {
       alive = false;
     };
-  }, [bridge, d.id, since]);
+  }, [d.id, since]);
 
   return (
     <section
@@ -122,11 +154,19 @@ function DeviceCard({
       aria-label={`${d.name} battery`}
     >
       <header className={s.cardHead}>
-        <Icon name={d.self ? "hub" : deviceIcon(d.kind)} size={22} />
+        <Icon name={d.icon} size={22} />
         <div className={s.cardTitle}>
           <h2>{d.name}</h2>
           <span className={s.sub}>
-            {d.self ? "This computer" : d.online ? "Connected" : "Offline, last reported level"}
+            {d.self
+              ? "This computer"
+              : d.kind === "accessory"
+                ? d.online
+                  ? "Accessory, connected"
+                  : "Accessory, last reported level"
+                : d.online
+                  ? "Connected"
+                  : "Offline, last reported level"}
           </span>
         </div>
         <BatteryMeter battery={battery} accent={d.color} />

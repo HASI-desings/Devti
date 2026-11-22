@@ -2,6 +2,7 @@ import { MotionConfig } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 import s from "./App.module.css";
 import { Prism } from "./design/Prism";
+import { AccessoriesPage } from "./features/accessories/AccessoriesPage";
 import { BatteryPage } from "./features/battery/BatteryPage";
 import { ControlPage } from "./features/control/ControlPage";
 import { DevicePage } from "./features/device/DevicePage";
@@ -176,6 +177,7 @@ export function App() {
           {page === "control" && <ControlPage />}
           {page === "mirror" && <MirrorPage />}
           {page === "screens" && <ScreensPage />}
+          {page === "accessories" && <AccessoriesPage />}
           {page === "security" && <SecurityPage onPair={() => setPairOpen(true)} />}
           {page === "settings" && <SettingsPage />}
           {page === "help" && (

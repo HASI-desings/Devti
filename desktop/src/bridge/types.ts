@@ -236,6 +236,47 @@ export interface ScreenLayoutInfo {
   active: boolean;
 }
 
+// ------------------------------------------------------------------ Phase 5
+
+export type AccessoryControl = { id: string; label: string; hint?: string } & (
+  | { type: "toggle"; on: string; off: string }
+  | { type: "choice"; options: { value: string; label: string; send: string }[] }
+  | { type: "slider"; min: number; max: number; step: number; send: string }
+  | { type: "equalizer"; bands: string[]; min: number; max: number; offset: number; send: string }
+  | { type: "action"; send: string }
+);
+
+export interface Accessory {
+  address: string;
+  name: string;
+  kind: "headphones" | "speaker" | "keyboard" | "mouse" | "gamepad" | "watch" | "other";
+  paired: boolean;
+  connected: boolean;
+  rssi: number | null;
+  battery: Record<string, { percent: number; charging: boolean }>;
+  profile: {
+    id: string;
+    name: string;
+    vendor: string;
+    verified: boolean;
+    notes: string;
+    controls: AccessoryControl[];
+    has_channel: boolean;
+  };
+  values: Record<string, string>;
+  session: string;
+  services: string[];
+  manufacturer_ids: number[];
+  drops: number;
+  last_connected: number | null;
+  remember: boolean;
+}
+
+export interface AccessoryList {
+  status: string;
+  list: Accessory[];
+}
+
 /** One decoded screen frame header + JPEG bytes. */
 export interface ScreenFrame {
   seq: number;
@@ -420,4 +461,13 @@ export interface Bridge {
   stopScreenViewer(id: string): Promise<void>;
   screenLayout(): Promise<ScreenLayoutInfo>;
   setScreenLayout(layout: ScreenLayout): Promise<void>;
+
+  // Phase 5 — Bluetooth accessories
+  accessories(): Promise<AccessoryList>;
+  onAccessories(cb: (list: AccessoryList) => void): () => void;
+  setAccessoryControl(address: string, control: string, value: string): Promise<void>;
+  setAccessoryRemember(address: string, on: boolean): Promise<void>;
+  connectAccessory(address: string, on: boolean): Promise<void>;
+  accessoryBatteryHistory(address: string, since: number): Promise<BatterySample[]>;
+  helpSupportAccessory(address: string): Promise<string>;
 }
