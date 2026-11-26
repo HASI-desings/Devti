@@ -263,9 +263,12 @@ pub enum ControlMsg {
     // ---- Phase 7: reach and shared folders
     /// Addresses the sender can be reached at away from the local network ("ip:port" or
     /// "host:port": VPN addresses such as Tailscale's, or ones the user typed). Sent after
-    /// every handshake; an empty list means remote access is off.
+    /// every handshake; an empty list means remote access is off. `relay` is the relay the
+    /// sender's connect-from-anywhere endpoint is reachable through (a dialling hint).
     Reach {
         addrs: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        relay: Option<String>,
     },
     /// List a folder the receiver shares; "/" lists the shared folders (`browse`).
     FsList {
@@ -753,7 +756,10 @@ mod tests {
             ControlMsg::Ping { nonce: 1 },
             ControlMsg::Pong { nonce: 1 },
             ControlMsg::Goodbye { reason: GoodbyeReason::Revoked },
-            ControlMsg::Reach { addrs: vec!["100.101.102.103:47810".into(), "home.example.org:47810".into()] },
+            ControlMsg::Reach {
+                addrs: vec!["100.101.102.103:47810".into(), "home.example.org:47810".into()],
+                relay: Some("https://relay.example.org/".into()),
+            },
             ControlMsg::FsList { path: "/Documents/2026".into() },
             ControlMsg::FsListing {
                 path: "/Documents".into(),

@@ -287,6 +287,8 @@ pub fn run() {
             commands::run_rule_now,
             commands::pick_folder,
             commands::reach_info,
+            commands::anywhere_info,
+            commands::set_anywhere,
             commands::set_reach,
             commands::peer_reach,
             commands::shared_folders,

@@ -28,6 +28,7 @@ async fn start_in(
     cfg.bind_ip = "127.0.0.1".parse().unwrap();
     cfg.port = 0;
     cfg.discovery = false;
+    cfg.anywhere = devti_core::AnywhereMode::Off;
     let node = Node::start(cfg, secrets).await.expect("node starts");
     let events = node.subscribe();
     (node, events)
@@ -369,6 +370,7 @@ fn api_is_callable_from_threads_outside_the_runtime() {
         cfg.bind_ip = "127.0.0.1".parse().unwrap();
         cfg.port = 0;
         cfg.discovery = false;
+        cfg.anywhere = devti_core::AnywhereMode::Off;
         Node::start(cfg, Arc::new(MemorySecretStore::new())).await.unwrap()
     });
     let handle = std::thread::spawn(move || {

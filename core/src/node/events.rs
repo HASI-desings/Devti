@@ -330,6 +330,8 @@ pub enum NodeEvent {
     ReachChanged {
         peer: DeviceId,
     },
+    /// Connecting from anywhere started, stopped or came online (see `Node::anywhere_info`).
+    AnywhereChanged,
     /// A listing of another device's shared folder.
     FsListing {
         from: DeviceId,

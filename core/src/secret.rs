@@ -155,6 +155,7 @@ fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
 /// runtime; calling it from inside Devti's (node start, async commands) panics with "Cannot
 /// start a runtime from within a runtime" — which only happens on desktops that really have a
 /// keyring, so test machines never saw it. Keychain calls run on a short-lived thread instead.
+#[cfg_attr(not(feature = "keychain"), allow(dead_code))]
 pub(crate) fn off_runtime<T: Send>(f: impl FnOnce() -> T + Send) -> T {
     if tokio::runtime::Handle::try_current().is_err() {
         return f();

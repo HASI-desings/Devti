@@ -235,6 +235,18 @@ data class ReachInfo(
     val extra: List<String>,
 )
 
+/** Connecting from anywhere (built in since 1.1). */
+@Serializable
+data class AnywhereInfo(
+    val enabled: Boolean,
+    val running: Boolean,
+    val online: Boolean,
+    val relay: String? = null,
+    @SerialName("custom_relay") val customRelay: String = "",
+    @SerialName("public_ip") val publicIp: String? = null,
+    val error: String? = null,
+)
+
 @Serializable
 data class SharedFolder(val name: String, val path: String)
 

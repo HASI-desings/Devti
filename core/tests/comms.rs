@@ -25,6 +25,7 @@ async fn spawn(name: &str, kind: DeviceKind) -> T {
     cfg.bind_ip = "127.0.0.1".parse().unwrap();
     cfg.port = 0;
     cfg.discovery = false;
+    cfg.anywhere = devti_core::AnywhereMode::Off;
     cfg.downloads_dir = dir.path().join("downloads");
     let node = Node::start(cfg, Arc::new(MemorySecretStore::new())).await.unwrap();
     let ev = node.subscribe();

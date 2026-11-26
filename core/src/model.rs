@@ -411,8 +411,11 @@ pub enum ConnectionKind {
     Lan,
     /// Through a private overlay network (Tailscale, Headscale, ZeroTier, WireGuard…).
     Vpn,
-    /// Over the internet (a forwarded port or a public address).
+    /// Over the internet (a forwarded port, a public address, or a hole punched
+    /// through both routers).
     Internet,
+    /// Through an encrypted relay, when no direct path could be made.
+    Relay,
 }
 
 impl ConnectionKind {

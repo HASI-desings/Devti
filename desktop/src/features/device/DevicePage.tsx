@@ -43,10 +43,11 @@ export const PERMISSION_COPY: { key: keyof Permissions; title: string; hint: str
   },
 ];
 
-const PATH_COPY: Record<"lan" | "vpn" | "internet", string> = {
+const PATH_COPY: Record<"lan" | "vpn" | "internet" | "relay", string> = {
   lan: "over your local network",
   vpn: "through your private network",
-  internet: "over the internet",
+  internet: "directly over the internet",
+  relay: "through an encrypted relay",
 };
 
 export function DevicePage() {

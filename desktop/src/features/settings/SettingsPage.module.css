@@ -92,3 +92,10 @@
   color: var(--text);
   font-size: var(--t-16);
 }
+
+.subTitle {
+  margin-top: var(--s-6);
+  margin-bottom: var(--s-3);
+  font-size: var(--t-16);
+  color: var(--text-dim);
+}

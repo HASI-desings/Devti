@@ -284,6 +284,13 @@ final class Core: ObservableObject {
         if act({ try $0.fsGet(deviceId: id, path: path) }) { toast = "Downloading — it goes to Files → On My iPhone → Devti." }
     }
 
+    var anywhere: AnywhereInfo? { node.flatMap { JSON.decode(AnywhereInfo.self, $0.anywhereInfoJson()) } }
+    func setAnywhere(_ on: Bool) {
+        let relay = anywhere?.customRelay ?? ""
+        act { try $0.setAnywhere(enabled: on, relay: relay) }
+        objectWillChange.send()
+    }
+
     var reach: ReachInfo? { node.flatMap { JSON.decode(ReachInfo.self, $0.reachInfoJson()) } }
     func setReach(_ on: Bool) {
         let extra = JSON.string(reach?.extra ?? [])

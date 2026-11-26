@@ -19,8 +19,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use super::link::{Link, LinkReadError, LinkRecv as RecvStream, LinkSend as SendStream};
 use parking_lot::{Mutex, RwLock};
-use quinn::{RecvStream, SendStream, VarInt};
 use ring::digest::{Context, SHA256};
 use serde_bytes::ByteBuf;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
@@ -168,7 +168,7 @@ fn schedule_retry(inner: &Arc<Inner>, rec: TransferRecord) {
 
 async fn send_on(
     inner: &Arc<Inner>,
-    conn: &quinn::Connection,
+    conn: &Link,
     rec: &mut TransferRecord,
     cancel: &std::sync::atomic::AtomicBool,
 ) -> Result<()> {
@@ -201,7 +201,7 @@ async fn send_on(
     let (mut last, mut last_done) = (Instant::now(), offset);
     loop {
         if cancel.load(std::sync::atomic::Ordering::SeqCst) {
-            let _ = send.reset(VarInt::from_u32(CANCELLED));
+            let _ = send.reset(CANCELLED);
             return Err(Error::Connection("cancelled".into()));
         }
         let n = file.read(&mut buf).await?;
@@ -350,7 +350,7 @@ async fn receive_into(
         let n = match recv.read(&mut buf[..want]).await {
             Ok(Some(n)) => n,
             Ok(None) => return Err(Error::Connection("stream ended early".into())),
-            Err(quinn::ReadError::Reset(code)) if code == VarInt::from_u32(CANCELLED) => {
+            Err(LinkReadError::Reset(code)) if code == u64::from(CANCELLED) => {
                 return Err(Error::Connection("cancelled by sender".into()));
             }
             Err(e) => return Err(Error::Connection(e.to_string())),

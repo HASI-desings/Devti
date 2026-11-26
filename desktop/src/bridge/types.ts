@@ -38,8 +38,12 @@ export interface Permissions {
 }
 
 export interface ConnectionSnapshot {
-  /** How the session runs: local network, a private VPN (Tailscale…), or the internet. */
-  kind: "lan" | "vpn" | "internet";
+  /**
+   * How the session runs: local network, a private VPN (Tailscale…), directly over the
+   * internet (a hole punched through both routers, or a forwarded port), or through an
+   * encrypted relay.
+   */
+  kind: "lan" | "vpn" | "internet" | "relay";
   address: string;
   rtt_ms: number;
   since: number;
@@ -152,6 +156,7 @@ export type NodeEvent =
     }
   | { type: "audio_ended"; from: string; kind: string }
   | { type: "reach_changed"; peer: string }
+  | { type: "anywhere_changed" }
   | {
       type: "fs_listing";
       from: string;
@@ -163,6 +168,22 @@ export type NodeEvent =
   | { type: "fs_error"; from: string; path: string; error: string };
 
 // ------------------------------------------------------------------ Phase 7
+
+/** Connecting from anywhere (built in since 1.1). */
+export interface AnywhereInfo {
+  enabled: boolean;
+  /** The endpoint is running. */
+  running: boolean;
+  /** Connected to a relay, so devices can find this one from anywhere. */
+  online: boolean;
+  /** Host name of the relay this device is reachable through. */
+  relay: string | null;
+  /** The user's own relay URL ("" = the free public relays). */
+  custom_relay: string;
+  /** This network's public address as seen from the internet. */
+  public_ip: string | null;
+  error: string | null;
+}
 
 export interface ReachAddress {
   address: string;
@@ -656,6 +677,8 @@ export interface Bridge {
   // Phase 7 — reach and extensibility
   pickFolder(title: string): Promise<string | null>;
   reachInfo(): Promise<ReachInfo>;
+  anywhereInfo(): Promise<AnywhereInfo>;
+  setAnywhere(enabled: boolean, relay: string): Promise<AnywhereInfo>;
   setReach(enabled: boolean, extra: string[]): Promise<ReachInfo>;
   peerReach(id: string): Promise<string[]>;
   sharedFolders(): Promise<SharedFolder[]>;

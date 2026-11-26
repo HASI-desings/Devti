@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use quinn::{RecvStream, SendStream, VarInt};
+use super::link::{LinkRecv as RecvStream, LinkSend as SendStream};
 use tokio::sync::{broadcast, mpsc};
 
 use super::{Inner, NodeEvent};
@@ -66,8 +66,8 @@ pub(crate) async fn receive(
         && (8_000..=96_000).contains(&sample_rate)
         && (1..=2).contains(&channels);
     if !allowed || !valid {
-        let _ = send.reset(VarInt::from_u32(0));
-        let _ = recv.stop(VarInt::from_u32(0));
+        let _ = send.reset(0);
+        let _ = recv.stop(0);
         return;
     }
     let name = inner.peer_name(&peer);

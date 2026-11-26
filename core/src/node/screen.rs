@@ -19,8 +19,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use super::link::{Link, LinkRecv as RecvStream, LinkSend as SendStream};
 use parking_lot::{Mutex, RwLock};
-use quinn::{RecvStream, SendStream, VarInt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, watch};
 
@@ -148,12 +148,7 @@ pub(crate) fn on_session_down(inner: &Arc<Inner>, peer: DeviceId) {
     }
 }
 
-async fn share(
-    inner: &Arc<Inner>,
-    peer: DeviceId,
-    conn: quinn::Connection,
-    mut stop: watch::Receiver<bool>,
-) -> Result<()> {
+async fn share(inner: &Arc<Inner>, peer: DeviceId, conn: Link, mut stop: watch::Receiver<bool>) -> Result<()> {
     let (mut send, mut recv) = conn.open_bi().await?;
     write_message(&mut send, &StreamOpen::Screen).await?;
     let mut frames = inner.screen.latest.subscribe();
@@ -241,7 +236,7 @@ fn adapt(inner: &Arc<Inner>, latency_ms: u32, fps: u8) {
 /// A sharer opened a screen stream to us (viewer side).
 pub(crate) async fn receive(inner: Arc<Inner>, peer: DeviceId, mut send: SendStream, mut recv: RecvStream) {
     if !inner.screen.viewing.lock().contains(&peer) {
-        let _ = send.reset(VarInt::from_u32(0));
+        let _ = send.reset(0);
         return;
     }
     let mut window = (Instant::now(), 0u32, 0u64);

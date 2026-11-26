@@ -45,6 +45,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     cfg.model = Some("Devti simulator".into());
     cfg.port = 0;
     cfg.discovery = arg("--mdns").is_some();
+    if arg("--anywhere").is_none() {
+        cfg.anywhere = devti_core::AnywhereMode::Off;
+    }
     let node = Node::start(cfg, Arc::new(MemorySecretStore::new())).await?;
     let mut events = node.subscribe();
     let mut frames = node.subscribe_frames();
@@ -159,7 +162,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 if frame_count > 10 {
                     latencies.push(f.latency_ms);
-                    if watch_frames.is_some() && frame_count % 30 == 0 {
+                    if watch_frames.is_some() && frame_count.is_multiple_of(30) {
                         println!("screen frames={frame_count} latency={} fps={}", f.latency_ms, f.fps);
                     }
                 }
@@ -185,7 +188,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             },
             _ = tick.tick() => {
                 ticks += 1;
-                if ticks % (battery_every / 5) == 0 {
+                if ticks.is_multiple_of(battery_every / 5) {
                     battery = battery.saturating_sub(1).max(5);
                 }
                 node.set_status(DeviceStatus { battery: Some(BatteryState::new(battery, false)) });

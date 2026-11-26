@@ -262,7 +262,7 @@ impl FrameEncoder {
         let hash = sample_hash(rgba);
         if hash == self.last_hash {
             self.same_count += 1;
-            if self.same_count % 60 != 0 {
+            if !self.same_count.is_multiple_of(60) {
                 return Ok(None);
             }
         } else {

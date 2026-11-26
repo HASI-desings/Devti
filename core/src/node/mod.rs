@@ -10,12 +10,14 @@
 //! * [`session`] — accepting/dialling connections, sessions, reconnect with backoff,
 //! * [`ceremony`] — the hub and joiner sides of the pairing ceremony.
 
+mod anywhere;
 pub mod audio;
 mod ceremony;
 mod comms;
 mod continuity;
 mod control;
 mod events;
+pub(crate) mod link;
 pub mod reach;
 pub mod screen;
 mod session;
@@ -33,6 +35,7 @@ use std::time::{Duration, Instant};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
 
+pub use anywhere::AnywhereInfo;
 pub use events::*;
 pub use reach::{ReachAddress, ReachInfo};
 pub use storage::SharedFolder;
@@ -83,6 +86,31 @@ pub struct NodeConfig {
     pub discovery: bool,
     /// Where received files are saved (changeable later in settings).
     pub downloads_dir: PathBuf,
+    /// Whether to run the connect-from-anywhere endpoint.
+    pub anywhere: AnywhereMode,
+}
+
+/// How the connect-from-anywhere endpoint is run.
+#[derive(Clone, Default)]
+pub enum AnywhereMode {
+    /// Follow the user's setting (on unless they turned it off).
+    #[default]
+    Setting,
+    /// Never start it.
+    Off,
+    /// Start it with a customised builder (tests use a local relay).
+    #[doc(hidden)]
+    Custom(Arc<dyn Fn(iroh::endpoint::Builder) -> iroh::endpoint::Builder + Send + Sync>),
+}
+
+impl std::fmt::Debug for AnywhereMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            AnywhereMode::Setting => "Setting",
+            AnywhereMode::Off => "Off",
+            AnywhereMode::Custom(_) => "Custom",
+        })
+    }
 }
 
 impl NodeConfig {
@@ -101,6 +129,7 @@ impl NodeConfig {
             port: DEFAULT_PORT,
             discovery: true,
             downloads_dir: data_dir_default_downloads(),
+            anywhere: AnywhereMode::Setting,
         }
     }
 }
@@ -170,8 +199,11 @@ pub(crate) struct Inner {
     pub screen: screen::State,
     /// Live audio streams received.
     pub audio: audio::State,
+    pub anywhere_mode: AnywhereMode,
     /// Where peers said they can be reached away from the local network.
     pub reach: reach::State,
+    /// The connect-from-anywhere endpoint and paired devices' keys.
+    pub anywhere: anywhere::State,
 }
 
 /// Handle to a running node. Cheap to clone.
@@ -256,13 +288,17 @@ impl Node {
             control: control::State::new(),
             screen: screen::State::new(),
             audio: audio::State::new(),
+            anywhere_mode: config.anywhere.clone(),
             reach: reach::State::new(),
+            anywhere: anywhere::State::new(),
         });
 
         if config.discovery && !paused {
             inner.start_discovery();
         }
         reach::load(&inner);
+        anywhere::load(&inner);
+        anywhere::start(&inner);
         inner.rt.spawn(session::accept_loop(inner.clone()));
         inner.rt.spawn(session::reconnect_loop(inner.clone()));
         inner.rt.spawn(session::discovery_loop(inner.clone(), discovery_rx));
@@ -337,6 +373,7 @@ impl Node {
             expect: ServerExpectation::Pinned(uri.fingerprint),
             method: PairMethod::Qr,
             password: crate::pairing::pake::password_for_qr(&uri.secret),
+            key: uri.key,
         };
         self.inner.rt.spawn(ceremony::run_joiner(self.inner.clone(), pairing_id, target));
         Ok(pairing_id)
@@ -377,6 +414,7 @@ impl Node {
             expect,
             method: PairMethod::Code,
             password: crate::pairing::pake::password_for_code(&digits),
+            key: None,
         };
         self.inner.rt.spawn(ceremony::run_joiner(self.inner.clone(), pairing_id, target));
         Ok(pairing_id)
@@ -466,6 +504,10 @@ impl Node {
             p.attempts = 0;
             p.next_attempt = now;
         }
+        // The network changed: let the anywhere endpoint look for new paths right away.
+        if let Some(ep) = self.inner.anywhere.endpoint() {
+            self.inner.rt.spawn(async move { ep.network_change().await });
+        }
     }
 
     /// Newest-first activity log page.
@@ -513,7 +555,14 @@ impl Node {
         if let Some(d) = self.inner.discovery.lock().take() {
             d.stop();
         }
-        let _ = tokio::time::timeout(Duration::from_secs(2), self.inner.endpoint.wait_idle()).await;
+        let anywhere = self.inner.anywhere.endpoint();
+        let _ = tokio::time::timeout(Duration::from_secs(2), async {
+            self.inner.endpoint.wait_idle().await;
+            if let Some(ep) = anywhere {
+                ep.close().await;
+            }
+        })
+        .await;
     }
 }
 
@@ -567,11 +616,14 @@ impl Inner {
     }
 
     pub(crate) fn snapshot(&self, p: &PeerState) -> PeerSnapshot {
-        let connection = p.session.as_ref().map(|s| ConnectionSnapshot {
-            kind: crate::model::ConnectionKind::of(&s.conn.remote_address()),
-            address: s.conn.remote_address().to_string(),
-            rtt_ms: s.conn.rtt().as_millis().min(u32::MAX as u128) as u32,
-            since: s.connected_at,
+        let connection = p.session.as_ref().map(|s| {
+            let path = s.conn.path();
+            ConnectionSnapshot {
+                kind: path.kind,
+                address: path.address,
+                rtt_ms: path.rtt.as_millis().min(u32::MAX as u128) as u32,
+                since: s.connected_at,
+            }
         });
         PeerSnapshot {
             info: p.record.info.clone(),
@@ -634,7 +686,7 @@ impl Inner {
         let qr_secret = pairing::new_qr_secret()?;
         let code = pairing::new_code()?;
         let addrs = self.advertised_addresses();
-        if addrs.is_empty() {
+        if addrs.is_empty() && self.anywhere.endpoint().is_none() {
             return Err(Error::Connection(
                 "this device has no network connection — connect to Wi-Fi or Ethernet first".into(),
             ));
@@ -648,6 +700,7 @@ impl Inner {
             addrs: addrs.clone(),
             name: info.name,
             kind: info.kind,
+            key: link::key_of_cert(self.identity.cert_der().as_ref()).filter(|_| self.anywhere.endpoint().is_some()),
         };
         let expires_at_ms = now_ms() + PAIRING_WINDOW_TTL.as_millis() as i64;
         let window_info = PairingWindowInfo {
@@ -699,6 +752,7 @@ impl Inner {
         self.trust.remove(&state.record.fingerprint);
         self.store.remove_peer(id)?;
         reach::forget(self, id);
+        anywhere::forget(self, id);
         if let Some(s) = state.session {
             if reason == RemovalReason::RevokedHere {
                 let _ = s.tx.send(ControlMsg::Goodbye { reason: GoodbyeReason::Revoked });
@@ -706,7 +760,7 @@ impl Inner {
             let conn = s.conn.clone();
             self.rt.spawn(async move {
                 tokio::time::sleep(Duration::from_millis(150)).await;
-                conn.close(quinn::VarInt::from_u32(close_code::REVOKED), b"revoked");
+                conn.close(close_code::REVOKED, b"revoked");
             });
         }
         let action = match reason {
@@ -726,7 +780,7 @@ impl Inner {
         self.store.set_setting(SETTING_PAUSED, if paused { "true" } else { "false" })?;
         if paused {
             self.close_pairing_window("paused");
-            let sessions: Vec<quinn::Connection> = {
+            let sessions: Vec<link::Link> = {
                 let peers = self.peers.read();
                 peers
                     .values()
@@ -740,7 +794,7 @@ impl Inner {
             self.rt.spawn(async move {
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 for c in sessions {
-                    c.close(quinn::VarInt::from_u32(close_code::PAUSED), b"paused");
+                    c.close(close_code::PAUSED, b"paused");
                 }
             });
             if let Some(d) = self.discovery.lock().take() {

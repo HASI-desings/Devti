@@ -553,6 +553,17 @@ impl DevtiMobile {
         Ok(self.node.set_reach(enabled, parse_json(&extra_json)?)?)
     }
 
+    /// Connecting from anywhere (`AnywhereInfo`).
+    pub fn anywhere_info_json(&self) -> String {
+        serde_json::to_string(&self.node.anywhere_info()).unwrap_or_else(|_| "{}".into())
+    }
+
+    /// Turns connecting from anywhere on or off; `relay` is the user's own relay URL, or
+    /// empty for the free public relays.
+    pub fn set_anywhere(&self, enabled: bool, relay: String) -> Result<(), DevtiError> {
+        Ok(self.runtime.block_on(self.node.set_anywhere(enabled, &relay))?)
+    }
+
     /// The folders this device shares, as `[{name, path}]`.
     pub fn shared_folders_json(&self) -> String {
         serde_json::to_string(&self.node.shared_folders()).unwrap_or_else(|_| "[]".into())

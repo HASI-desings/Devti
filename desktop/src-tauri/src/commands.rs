@@ -733,6 +733,22 @@ pub fn set_reach(
     Ok(state.node.reach_info())
 }
 
+/// Connecting from anywhere: status, relay and this network's public address.
+#[tauri::command]
+pub fn anywhere_info(state: State<'_, AppState>) -> devti_core::node::AnywhereInfo {
+    state.node.anywhere_info()
+}
+
+#[tauri::command]
+pub async fn set_anywhere(
+    state: State<'_, AppState>,
+    enabled: bool,
+    relay: String,
+) -> CmdResult<devti_core::node::AnywhereInfo> {
+    state.node.set_anywhere(enabled, &relay).await.map_err(err)?;
+    Ok(state.node.anywhere_info())
+}
+
 /// Where `id` said it can be reached away from home.
 #[tauri::command]
 pub fn peer_reach(state: State<'_, AppState>, id: String) -> CmdResult<Vec<String>> {

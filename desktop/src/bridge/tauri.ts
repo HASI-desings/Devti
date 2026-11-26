@@ -175,6 +175,8 @@ export function createTauriBridge(): Bridge {
     runRuleNow: (id) => invoke("run_rule_now", { id }),
     pickFolder: (title) => invoke("pick_folder", { title }),
     reachInfo: () => invoke("reach_info"),
+    anywhereInfo: () => invoke("anywhere_info"),
+    setAnywhere: (enabled, relay) => invoke("set_anywhere", { enabled, relay }),
     setReach: (enabled, extra) => invoke("set_reach", { enabled, extra }),
     peerReach: (id) => invoke("peer_reach", { id }),
     sharedFolders: () => invoke("shared_folders"),

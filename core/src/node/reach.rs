@@ -94,6 +94,7 @@ fn kind_name(k: ConnectionKind) -> &'static str {
         ConnectionKind::Lan => "lan",
         ConnectionKind::Vpn => "vpn",
         ConnectionKind::Internet => "internet",
+        ConnectionKind::Relay => "relay",
     }
 }
 
@@ -171,9 +172,23 @@ pub(crate) fn load(inner: &Inner) {
     }
 }
 
+fn message(inner: &Inner) -> ControlMsg {
+    ControlMsg::Reach { addrs: own_reach(inner), relay: super::anywhere::home_relay(inner) }
+}
+
 /// A session came up: tell the peer where we can be reached (or that we can't).
 pub(crate) fn on_session(inner: &Arc<Inner>, peer: DeviceId) {
-    let _ = inner.send_to(&peer, ControlMsg::Reach { addrs: own_reach(inner) });
+    let _ = inner.send_to(&peer, message(inner));
+}
+
+/// Tells every online peer where this device can be reached now.
+pub(crate) fn announce(inner: &Arc<Inner>) {
+    let online: Vec<DeviceId> =
+        inner.peers.read().iter().filter(|(_, p)| p.session.is_some()).map(|(id, _)| *id).collect();
+    let msg = message(inner);
+    for id in online {
+        let _ = inner.send_to(&id, msg.clone());
+    }
 }
 
 /// A peer told us where it can be reached.
@@ -253,12 +268,7 @@ impl Node {
         inner.store.set_setting(SETTING_EXTRA, &serde_json::to_string(&extra)?)?;
         inner.store.set_setting(SETTING_ENABLED, if on { "true" } else { "false" })?;
         inner.log(None, if on { "remote_access_on" } else { "remote_access_off" }, "");
-        let online: Vec<DeviceId> =
-            inner.peers.read().iter().filter(|(_, p)| p.session.is_some()).map(|(id, _)| *id).collect();
-        let addrs = own_reach(inner);
-        for id in online {
-            let _ = inner.send_to(&id, ControlMsg::Reach { addrs: addrs.clone() });
-        }
+        announce(inner);
         Ok(())
     }
 

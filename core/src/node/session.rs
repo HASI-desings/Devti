@@ -7,7 +7,8 @@
 //!   most one per peer; if both devices dial each other at once, both deterministically
 //!   keep the connection initiated by the lower device ID.
 //! * [`reconnect_loop`] redials offline peers with capped exponential backoff, using
-//!   fresh mDNS addresses first and the last known address second.
+//!   fresh mDNS addresses first and the last known address second, then the
+//!   connect-from-anywhere endpoint ([`super::anywhere`]).
 
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -15,14 +16,13 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use quinn::crypto::rustls::{QuicClientConfig, QuicServerConfig};
-use quinn::{Connection, RecvStream, SendStream, VarInt};
-use rustls::pki_types::CertificateDer;
 use tokio::sync::mpsc;
 
+use super::link::{Link, LinkRecv, LinkSend};
 use super::{Inner, NodeEvent, ceremony, trust::TrustView};
 use crate::discovery::DiscoveryEvent;
 use crate::error::{Error, Result};
-use crate::identity::{Identity, fingerprint_of};
+use crate::identity::Identity;
 use crate::model::{DeviceId, DeviceInfo, DeviceStatus, Fingerprint};
 use crate::net::now_ms;
 use crate::protocol::{
@@ -39,7 +39,7 @@ const MAX_BACKOFF: Duration = Duration::from_secs(30);
 /// An authenticated control channel with one peer.
 pub(crate) struct Session {
     pub id: u64,
-    pub conn: Connection,
+    pub conn: Link,
     pub tx: mpsc::UnboundedSender<ControlMsg>,
     pub initiator: DeviceId,
     pub connected_at: i64,
@@ -83,22 +83,8 @@ fn client_config(identity: &Identity, expect: ServerExpectation) -> Result<quinn
     Ok(cfg)
 }
 
-/// Fingerprint of the certificate the peer authenticated with.
-pub(crate) fn peer_fingerprint(conn: &Connection) -> Result<Fingerprint> {
-    let certs = conn
-        .peer_identity()
-        .and_then(|id| id.downcast::<Vec<CertificateDer<'static>>>().ok())
-        .ok_or_else(|| Error::Tls("peer presented no certificate".into()))?;
-    let first = certs.first().ok_or_else(|| Error::Tls("peer presented no certificate".into()))?;
-    fingerprint_of(first)
-}
-
-/// Dials the first reachable address.
-pub(crate) async fn connect_any(
-    inner: &Arc<Inner>,
-    addrs: &[SocketAddr],
-    expect: ServerExpectation,
-) -> Result<Connection> {
+/// Dials the first reachable address on the local endpoint.
+pub(crate) async fn connect_any(inner: &Arc<Inner>, addrs: &[SocketAddr], expect: ServerExpectation) -> Result<Link> {
     let cfg = client_config(&inner.identity, expect)?;
     let mut last_err = Error::Connection("no address to dial".into());
     for addr in addrs {
@@ -110,7 +96,7 @@ pub(crate) async fn connect_any(
             Ok::<_, Error>(connecting.await?)
         };
         match tokio::time::timeout(DIAL_TIMEOUT, attempt).await {
-            Ok(Ok(conn)) => return Ok(conn),
+            Ok(Ok(conn)) => return Ok(Link::Quic(conn)),
             Ok(Err(e)) => last_err = e,
             Err(_) => last_err = Error::Timeout(format!("no answer from {addr}")),
         }
@@ -148,16 +134,17 @@ pub(crate) async fn accept_loop(inner: Arc<Inner>) {
                     return;
                 }
             };
-            match peer_fingerprint(&conn) {
-                Ok(fp) => serve_connection(inner, conn, fp).await,
-                Err(_) => conn.close(VarInt::from_u32(close_code::UNTRUSTED), b"no certificate"),
+            let link = Link::Quic(conn);
+            match link.peer_fingerprint() {
+                Ok(fp) => serve_connection(inner, link, fp).await,
+                Err(_) => link.close(close_code::UNTRUSTED, b"no certificate"),
             }
         });
     }
 }
 
 /// Routes every bi-directional stream the peer opens on `conn`.
-pub(crate) async fn serve_connection(inner: Arc<Inner>, conn: Connection, peer_fp: Fingerprint) {
+pub(crate) async fn serve_connection(inner: Arc<Inner>, conn: Link, peer_fp: Fingerprint) {
     let peer_id = peer_fp.device_id();
     let mut shutdown = inner.shutdown.subscribe();
     let mut first = true;
@@ -178,7 +165,7 @@ pub(crate) async fn serve_connection(inner: Arc<Inner>, conn: Connection, peer_f
             Some(Ok(s)) => s,
             Some(Err(_)) => return, // connection closed
             None => {
-                conn.close(VarInt::from_u32(close_code::UNTRUSTED), b"idle stranger");
+                conn.close(close_code::UNTRUSTED, b"idle stranger");
                 return;
             }
         };
@@ -189,7 +176,7 @@ pub(crate) async fn serve_connection(inner: Arc<Inner>, conn: Connection, peer_f
             {
                 Ok(Ok(Some(o))) => o,
                 _ => {
-                    conn.close(VarInt::from_u32(close_code::PROTOCOL), b"bad stream header");
+                    conn.close(close_code::PROTOCOL, b"bad stream header");
                     return;
                 }
             };
@@ -199,58 +186,52 @@ pub(crate) async fn serve_connection(inner: Arc<Inner>, conn: Connection, peer_f
             }
             StreamOpen::Control => {
                 if !inner.trust.is_trusted(&peer_fp) {
-                    conn.close(VarInt::from_u32(close_code::UNTRUSTED), b"not paired");
+                    conn.close(close_code::UNTRUSTED, b"not paired");
                     return;
                 }
                 inner.rt.spawn(accept_control(inner.clone(), conn.clone(), send, recv, peer_id));
             }
             StreamOpen::File => {
                 if !inner.trust.is_trusted(&peer_fp) {
-                    conn.close(VarInt::from_u32(close_code::UNTRUSTED), b"not paired");
+                    conn.close(close_code::UNTRUSTED, b"not paired");
                     return;
                 }
                 inner.rt.spawn(super::transfer::receive(inner.clone(), peer_id, send, recv));
             }
             StreamOpen::Audio { kind, sample_rate, channels } => {
                 if !inner.trust.is_trusted(&peer_fp) {
-                    conn.close(VarInt::from_u32(close_code::UNTRUSTED), b"not paired");
+                    conn.close(close_code::UNTRUSTED, b"not paired");
                     return;
                 }
                 inner.rt.spawn(super::audio::receive(inner.clone(), peer_id, kind, sample_rate, channels, send, recv));
             }
             StreamOpen::Screen => {
                 if !inner.trust.is_trusted(&peer_fp) {
-                    conn.close(VarInt::from_u32(close_code::UNTRUSTED), b"not paired");
+                    conn.close(close_code::UNTRUSTED, b"not paired");
                     return;
                 }
                 inner.rt.spawn(super::screen::receive(inner.clone(), peer_id, send, recv));
             }
             StreamOpen::Unknown => {
                 let mut send = send;
-                let _ = send.reset(VarInt::from_u32(0));
-                let _ = recv.stop(VarInt::from_u32(0));
+                let _ = send.reset(0);
+                let _ = recv.stop(0);
             }
         }
     }
 }
 
-async fn accept_control(
-    inner: Arc<Inner>,
-    conn: Connection,
-    mut send: SendStream,
-    mut recv: RecvStream,
-    peer_id: DeviceId,
-) {
+async fn accept_control(inner: Arc<Inner>, conn: Link, mut send: LinkSend, mut recv: LinkRecv, peer_id: DeviceId) {
     match exchange_hello(&inner, &mut send, &mut recv, peer_id, false).await {
         Ok((info, status)) => {
             if let Err(e) = register_session(&inner, peer_id, conn.clone(), peer_id, send, recv, info, status) {
                 tracing::debug!(error = %e, "session rejected");
-                conn.close(VarInt::from_u32(close_code::UNTRUSTED), b"not paired");
+                conn.close(close_code::UNTRUSTED, b"not paired");
             }
         }
         Err(e) => {
             tracing::debug!(error = %e, "hello failed");
-            conn.close(VarInt::from_u32(close_code::PROTOCOL), b"hello failed");
+            conn.close(close_code::PROTOCOL, b"hello failed");
         }
     }
 }
@@ -258,11 +239,11 @@ async fn accept_control(
 // ----------------------------------------------------------------- outbound
 
 /// Opens the control stream on a freshly dialled (or freshly paired) connection.
-pub(crate) async fn establish_outgoing(inner: &Arc<Inner>, conn: Connection, peer_id: DeviceId) -> Result<()> {
+pub(crate) async fn establish_outgoing(inner: &Arc<Inner>, conn: Link, peer_id: DeviceId) -> Result<()> {
     let (mut send, mut recv) = conn.open_bi().await?;
     write_message(&mut send, &StreamOpen::Control).await?;
     let (info, status) = exchange_hello(inner, &mut send, &mut recv, peer_id, true).await?;
-    let fp = peer_fingerprint(&conn)?;
+    let fp = conn.peer_fingerprint()?;
     register_session(inner, peer_id, conn.clone(), inner.identity.device_id(), send, recv, info, status)?;
     inner.rt.spawn(serve_connection(inner.clone(), conn, fp));
     Ok(())
@@ -270,8 +251,8 @@ pub(crate) async fn establish_outgoing(inner: &Arc<Inner>, conn: Connection, pee
 
 async fn exchange_hello(
     inner: &Arc<Inner>,
-    send: &mut SendStream,
-    recv: &mut RecvStream,
+    send: &mut LinkSend,
+    recv: &mut LinkRecv,
     peer_id: DeviceId,
     speak_first: bool,
 ) -> Result<(DeviceInfo, DeviceStatus)> {
@@ -304,17 +285,17 @@ async fn exchange_hello(
 fn register_session(
     inner: &Arc<Inner>,
     peer_id: DeviceId,
-    conn: Connection,
+    conn: Link,
     initiator: DeviceId,
-    send: SendStream,
-    recv: RecvStream,
+    send: LinkSend,
+    recv: LinkRecv,
     info: DeviceInfo,
     status: DeviceStatus,
 ) -> Result<()> {
     let preferred = inner.identity.device_id().min(peer_id);
     let session_id = inner.session_seq.fetch_add(1, Ordering::SeqCst);
     let now = now_ms();
-    let addr = conn.remote_address();
+    let path = conn.path();
     let (tx, rx) = mpsc::unbounded_channel();
 
     let (snap, replaced) = {
@@ -322,11 +303,11 @@ fn register_session(
         let p = peers.get_mut(&peer_id).ok_or_else(|| Error::UnknownPeer(peer_id.to_string()))?;
         let mut replaced = None;
         if let Some(existing) = &p.session
-            && existing.conn.close_reason().is_none()
+            && !existing.conn.is_closed()
         {
             if existing.initiator == preferred && initiator != preferred {
                 drop(peers);
-                conn.close(VarInt::from_u32(close_code::DUPLICATE), b"duplicate");
+                conn.close(close_code::DUPLICATE, b"duplicate");
                 return Ok(());
             }
             replaced = Some(existing.conn.clone());
@@ -334,17 +315,23 @@ fn register_session(
         p.record.info = info;
         p.record.last_status = status;
         p.record.last_seen = Some(now);
-        p.record.last_addrs = vec![addr];
+        if let Some(a) = path.socket.filter(|_| conn.is_quic()) {
+            p.record.last_addrs = vec![a];
+        }
         p.attempts = 0;
         p.session = Some(Session { id: session_id, conn: conn.clone(), tx, initiator, connected_at: now });
         (inner.snapshot(p), replaced)
     };
     if let Some(old) = replaced {
-        old.close(VarInt::from_u32(close_code::DUPLICATE), b"duplicate");
+        old.close(close_code::DUPLICATE, b"duplicate");
     }
     let _ = inner.store.update_peer_info(&snap.info);
     let _ = inner.store.update_peer_status(&peer_id, &snap.status);
-    let _ = inner.store.update_peer_seen(&peer_id, now, &[addr]);
+    let addrs = inner.peers.read().get(&peer_id).map(|p| p.record.last_addrs.clone()).unwrap_or_default();
+    let _ = inner.store.update_peer_seen(&peer_id, now, &addrs);
+    if let (Some(key), Ok(fp)) = (conn.peer_key(), conn.peer_fingerprint()) {
+        super::anywhere::learn_key(inner, &peer_id, key, &fp);
+    }
 
     inner.rt.spawn(write_loop(send, rx));
     inner.rt.spawn(read_loop(inner.clone(), peer_id, recv));
@@ -358,12 +345,12 @@ fn register_session(
     super::continuity::on_session_up(inner, peer_id);
     super::transfer::resume_for(inner, peer_id);
     super::reach::on_session(inner, peer_id);
-    inner.log(Some((&peer_id, &snap.info.name)), "connected", &addr.to_string());
+    inner.log(Some((&peer_id, &snap.info.name)), "connected", &path.address);
     inner.emit(NodeEvent::PeerChanged { peer: snap });
     Ok(())
 }
 
-async fn write_loop(mut send: SendStream, mut rx: mpsc::UnboundedReceiver<ControlMsg>) {
+async fn write_loop(mut send: LinkSend, mut rx: mpsc::UnboundedReceiver<ControlMsg>) {
     while let Some(msg) = rx.recv().await {
         if write_message(&mut send, &msg).await.is_err() {
             break;
@@ -372,7 +359,7 @@ async fn write_loop(mut send: SendStream, mut rx: mpsc::UnboundedReceiver<Contro
     let _ = send.finish();
 }
 
-async fn read_loop(inner: Arc<Inner>, peer_id: DeviceId, mut recv: RecvStream) {
+async fn read_loop(inner: Arc<Inner>, peer_id: DeviceId, mut recv: LinkRecv) {
     loop {
         match read_message::<_, ControlMsg>(&mut recv, CONTROL_FRAME_LIMIT).await {
             Ok(Some(msg)) => handle_control(&inner, peer_id, msg),
@@ -449,7 +436,10 @@ fn handle_control(inner: &Arc<Inner>, peer_id: DeviceId, msg: ControlMsg) {
         | ControlMsg::Call { .. }
         | ControlMsg::CallAction { .. }
         | ControlMsg::Handoff { .. } => super::comms::handle(inner, peer_id, msg),
-        ControlMsg::Reach { addrs } => super::reach::handle(inner, peer_id, addrs),
+        ControlMsg::Reach { addrs, relay } => {
+            super::anywhere::on_relay_hint(inner, &peer_id, relay);
+            super::reach::handle(inner, peer_id, addrs)
+        }
         ControlMsg::FsList { .. }
         | ControlMsg::FsListing { .. }
         | ControlMsg::FsGet { .. }
@@ -459,11 +449,8 @@ fn handle_control(inner: &Arc<Inner>, peer_id: DeviceId, msg: ControlMsg) {
     }
 }
 
-fn on_session_closed(inner: &Arc<Inner>, peer_id: DeviceId, session_id: u64, reason: quinn::ConnectionError) {
-    let revoked_by_peer = matches!(
-        &reason,
-        quinn::ConnectionError::ApplicationClosed(c) if c.error_code == VarInt::from_u32(close_code::REVOKED)
-    );
+fn on_session_closed(inner: &Arc<Inner>, peer_id: DeviceId, session_id: u64, reason: super::link::LinkClosed) {
+    let revoked_by_peer = reason.app_code == Some(u64::from(close_code::REVOKED));
     let now = now_ms();
     let (snap, addrs) = {
         let mut peers = inner.peers.write();
@@ -526,7 +513,7 @@ pub(crate) async fn reconnect_loop(inner: Arc<Inner>) {
                     }
                     // Addresses the peer gave for when it's away (Phase 7), tried last.
                     let reach = inner.reach.of(id);
-                    if addrs.is_empty() && reach.is_empty() {
+                    if addrs.is_empty() && reach.is_empty() && !super::anywhere::can_dial(&inner, id) {
                         p.next_attempt = now + Duration::from_secs(5);
                         return None;
                     }
@@ -548,9 +535,9 @@ async fn dial_peer(inner: Arc<Inner>, id: DeviceId, fp: Fingerprint, mut addrs: 
         }
     }
     let result = async {
-        let conn = connect_any(&inner, &addrs, ServerExpectation::Pinned(fp)).await?;
+        let conn = dial_any(&inner, id, fp, &addrs).await?;
         if let Err(e) = establish_outgoing(&inner, conn.clone(), id).await {
-            conn.close(VarInt::from_u32(close_code::PROTOCOL), b"session setup failed");
+            conn.close(close_code::PROTOCOL, b"session setup failed");
             return Err(e);
         }
         Ok::<_, Error>(())
@@ -563,6 +550,50 @@ async fn dial_peer(inner: Arc<Inner>, id: DeviceId, fp: Fingerprint, mut addrs: 
             p.attempts = p.attempts.saturating_add(1);
             p.next_attempt = Instant::now() + backoff(p.attempts);
             tracing::debug!(peer = %id, error = %e, attempts = p.attempts, "reconnect failed");
+        }
+    }
+}
+
+/// Dials a paired device every way it might be reachable. Addresses found on the local
+/// network go first; otherwise the local endpoint and the anywhere endpoint race, and
+/// the first to authenticate the pinned device wins.
+async fn dial_any(inner: &Arc<Inner>, id: DeviceId, fp: Fingerprint, addrs: &[SocketAddr]) -> Result<Link> {
+    let anywhere = super::anywhere::can_dial(inner, &id);
+    let on_lan = inner.discovered.read().contains_key(&id);
+    let local = connect_any(inner, addrs, ServerExpectation::Pinned(fp));
+    if !anywhere {
+        return local.await;
+    }
+    let remote = async {
+        let link = super::anywhere::dial(inner, &id).await?;
+        if link.peer_fingerprint().ok() != Some(fp) {
+            link.close(close_code::UNTRUSTED, b"wrong device");
+            return Err(Error::Tls("a different device answered".into()));
+        }
+        Ok(link)
+    };
+    if on_lan {
+        return match local.await {
+            Ok(l) => Ok(l),
+            Err(_) => remote.await,
+        };
+    }
+    tokio::pin!(local);
+    tokio::pin!(remote);
+    let (mut local_err, mut remote_err) = (None, None);
+    loop {
+        tokio::select! {
+            r = &mut local, if local_err.is_none() => match r {
+                Ok(l) => return Ok(l),
+                Err(e) => local_err = Some(e),
+            },
+            r = &mut remote, if remote_err.is_none() => match r {
+                Ok(l) => return Ok(l),
+                Err(e) => remote_err = Some(e),
+            },
+        }
+        if let (Some(_), Some(e)) = (&local_err, remote_err.take()) {
+            return Err(e);
         }
     }
 }

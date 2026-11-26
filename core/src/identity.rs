@@ -112,6 +112,20 @@ impl Identity {
         self.cert_der.clone()
     }
 
+    /// The 32-byte Ed25519 seed inside the PKCS#8 key. The "connect from anywhere"
+    /// endpoint uses the same key pair, so a device has one identity on every transport.
+    pub fn ed25519_seed(&self) -> Result<[u8; 32]> {
+        // PKCS#8 wraps the seed as OCTET STRING { OCTET STRING (32 bytes) }: 04 22 04 20 <seed>.
+        let k = &self.key_pkcs8;
+        let at = k
+            .windows(4)
+            .position(|w| w == [0x04, 0x22, 0x04, 0x20])
+            .ok_or_else(|| Error::Crypto("identity key is not an Ed25519 PKCS#8 key".into()))?;
+        k.get(at + 4..at + 36)
+            .and_then(|s| s.try_into().ok())
+            .ok_or_else(|| Error::Crypto("identity key is truncated".into()))
+    }
+
     pub fn private_key_der(&self) -> PrivateKeyDer<'static> {
         PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(self.key_pkcs8.clone()))
     }

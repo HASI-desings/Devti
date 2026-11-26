@@ -25,7 +25,7 @@ pub mod accessory;
 pub mod api;
 pub mod rules;
 pub use error::{Error, Result};
-pub use node::{Node, NodeConfig, NodeEvent};
+pub use node::{AnywhereMode, Node, NodeConfig, NodeEvent};
 
 /// Version of this crate (shown in About screens).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

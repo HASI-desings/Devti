@@ -59,9 +59,15 @@ struct HomeView: View {
         guard let hub else { return "Pair with your computer to join its ecosystem." }
         if core.local?.paused == true { return "Devti is paused on this iPhone." }
         guard hub.online, let c = hub.connection else {
-            return "Waiting for \(hub.info.name). It connects while Devti is open on the same network — or anywhere with Reach from anywhere."
+            return "Waiting for \(hub.info.name). It connects while Devti is open here — at home or anywhere else."
         }
-        let path = c.kind == "vpn" ? "through your private network" : c.kind == "internet" ? "over the internet" : "on your network"
+        let path: String
+        switch c.kind {
+        case "vpn": path = "through your private network"
+        case "internet": path = "directly over the internet"
+        case "relay": path = "through an encrypted relay"
+        default: path = "on your network"
+        }
         return "Connected \(path), \(c.rttMs) ms away"
     }
 
@@ -165,10 +171,18 @@ struct HomeView: View {
                     }
                 }
                 Divider().overlay(Theme.line)
+                Toggle(isOn: Binding(get: { core.anywhere?.enabled != false }, set: { core.setAnywhere($0) })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Connect from anywhere").font(Theme.ui(16, .semibold))
+                        Text("On mobile data or any Wi‑Fi, this iPhone and your computer find each other — directly when they can, through an encrypted relay when they can't.")
+                            .font(Theme.ui(13)).foregroundStyle(Theme.textDim)
+                    }
+                }
+                Divider().overlay(Theme.line)
                 Toggle(isOn: Binding(get: { core.reach?.enabled == true }, set: { core.setReach($0) })) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Reach from anywhere").font(Theme.ui(16, .semibold))
-                        Text("With Tailscale (free) on this iPhone and your computer, they find each other away from home too.")
+                        Text("Also share my VPN addresses").font(Theme.ui(16, .semibold))
+                        Text("Optional: if you use Tailscale or WireGuard, your computer can use it too.")
                             .font(Theme.ui(13)).foregroundStyle(Theme.textDim)
                     }
                 }
@@ -208,6 +222,6 @@ struct HomeView: View {
         "Your computer's screen on this iPhone or iPad",
         "Browse and download your computer's shared folders",
         "Find this iPhone (while Devti is open) and find your computer",
-        "Do Not Disturb everywhere, and Reach from anywhere",
+        "Do Not Disturb everywhere, and connecting from anywhere",
     ]
 }

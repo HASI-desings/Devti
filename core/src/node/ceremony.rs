@@ -19,11 +19,11 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use quinn::{Connection, RecvStream, SendStream, VarInt};
 use serde_bytes::ByteBuf;
 use tokio::sync::oneshot;
 
-use super::session::{self, peer_fingerprint};
+use super::link::{Link, LinkRecv, LinkSend};
+use super::session;
 use super::{Inner, MAX_PAIRING_FAILURES, NodeEvent, PairingRole, PeerSnapshot, PeerState};
 use crate::error::Result;
 use crate::model::{DeviceInfo, Fingerprint, Permissions, TrustRole};
@@ -59,6 +59,8 @@ pub(crate) struct JoinTarget {
     pub expect: ServerExpectation,
     pub method: PairMethod,
     pub password: Vec<u8>,
+    /// The hub's public key from its QR code: lets pairing work from anywhere too.
+    pub key: Option<[u8; 32]>,
 }
 
 // ------------------------------------------------------------------- joiner
@@ -67,12 +69,23 @@ pub(crate) async fn run_joiner(inner: Arc<Inner>, pairing_id: u64, target: JoinT
     inner.emit(NodeEvent::PairingStarted { pairing_id, role: PairingRole::Joiner, peer: None });
     let conn = match session::connect_any(&inner, &target.addrs, target.expect).await {
         Ok(c) => c,
-        Err(e) => {
-            let msg = format!(
-                "Couldn't reach the other device ({e}). Make sure both devices are on the same network and Devti is open."
-            );
-            inner.emit(NodeEvent::PairingFailed { pairing_id, reason: PairAbortReason::Other, message: msg });
-            return;
+        Err(local) => {
+            let anywhere = match target.key {
+                Some(key) if inner.anywhere.endpoint().is_some() => {
+                    super::anywhere::dial_key(&inner, key, None).await.ok()
+                }
+                _ => None,
+            };
+            match anywhere {
+                Some(c) => c,
+                None => {
+                    let msg = format!(
+                        "Couldn't reach the other device ({local}). Make sure Devti is open on it, and that both devices are online."
+                    );
+                    inner.emit(NodeEvent::PairingFailed { pairing_id, reason: PairAbortReason::Other, message: msg });
+                    return;
+                }
+            }
         }
     };
     match joiner_flow(&inner, pairing_id, &conn, &target).await {
@@ -81,14 +94,14 @@ pub(crate) async fn run_joiner(inner: Arc<Inner>, pairing_id: u64, target: JoinT
             let id = peer.info.id;
             if let Err(e) = session::establish_outgoing(&inner, conn.clone(), id).await {
                 tracing::debug!(error = %e, "post-pairing session failed; reconnect loop will retry");
-                conn.close(VarInt::from_u32(close_code::PAIRING_FINISHED), b"paired");
+                conn.close(close_code::PAIRING_FINISHED, b"paired");
             }
         }
         Err((reason, message)) => {
             inner.decisions.lock().remove(&pairing_id);
             inner.emit(NodeEvent::PairingFailed { pairing_id, reason, message });
             tokio::time::sleep(Duration::from_millis(100)).await;
-            conn.close(VarInt::from_u32(close_code::PAIRING_FAILED), b"pairing failed");
+            conn.close(close_code::PAIRING_FAILED, b"pairing failed");
         }
     }
 }
@@ -96,10 +109,15 @@ pub(crate) async fn run_joiner(inner: Arc<Inner>, pairing_id: u64, target: JoinT
 async fn joiner_flow(
     inner: &Arc<Inner>,
     pairing_id: u64,
-    conn: &Connection,
+    conn: &Link,
     target: &JoinTarget,
 ) -> Result<PeerSnapshot, Fail> {
-    let hub_fp = peer_fingerprint(conn).map_err(other)?;
+    let hub_fp = conn.peer_fingerprint().map_err(other)?;
+    if let ServerExpectation::Pinned(expected) = target.expect
+        && expected != hub_fp
+    {
+        return Err(fail(PairAbortReason::IdentityMismatch));
+    }
     let (mut send, mut recv) = conn.open_bi().await.map_err(other)?;
     write_message(&mut send, &StreamOpen::Pair).await.map_err(other)?;
 
@@ -146,7 +164,7 @@ async fn joiner_flow(
         PairMsg::Done => {}
         _ => return Err(fail(PairAbortReason::Other)),
     }
-    let snap = inner.add_trusted_peer(hub_info, hub_fp, conn.remote_address()).map_err(other)?;
+    let snap = inner.add_trusted_peer(hub_info, hub_fp, direct_addr(conn)).map_err(other)?;
     let _ = send.finish();
     Ok(snap)
 }
@@ -155,9 +173,9 @@ async fn joiner_flow(
 
 pub(crate) async fn run_hub(
     inner: Arc<Inner>,
-    conn: Connection,
-    mut send: SendStream,
-    mut recv: RecvStream,
+    conn: Link,
+    mut send: LinkSend,
+    mut recv: LinkRecv,
     joiner_fp: Fingerprint,
 ) {
     let reserved = {
@@ -226,9 +244,9 @@ struct HubSecrets {
 async fn hub_flow(
     inner: &Arc<Inner>,
     pairing_id: u64,
-    conn: &Connection,
-    send: &mut SendStream,
-    recv: &mut RecvStream,
+    conn: &Link,
+    send: &mut LinkSend,
+    recv: &mut LinkRecv,
     joiner_fp: Fingerprint,
     secrets: &HubSecrets,
     started: &mut bool,
@@ -284,7 +302,7 @@ async fn hub_flow(
     });
     exchange_decisions(send, recv, rx).await?;
 
-    let snap = inner.add_trusted_peer(info, joiner_fp, conn.remote_address()).map_err(other)?;
+    let snap = inner.add_trusted_peer(info, joiner_fp, direct_addr(conn)).map_err(other)?;
     write_message(send, &PairMsg::Done).await.map_err(other)?;
     let _ = send.finish();
     Ok(snap)
@@ -292,7 +310,7 @@ async fn hub_flow(
 
 // ------------------------------------------------------------------ shared
 
-async fn read_pair(recv: &mut RecvStream) -> Result<PairMsg, Fail> {
+async fn read_pair(recv: &mut LinkRecv) -> Result<PairMsg, Fail> {
     match tokio::time::timeout(STEP_TIMEOUT, read_message::<_, PairMsg>(recv, PAIR_FRAME_LIMIT)).await {
         Err(_) => Err(fail(PairAbortReason::Timeout)),
         Ok(Err(e)) => Err(other(e)),
@@ -304,8 +322,8 @@ async fn read_pair(recv: &mut RecvStream) -> Result<PairMsg, Fail> {
 
 /// Waits until both the local user and the remote device accepted.
 async fn exchange_decisions(
-    send: &mut SendStream,
-    recv: &mut RecvStream,
+    send: &mut LinkSend,
+    recv: &mut LinkRecv,
     mut local: oneshot::Receiver<bool>,
 ) -> Result<(), Fail> {
     let remote = read_message::<_, PairMsg>(recv, PAIR_FRAME_LIMIT);
@@ -341,22 +359,32 @@ async fn exchange_decisions(
     }
 }
 
-fn exporter(conn: &Connection) -> Result<[u8; 32], Fail> {
+fn exporter(conn: &Link) -> Result<[u8; 32], Fail> {
     let mut out = [0u8; 32];
-    conn.export_keying_material(&mut out, EXPORTER_LABEL, b"devti").map_err(|_| other("TLS exporter unavailable"))?;
+    conn.export_keying_material(&mut out, EXPORTER_LABEL, b"devti").map_err(other)?;
     Ok(out)
 }
 
-async fn close_if_stranger(inner: &Arc<Inner>, conn: &Connection, fp: &Fingerprint) {
+/// The peer's address when the link runs over the local endpoint (kept for redialling).
+fn direct_addr(conn: &Link) -> Option<SocketAddr> {
+    if conn.is_quic() { conn.path().socket } else { None }
+}
+
+async fn close_if_stranger(inner: &Arc<Inner>, conn: &Link, fp: &Fingerprint) {
     if !inner.trust.is_trusted(fp) {
         tokio::time::sleep(Duration::from_millis(150)).await;
-        conn.close(VarInt::from_u32(close_code::PAIRING_FAILED), b"pairing failed");
+        conn.close(close_code::PAIRING_FAILED, b"pairing failed");
     }
 }
 
 impl Inner {
     /// Persists a newly paired device and starts treating it as trusted.
-    pub(crate) fn add_trusted_peer(&self, info: DeviceInfo, fp: Fingerprint, addr: SocketAddr) -> Result<PeerSnapshot> {
+    pub(crate) fn add_trusted_peer(
+        &self,
+        info: DeviceInfo,
+        fp: Fingerprint,
+        addr: Option<SocketAddr>,
+    ) -> Result<PeerSnapshot> {
         let now = now_ms();
         let record = PeerRecord {
             info: info.clone(),
@@ -365,7 +393,7 @@ impl Inner {
             permissions: Permissions::for_role(TrustRole::Trusted),
             paired_at: now,
             last_seen: Some(now),
-            last_addrs: vec![addr],
+            last_addrs: addr.into_iter().collect(),
             last_status: Default::default(),
         };
         self.store.upsert_peer(&record)?;

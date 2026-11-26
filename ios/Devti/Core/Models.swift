@@ -150,6 +150,16 @@ struct ReachInfo: Codable, Hashable {
     var extra: [String]
 }
 
+/// Connecting from anywhere (built in since 1.1).
+struct AnywhereInfo: Codable, Hashable {
+    var enabled: Bool
+    var running: Bool
+    var online: Bool
+    var relay: String?
+    var customRelay: String
+    var publicIp: String?
+}
+
 enum PairingStage: Equatable {
     case connecting
     case verify(id: UInt64, peer: DeviceInfo, sas: String, confirmed: Bool)

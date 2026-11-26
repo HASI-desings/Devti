@@ -427,6 +427,15 @@ class DevtiCore(private val context: Context) : EventListener {
         node?.setReach(on, Reducer.json.encodeToString(ListSerializer(String.serializer()), extra))
     }
 
+    fun anywhereInfo(): AnywhereInfo? = runCatching {
+        Reducer.json.decodeFromString(AnywhereInfo.serializer(), node?.anywhereInfoJson() ?: return null)
+    }.getOrNull()
+
+    /** Connects from anywhere: mobile data, other Wi-Fi, through any router. */
+    fun setAnywhere(on: Boolean): String? = act {
+        node?.setAnywhere(on, anywhereInfo()?.customRelay.orEmpty())
+    }
+
     /** Asks a computer for a folder listing; the answer lands in [CoreState.fsListings]. */
     fun fsList(deviceId: String, path: String): String? = act { node?.fsList(deviceId, path) }
 

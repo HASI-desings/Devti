@@ -252,7 +252,7 @@ impl Automation {
             } else {
                 known = None;
             }
-            if ticks % 2 == 0 && self.uses(|t| matches!(t, Trigger::NetworkChanged { .. })) {
+            if ticks.is_multiple_of(2) && self.uses(|t| matches!(t, Trigger::NetworkChanged { .. })) {
                 let net = wifi_name();
                 let mut prev = self.network.lock();
                 if net.is_some() && *prev != net {

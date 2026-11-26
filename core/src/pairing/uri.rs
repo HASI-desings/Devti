@@ -34,6 +34,9 @@ pub struct PairingUri {
     pub addrs: Vec<IpAddr>,
     pub name: String,
     pub kind: DeviceKind,
+    /// The hub's Ed25519 public key, so the joiner can reach it from anywhere. Optional:
+    /// links without it pair on the local network only. Checked against `fingerprint`.
+    pub key: Option<[u8; 32]>,
 }
 
 impl PairingUri {
@@ -50,6 +53,9 @@ impl PairingUri {
             .append_pair("a", &addrs)
             .append_pair("n", &self.name)
             .append_pair("k", self.kind.as_str());
+        if let Some(key) = &self.key {
+            url.query_pairs_mut().append_pair("e", &BASE32_NOPAD.encode(key));
+        }
         url.to_string()
     }
 
@@ -78,6 +84,7 @@ impl PairingUri {
         let mut addrs = None;
         let mut name = None;
         let mut kind = DeviceKind::Desktop;
+        let mut hub_key = None;
         for (key, value) in url.query_pairs() {
             match key.as_ref() {
                 "v" => v = Some(value.into_owned()),
@@ -108,6 +115,10 @@ impl PairingUri {
                 }
                 "n" => name = Some(sanitize_name(&value)),
                 "k" => kind = DeviceKind::parse(&value),
+                "e" => {
+                    let bytes = BASE32_NOPAD.decode(value.as_bytes()).map_err(|_| bad("bad device key"))?;
+                    hub_key = Some(<[u8; 32]>::try_from(bytes).map_err(|_| bad("bad device key length"))?);
+                }
                 _ => {}
             }
         }
@@ -120,8 +131,13 @@ impl PairingUri {
         if fingerprint.device_id() != hub_id {
             return Err(bad("device id doesn't match fingerprint"));
         }
+        if let Some(k) = &hub_key
+            && crate::node::link::fingerprint_of_key(k) != fingerprint
+        {
+            return Err(bad("device key doesn't match fingerprint"));
+        }
         let addrs = addrs.unwrap_or_default();
-        if addrs.is_empty() {
+        if addrs.is_empty() && hub_key.is_none() {
             return Err(bad("missing address"));
         }
         Ok(Self {
@@ -132,6 +148,7 @@ impl PairingUri {
             addrs,
             name: name.unwrap_or_else(|| sanitize_name("")),
             kind,
+            key: hub_key,
         })
     }
 }
@@ -154,7 +171,26 @@ mod tests {
             addrs: vec!["192.168.1.20".parse().unwrap(), "fe80::1".parse().unwrap()],
             name: "Hussnain's Laptop & Co".into(),
             kind: DeviceKind::Laptop,
+            key: None,
         }
+    }
+
+    #[test]
+    fn key_must_match_fingerprint() {
+        let id = crate::identity::Identity::generate().unwrap();
+        let key = crate::node::link::key_of_cert(id.cert_der().as_ref()).unwrap();
+        let uri = PairingUri {
+            hub_id: id.device_id(),
+            fingerprint: id.fingerprint(),
+            key: Some(key),
+            addrs: vec![],
+            ..sample()
+        };
+        let back = PairingUri::parse(&uri.to_uri()).unwrap();
+        assert_eq!(back.key, Some(key));
+        let mut wrong = uri.clone();
+        wrong.key = Some([1; 32]);
+        assert!(PairingUri::parse(&wrong.to_uri()).is_err());
     }
 
     #[test]

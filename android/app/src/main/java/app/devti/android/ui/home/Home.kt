@@ -114,8 +114,8 @@ fun Home(core: DevtiCore, state: CoreState, onPairAnother: () -> Unit) {
             when {
                 local?.paused == true -> "Devti is paused on this phone."
                 hub == null -> "Pair with your computer to join its ecosystem."
-                hub.online -> "Connected" + (hub.connection?.let { ", ${it.rttMs} ms away" } ?: "")
-                else -> "Waiting for ${hub.info.name}. Both devices need to be on the same network."
+                hub.online -> "Connected" + (hub.connection?.let { pathLabel(it.kind) + ", ${it.rttMs} ms away" } ?: "")
+                else -> "Waiting for ${hub.info.name}. It connects as soon as both devices are online."
             },
             style = Devti.type.body,
             color = c.textDim,
@@ -600,10 +600,18 @@ private fun ShareChip(label: String, active: Boolean, modifier: Modifier, enable
     }
 }
 
+private fun pathLabel(kind: String): String = when (kind) {
+    "vpn" -> " through your private network"
+    "internet" -> " directly over the internet"
+    "relay" -> " through an encrypted relay"
+    else -> " on your network"
+}
+
 /** Phase 7: reconnect from anywhere, and let computers browse this phone's folders. */
 @Composable
 private fun Reach(core: DevtiCore) {
     val context = LocalContext.current
+    var anywhere by remember { mutableStateOf(core.anywhereInfo()?.enabled != false) }
     var reach by remember { mutableStateOf(core.reachInfo()?.enabled == true) }
     var sharing by remember { mutableStateOf(core.sharedFolders().isNotEmpty()) }
     var wantShare by remember { mutableStateOf(false) }
@@ -630,11 +638,21 @@ private fun Reach(core: DevtiCore) {
     }
     Card {
         Toggle(
-            "Reach from anywhere",
-            if (reach) {
-                "On. Your computers can reconnect to this phone through a private network like Tailscale."
+            "Connect from anywhere",
+            if (anywhere) {
+                "On. On mobile data or any Wi-Fi, this phone and your computers find each other. Directly when " +
+                    "they can, through an encrypted relay when they can't."
             } else {
-                "Away from home, your devices can still connect through a private network like Tailscale (free)."
+                "Off. This phone connects only on the same network as your computers."
+            },
+            anywhere,
+        ) { on -> core.setAnywhere(on)?.let { toast(context, it) } ?: run { anywhere = on } }
+        Toggle(
+            "Also share my VPN addresses",
+            if (reach) {
+                "On. Your computers can also reconnect through a private network like Tailscale."
+            } else {
+                "Optional: if you use Tailscale or WireGuard, your computers can use it too."
             },
             reach,
         ) { on -> core.setReach(on)?.let { toast(context, it) } ?: run { reach = on } }

@@ -2,6 +2,7 @@ import { simulatedAccessories } from "./sim-accessories";
 import { drawSimulatedPhone, type SimScreen } from "./sim-screen";
 import type {
   ActivityEntry,
+  AnywhereInfo,
   BatterySample,
   BluetoothEvent,
   Bridge,
@@ -379,6 +380,15 @@ export function createPreviewBridge(): Bridge {
       { address: "100.101.12.7:47810", kind: "vpn", interface: "tailscale0" },
     ],
     extra: [],
+  };
+  let anywhere: AnywhereInfo = {
+    enabled: true,
+    running: true,
+    online: true,
+    relay: "euc1-1.relay.iroh.network",
+    custom_relay: "",
+    public_ip: "203.0.113.42",
+    error: null,
   };
   let shared: SharedFolder[] = [];
   let plugins: PluginInfo[] = [];
@@ -1163,6 +1173,30 @@ export function createPreviewBridge(): Bridge {
     },
     async reachInfo() {
       return structuredClone(reach);
+    },
+    async anywhereInfo() {
+      return structuredClone(anywhere);
+    },
+    async setAnywhere(enabled, relay) {
+      const r = relay.trim();
+      if (r && !/^https?:\/\/[a-z0-9.-]+(:\d+)?\/?$/i.test(r))
+        throw new Error("the relay address looks like https://relay.example.org");
+      anywhere = {
+        ...anywhere,
+        enabled,
+        running: enabled,
+        online: enabled,
+        relay: enabled
+          ? r
+            ? r.replace(/^https?:\/\//, "").replace(/[:/].*$/, "")
+            : "euc1-1.relay.iroh.network"
+          : null,
+        custom_relay: r,
+        public_ip: enabled ? "203.0.113.42" : null,
+      };
+      addLog(enabled ? "anywhere_on" : "anywhere_off", undefined, r);
+      emit({ type: "anywhere_changed" });
+      return structuredClone(anywhere);
     },
     async setReach(enabled, extra) {
       const bad = extra.find((e) => !validReachEntry(e));
