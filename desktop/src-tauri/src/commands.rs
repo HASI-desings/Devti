@@ -460,8 +460,49 @@ pub fn reset_api_token(app: AppHandle) -> CmdResult<serde_json::Value> {
     Ok(r.api_info())
 }
 
-/// Starts watching a device's screen. Frames arrive on `frames` as raw bytes:
-/// a 12-byte header (seq u32, width u16, height u16, latency ms u16, fps u8, 0) + JPEG.
+/// One frame for the UI: a 12-byte header (seq u32, width u16, height u16, latency ms u16,
+/// fps u8, 0) followed by the JPEG.
+fn frame_bytes(f: &devti_core::node::screen::ViewerFrame) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(12 + f.jpeg.len());
+    buf.extend_from_slice(&(f.seq as u32).to_le_bytes());
+    buf.extend_from_slice(&(f.w.min(65535) as u16).to_le_bytes());
+    buf.extend_from_slice(&(f.h.min(65535) as u16).to_le_bytes());
+    buf.extend_from_slice(&(f.latency_ms.min(65535) as u16).to_le_bytes());
+    buf.push(f.fps);
+    buf.push(0);
+    buf.extend_from_slice(&f.jpeg);
+    buf
+}
+
+/// Forwards `peer`'s frames of `source` to the UI until it stops or the view closes.
+fn forward_frames(
+    node: devti_core::Node,
+    peer: DeviceId,
+    source: &'static str,
+    mut rx: tokio::sync::broadcast::Receiver<devti_core::node::screen::ViewerFrame>,
+    frames: Channel<InvokeResponseBody>,
+) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            match rx.recv().await {
+                Ok(f) if f.from == peer && f.source == source => {
+                    if frames.send(InvokeResponseBody::Raw(frame_bytes(&f))).is_err() {
+                        break;
+                    }
+                }
+                Ok(_) => {}
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                Err(_) => break,
+            }
+            let still = if source == "camera" { node.is_viewing_camera(&peer) } else { node.is_viewing(&peer) };
+            if !still {
+                break;
+            }
+        }
+    });
+}
+
+/// Starts watching a device's screen. Frames arrive on `frames` (see [`frame_bytes`]).
 #[tauri::command]
 pub fn screen_watch(
     state: State<'_, AppState>,
@@ -471,31 +512,29 @@ pub fn screen_watch(
     frames: Channel<InvokeResponseBody>,
 ) -> CmdResult<()> {
     let peer = parse_id(&id)?;
-    let mut rx = state.node.subscribe_frames();
+    let rx = state.node.subscribe_frames();
     state.node.screen_start(&peer, max_width, fps).map_err(err)?;
-    tauri::async_runtime::spawn(async move {
-        loop {
-            match rx.recv().await {
-                Ok(f) if f.from == peer => {
-                    let mut buf = Vec::with_capacity(12 + f.jpeg.len());
-                    buf.extend_from_slice(&(f.seq as u32).to_le_bytes());
-                    buf.extend_from_slice(&(f.w.min(65535) as u16).to_le_bytes());
-                    buf.extend_from_slice(&(f.h.min(65535) as u16).to_le_bytes());
-                    buf.extend_from_slice(&(f.latency_ms.min(65535) as u16).to_le_bytes());
-                    buf.push(f.fps);
-                    buf.push(0);
-                    buf.extend_from_slice(&f.jpeg);
-                    if frames.send(InvokeResponseBody::Raw(buf)).is_err() {
-                        break;
-                    }
-                }
-                Ok(_) => {}
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
-                Err(_) => break,
-            }
-        }
-    });
+    forward_frames(state.node.clone(), peer, "screen", rx, frames);
     Ok(())
+}
+
+/// Shows a phone camera that's in use (see `use_phone_camera`) in the UI.
+#[tauri::command]
+pub fn camera_view(state: State<'_, AppState>, id: String, frames: Channel<InvokeResponseBody>) -> CmdResult<()> {
+    let peer = parse_id(&id)?;
+    if !state.node.is_viewing_camera(&peer) {
+        return Err("that camera isn't on".into());
+    }
+    forward_frames(state.node.clone(), peer, "camera", state.node.subscribe_frames(), frames);
+    Ok(())
+}
+
+/// Sets up the virtual webcam (Linux: loads v4l2loopback with one password prompt).
+#[tauri::command]
+pub async fn setup_webcam(app: AppHandle) -> CmdResult<crate::media::MediaStatus> {
+    tauri::async_runtime::spawn_blocking(crate::media::set_up_webcam).await.map_err(err)??;
+    let media = crate::media::app_state(&app).ok_or("media isn't ready")?;
+    Ok(media.status())
 }
 
 #[tauri::command]
@@ -672,8 +711,8 @@ pub fn media_status(app: AppHandle) -> CmdResult<crate::media::MediaStatus> {
 }
 
 #[tauri::command]
-pub fn use_phone_camera(app: AppHandle, id: String) -> CmdResult<()> {
-    crate::media::app_state(&app).ok_or("media isn't ready")?.use_camera(&parse_id(&id)?)
+pub fn use_phone_camera(app: AppHandle, id: String, facing: Option<String>) -> CmdResult<()> {
+    crate::media::app_state(&app).ok_or("media isn't ready")?.use_camera(&parse_id(&id)?, facing)
 }
 
 #[tauri::command]

@@ -26,7 +26,7 @@ import java.util.concurrent.Executors
 /**
  * The phone's camera as the computer's webcam: CameraX analysis frames (latest only) →
  * upright JPEG at the core's adaptive quality → the same frame path as screen sharing.
- * The computer shows it as a camera (v4l2loopback on Linux). Android shows its own
+ * The computer shows it live, and as a webcam (v4l2loopback on Linux). Android shows its own
  * green camera indicator, and the notification has a Stop button.
  */
 class CameraShareService : LifecycleService() {
@@ -66,9 +66,15 @@ class CameraShareService : LifecycleService() {
                 .build()
             analysis.setAnalyzer(worker) { image -> image.use { send(it) } }
             provider.unbindAll()
+            val selector = if (back) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
             runCatching {
-                provider.bindToLifecycle(this, if (back) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA, analysis)
-            }.onFailure { stopSelf() }
+                if (!provider.hasCamera(selector)) error(if (back) "this phone has no back camera" else "this phone has no front camera")
+                provider.bindToLifecycle(this, selector, analysis)
+            }.onFailure { e ->
+                // Tell the computer instead of leaving it waiting.
+                (application as DevtiApp).core.cameraFailed(e.message ?: "the camera is busy or unavailable")
+                stopSelf()
+            }
         }, ContextCompat.getMainExecutor(this))
         running = true
         (application as DevtiApp).core.cameraSharing(true)
@@ -83,7 +89,7 @@ class CameraShareService : LifecycleService() {
         val out = ByteArrayOutputStream(128 * 1024)
         YuvImage(upright.data, ImageFormat.NV21, upright.width, upright.height, null)
             .compressToJpeg(Rect(0, 0, upright.width, upright.height), quality, out)
-        core.pushScreenFrame(upright.width, upright.height, out.toByteArray())
+        core.pushCameraFrame(upright.width, upright.height, out.toByteArray())
     }
 
     override fun onDestroy() {

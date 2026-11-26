@@ -223,6 +223,24 @@ export function createPreviewBridge(): Bridge {
   let obsUrl = "ws://127.0.0.1:4455";
   let api = { enabled: true, port: 47811 as number | null, token: randomHex(64) };
   const screens = new Map<string, SimScreen>();
+  const cameras = new Map<
+    string,
+    { facing: import("./types").CameraFacing | null; live: boolean; timer: number; draw: number }
+  >();
+  const mediaListeners = new Set<(m: import("./types").MediaStatus) => void>();
+  const noticeListeners = new Set<(text: string) => void>();
+  const mediaSnapshot = (): import("./types").MediaStatus => ({
+    audio: [],
+    cameras: [...cameras].map(([device, c]) => ({ device, live: c.live, facing: c.facing, webcam: false })),
+    webcam: "Simulated in the browser preview: the camera shows in Devti.",
+    webcam_ready: false,
+    webcam_setup: false,
+    mic: "Shows up as “Devti-phone-microphone” in any app's microphone list.",
+  });
+  const publishMedia = () => {
+    const m = mediaSnapshot();
+    for (const cb of mediaListeners) cb(m);
+  };
   let screenSource: import("./types").ScreenSource | null = null;
   let layout: import("./types").ScreenLayout = { enabled: false, links: [] };
   const accessories = simulatedAccessories();
@@ -1150,17 +1168,79 @@ export function createPreviewBridge(): Bridge {
       return "“Building a design system” (simulated)";
     },
     async mediaStatus() {
-      return {
-        audio: [],
-        cameras: [],
-        webcam: "Simulated in the browser preview.",
-        mic: "Shows up as “Devti-phone-microphone” in any app's microphone list.",
-      };
+      return mediaSnapshot();
     },
-    async startPhoneCamera() {
-      throw new Error("The phone camera needs the Devti desktop app.");
+    async startPhoneCamera(id, facing) {
+      const p = peers.get(id);
+      if (!p?.online) throw new Error("That device is offline.");
+      if (p.info.platform !== "android") throw new Error("Only an Android phone's camera can be used.");
+      const prev = cameras.get(id);
+      window.clearTimeout(prev?.timer);
+      const cam = { facing: facing ?? null, live: false, timer: 0, draw: 0 };
+      cameras.set(id, cam);
+      publishMedia();
+      // The phone asks its user; "they" allow it a moment later.
+      cam.timer = window.setTimeout(() => {
+        cam.live = true;
+        publishMedia();
+      }, 900);
     },
-    async stopPhoneCamera() {},
+    async stopPhoneCamera(id) {
+      const cam = cameras.get(id);
+      if (!cam) return;
+      window.clearTimeout(cam.timer);
+      window.clearInterval(cam.draw);
+      cameras.delete(id);
+      publishMedia();
+      for (const cb of noticeListeners) cb(`${peers.get(id)?.info.name ?? "The phone"}'s camera stopped.`);
+    },
+    async cameraView(id, onFrame) {
+      const cam = cameras.get(id);
+      if (!cam) throw new Error("that camera isn't on");
+      const canvas = document.createElement("canvas");
+      canvas.width = 640;
+      canvas.height = 360;
+      const g = canvas.getContext("2d");
+      if (!g) throw new Error("This browser can't draw the simulated camera.");
+      let seq = 0;
+      window.clearInterval(cam.draw);
+      cam.draw = window.setInterval(() => {
+        if (!cameras.has(id)) return window.clearInterval(cam.draw);
+        if (!cam.live) return;
+        const t = Date.now() / 1000;
+        const grad = g.createLinearGradient(0, 0, 640, 360);
+        grad.addColorStop(0, cam.facing === "back" ? "#203a43" : "#3a2b4f");
+        grad.addColorStop(1, cam.facing === "back" ? "#2c5364" : "#6a4c93");
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 640, 360);
+        g.fillStyle = "rgba(255,255,255,0.85)";
+        g.beginPath();
+        g.arc(320 + Math.sin(t) * 120, 180 + Math.cos(t * 1.3) * 60, 46, 0, Math.PI * 2);
+        g.fill();
+        g.font = "600 22px sans-serif";
+        g.fillText(`${cam.facing === "back" ? "Back" : "Front"} camera (simulated)`, 24, 40);
+        canvas.toBlob(
+          async (blob) => {
+            if (!blob || !cameras.has(id)) return;
+            const jpeg = new Uint8Array(await blob.arrayBuffer());
+            onFrame({ seq: ++seq, w: 640, h: 360, latencyMs: 24, fps: 15, jpeg });
+          },
+          "image/jpeg",
+          0.8,
+        );
+      }, 1000 / 15);
+    },
+    async setupWebcam() {
+      throw new Error("Setting up the virtual webcam needs the Devti desktop app.");
+    },
+    onMedia(cb) {
+      mediaListeners.add(cb);
+      return () => mediaListeners.delete(cb);
+    },
+    onNotice(cb) {
+      noticeListeners.add(cb);
+      return () => noticeListeners.delete(cb);
+    },
     async automation() {
       return { rules: structuredClone(rules), log: [], proximity: {} };
     },

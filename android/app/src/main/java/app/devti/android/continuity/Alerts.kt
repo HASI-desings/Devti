@@ -131,6 +131,12 @@ object Alerts {
             .setTimeoutAfter(60_000)
             .setContentIntent(
                 PendingIntent.getActivity(context, 9, consent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
+            )
+            // Android won't let a background app open a screen by itself; a full-screen intent
+            // brings the question up right away (like an incoming call) where allowed.
+            .setFullScreenIntent(
+                PendingIntent.getActivity(context, 10, consent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
+                true,
             ),
     )
 

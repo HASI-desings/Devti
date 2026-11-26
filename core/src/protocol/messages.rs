@@ -217,6 +217,9 @@ pub enum ControlMsg {
         fps: u8,
         #[serde(default = "screen_source")]
         source: String,
+        /// For the camera: "front" or "back" (default: the sharer's choice).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        facing: Option<String>,
     },
     /// The sender offers its camera to the receiver as a webcam; the receiver answers
     /// with `ScreenStart { source: "camera" }` (Phase 6).
@@ -292,7 +295,11 @@ pub enum ControlMsg {
         path: String,
         error: String,
     },
-    ScreenStop,
+    /// Stops sharing `source` with the sender ("screen" or "camera"; none: both).
+    ScreenStop {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
+    },
     /// The session is ending on purpose.
     Goodbye {
         reason: GoodbyeReason,
@@ -620,6 +627,9 @@ pub enum ScreenMsg {
         jpeg: ByteBuf,
         latency_ms: u32,
         fps: u8,
+        /// "screen" or "camera" (older sharers send none: "screen").
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
     },
     Ack {
         seq: u64,

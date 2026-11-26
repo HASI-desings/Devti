@@ -1,0 +1,103 @@
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--s-2);
+  border-radius: 50%;
+  background: var(--text-faint);
+  vertical-align: middle;
+}
+
+.dot[data-state="waiting"] {
+  background: var(--warn);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.dot[data-state="live"] {
+  background: var(--danger);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--danger) 25%, transparent);
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.facing {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.facingButton {
+  all: unset;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: var(--t-13);
+  color: var(--text-dim);
+}
+
+.facingButton[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+}
+
+.facingButton:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.facingButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-5);
+  min-width: min(80vw, 720px);
+}
+
+.stage {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  max-height: 70vh;
+  overflow: hidden;
+  border-radius: var(--r-card, 16px);
+  background: #000;
+}
+
+.canvas {
+  max-width: 100%;
+  max-height: 100%;
+  transition: transform 0.25s ease;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.fps {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--text-dim);
+  font-size: var(--t-13);
+}
+
+fieldset.facing {
+  margin: 0;
+  min-inline-size: auto;
+}

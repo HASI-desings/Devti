@@ -7,6 +7,7 @@ import { useStore } from "../../state/store";
 import { Button, Sheet } from "../../ui";
 import p from "../shell/page.module.css";
 import s from "./DevicePage.module.css";
+import { PhoneCamera } from "./PhoneCamera";
 
 const POWER: { a: SystemAction["a"]; label: string; icon: IconName; confirm?: string }[] = [
   { a: "lock", label: "Lock", icon: "lock" },
@@ -29,15 +30,9 @@ export function DeviceControl({ peer }: { peer: PeerSnapshot }) {
   const android = peer.info.platform === "android";
   const computer = peer.info.kind === "desktop" || peer.info.kind === "laptop";
 
-  const [usingCamera, setUsingCamera] = useState(false);
   useEffect(() => {
     if (peer.online) void bridge.requestCatalog(id).catch(() => {});
-    if (android)
-      void bridge.mediaStatus().then(
-        (m) => setUsingCamera(m.cameras.includes(id)),
-        () => {},
-      );
-  }, [bridge, id, peer.online, android]);
+  }, [bridge, id, peer.online]);
 
   const act = (fn: () => Promise<unknown>) => {
     fn().catch((e) => toast(String(e instanceof Error ? e.message : e), "danger"));
@@ -93,26 +88,7 @@ export function DeviceControl({ peer }: { peer: PeerSnapshot }) {
                 Continue there
               </Button>
             </div>
-            {android && (
-              <div className={p.item}>
-                <div className={p.itemText}>
-                  <span className={p.itemTitle}>Use its camera as this computer's webcam</span>
-                  <span className={p.itemHint}>
-                    The phone asks before its camera turns on. Its microphone and sound can be shared from the
-                    phone's Screen tab.
-                  </span>
-                </div>
-                {usingCamera ? (
-                  <Button size="sm" variant="danger" onPress={() => act(() => bridge.stopPhoneCamera(id))}>
-                    Stop camera
-                  </Button>
-                ) : (
-                  <Button size="sm" icon="camera" onPress={() => act(() => bridge.startPhoneCamera(id))}>
-                    Use camera
-                  </Button>
-                )}
-              </div>
-            )}
+            {android && <PhoneCamera peer={peer} />}
             <div className={p.item}>
               <div className={p.itemText}>
                 <span className={p.itemTitle}>Media</span>

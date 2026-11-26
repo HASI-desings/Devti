@@ -102,6 +102,8 @@ export function App() {
       const paths = await bridge.takePendingSend();
       if (paths.length) useStore.getState().setSendPaths(paths);
     };
+    // Background work on the Hub (a camera stopped, audio couldn't play…) speaks as toasts.
+    const offNotice = bridge.onNotice((text) => useStore.getState().toast(text, "info"));
     const offUi = bridge.onUiAction((action) => {
       if (action === "pair") setPairOpen(true);
       if (action === "send") void takeSend();
@@ -123,6 +125,7 @@ export function App() {
     });
     return () => {
       off();
+      offNotice();
       offUi();
       offDrop();
     };

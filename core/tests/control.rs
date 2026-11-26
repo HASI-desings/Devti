@@ -287,3 +287,77 @@ async fn live_screen_frames_flow_and_stop() {
     nothing_arrives(&mut phone.ev, "screen request", |e| matches!(e, NodeEvent::ScreenRequested { .. })).await;
     assert!(phone.node.screen_viewers().is_empty());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn camera_and_screen_share_side_by_side_and_survive_a_second_request() {
+    let mut hub = spawn("Studio Laptop", DeviceKind::Laptop).await;
+    let mut phone = spawn("Pixel 8", DeviceKind::Phone).await;
+    pair(&mut hub, &mut phone).await;
+    let (hid, pid) = (hub.node.device_id(), phone.node.device_id());
+
+    // An old screen frame is lying around from before anyone asked.
+    phone.node.push_camera_frame(1, 1, vec![0xFF, 0xD8, 0xEE, 0xFF, 0xD9]).unwrap();
+
+    let mut frames = hub.node.subscribe_frames();
+    hub.node.camera_start_facing(&pid, 1280, 30, Some("back")).unwrap();
+    let facing = wait_for(&mut phone.ev, "camera requested", |e| match e {
+        NodeEvent::ScreenRequested { on: true, source, facing, .. } if source == "camera" => Some(facing.clone()),
+        _ => None,
+    })
+    .await;
+    assert_eq!(facing.as_deref(), Some("back"));
+    // Clicking "Use camera" again must not end it.
+    hub.node.camera_start(&pid, 1280, 30).unwrap();
+    // Mirroring the same phone at the same time.
+    hub.node.screen_start(&pid, 1280, 30).unwrap();
+    wait_for(&mut phone.ev, "screen requested", |e| {
+        matches!(e, NodeEvent::ScreenRequested { on: true, source, .. } if source == "screen").then_some(())
+    })
+    .await;
+    assert_eq!(phone.node.camera_viewers(), vec![hid]);
+    assert_eq!(phone.node.screen_viewers(), vec![hid]);
+
+    let pusher = {
+        let node = phone.node.clone();
+        tokio::spawn(async move {
+            for i in 0..80u32 {
+                node.push_camera_frame(1280, 720, vec![0xFF, 0xD8, 1, (i % 250) as u8, 0xFF, 0xD9]).unwrap();
+                node.push_screen_frame(720, 1600, vec![0xFF, 0xD8, 2, (i % 250) as u8, 0xFF, 0xD9]).unwrap();
+                tokio::time::sleep(Duration::from_millis(16)).await;
+            }
+        })
+    };
+    let (mut cams, mut screens) = (0, 0);
+    let deadline = tokio::time::Instant::now() + WAIT;
+    while cams < 5 || screens < 5 {
+        let f = tokio::time::timeout_at(deadline, frames.recv()).await.expect("frames").expect("open");
+        assert_ne!(f.jpeg[2], 0xEE, "the stale frame from before the request never arrives");
+        match f.source {
+            "camera" => {
+                assert_eq!(f.jpeg[2], 1);
+                assert_eq!((f.w, f.h), (1280, 720));
+                cams += 1;
+            }
+            _ => {
+                assert_eq!(f.jpeg[2], 2);
+                screens += 1;
+            }
+        }
+    }
+    pusher.await.unwrap();
+
+    // Leaving the mirror keeps the camera running.
+    hub.node.screen_stop(&pid).unwrap();
+    wait_for(&mut phone.ev, "screen stopped", |e| {
+        matches!(e, NodeEvent::ScreenRequested { on: false, source, .. } if source == "screen").then_some(())
+    })
+    .await;
+    assert!(phone.node.screen_viewers().is_empty());
+    assert_eq!(phone.node.camera_viewers(), vec![hid]);
+    hub.node.camera_stop(&pid).unwrap();
+    wait_for(&mut phone.ev, "camera stopped", |e| {
+        matches!(e, NodeEvent::ScreenRequested { on: false, source, .. } if source == "camera").then_some(())
+    })
+    .await;
+    assert!(phone.node.camera_viewers().is_empty());
+}

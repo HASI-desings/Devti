@@ -433,6 +433,18 @@ impl DevtiMobile {
         Ok(self.node.push_screen_frame(width, height, jpeg)?)
     }
 
+    /// Sharer side: the newest encoded JPEG frame of this phone's camera.
+    pub fn push_camera_frame(&self, width: u32, height: u32, jpeg: Vec<u8>) -> Result<(), DevtiError> {
+        Ok(self.node.push_camera_frame(width, height, jpeg)?)
+    }
+
+    /// Ends one share with `device_id` ("screen" or "camera"), e.g. when the camera
+    /// couldn't start, so the computer stops waiting and says why.
+    pub fn share_stop(&self, device_id: String, source: String) -> Result<(), DevtiError> {
+        self.node.share_stop(&device_id.parse()?, &source);
+        Ok(())
+    }
+
     /// What the encoder should produce now (JSON `ScreenTarget`: max_width, fps, quality).
     pub fn screen_target_json(&self) -> String {
         serde_json::to_string(&self.node.screen_target()).unwrap_or_default()
@@ -459,7 +471,7 @@ impl DevtiMobile {
         self.runtime.spawn(async move {
             loop {
                 match rx.recv().await {
-                    Ok(f) if f.from == id => listener.on_frame(
+                    Ok(f) if f.from == id && f.source == "screen" => listener.on_frame(
                         f.from.to_string(),
                         f.seq,
                         f.w,
@@ -535,9 +547,9 @@ impl DevtiMobile {
         Ok(self.node.camera_offer(&device_id.parse()?)?)
     }
 
-    /// Which viewers asked for "camera" (the rest want the screen).
+    /// Device ids watching this phone's camera.
     pub fn camera_viewers(&self) -> Vec<String> {
-        self.node.screen_sources().into_iter().filter(|(_, s)| s == "camera").map(|(d, _)| d.to_string()).collect()
+        self.node.camera_viewers().into_iter().map(|d| d.to_string()).collect()
     }
 
     // ---- Phase 7: reach and shared folders

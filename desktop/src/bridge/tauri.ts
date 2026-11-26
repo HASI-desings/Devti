@@ -2,7 +2,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { AccessoryList, BluetoothEvent, Bridge, NodeEvent, ScreenFrame } from "./types";
+import type { AccessoryList, BluetoothEvent, Bridge, MediaStatus, NodeEvent, ScreenFrame } from "./types";
 
 /** 12-byte header (seq u32, w u16, h u16, latency u16, fps u8, 0) + JPEG; see commands.rs. */
 export function decodeFrame(buf: ArrayBuffer): ScreenFrame | null {
@@ -168,8 +168,41 @@ export function createTauriBridge(): Bridge {
     handoff: (id, item) => invoke("handoff", { id, item }),
     handoffCurrent: (id) => invoke("handoff_current", { id }),
     mediaStatus: () => invoke("media_status"),
-    startPhoneCamera: (id) => invoke("use_phone_camera", { id }),
+    startPhoneCamera: (id, facing) => invoke("use_phone_camera", { id, facing: facing ?? null }),
     stopPhoneCamera: (id) => invoke("stop_phone_camera", { id }),
+    async cameraView(id, onFrame) {
+      const frames = new Channel<ArrayBuffer>();
+      frames.onmessage = (buf) => {
+        const f = decodeFrame(buf);
+        if (f) onFrame(f);
+      };
+      await invoke("camera_view", { id, frames });
+    },
+    setupWebcam: () => invoke("setup_webcam"),
+    onMedia(cb) {
+      let unlisten: (() => void) | undefined;
+      let cancelled = false;
+      listen<MediaStatus>("devti://media", (e) => cb(e.payload)).then((u) => {
+        if (cancelled) u();
+        else unlisten = u;
+      });
+      return () => {
+        cancelled = true;
+        unlisten?.();
+      };
+    },
+    onNotice(cb) {
+      let unlisten: (() => void) | undefined;
+      let cancelled = false;
+      listen<string>("devti://notice", (e) => cb(e.payload)).then((u) => {
+        if (cancelled) u();
+        else unlisten = u;
+      });
+      return () => {
+        cancelled = true;
+        unlisten?.();
+      };
+    },
     automation: () => invoke("automation"),
     saveRules: (rules) => invoke("save_rules", { rules }),
     runRuleNow: (id) => invoke("run_rule_now", { id }),

@@ -249,7 +249,8 @@ class DevtiCore(private val context: Context) : EventListener {
                 val camera = str("source") == "camera"
                 val from = str("from") ?: return
                 if (ev["on"]?.jsonPrimitive?.booleanOrNull == true) {
-                    if (camera) requestCamera(from, str("from_name") ?: "Your computer") else requestScreenShare(from, str("from_name") ?: "Your computer")
+                    val name = str("from_name") ?: "Your computer"
+                    if (camera) requestCamera(from, name, back = str("facing") == "back") else requestScreenShare(from, name)
                 } else if (camera) {
                     if (node?.cameraViewers().isNullOrEmpty()) CameraShareService.stop(context)
                 } else if (screenOnlyViewers().isEmpty()) {
@@ -287,10 +288,7 @@ class DevtiCore(private val context: Context) : EventListener {
         }
     }
 
-    private fun screenOnlyViewers(): List<String> {
-        val cams = node?.cameraViewers().orEmpty().toSet()
-        return node?.screenViewers().orEmpty().filterNot { it in cams }
-    }
+    private fun screenOnlyViewers(): List<String> = node?.screenViewers().orEmpty()
 
     /** One input event from a computer, performed through the accessibility service. */
     private fun perform(e: JsonObject) {
@@ -320,32 +318,50 @@ class DevtiCore(private val context: Context) : EventListener {
     /** A computer wants to see this screen: Android requires the user to say yes each time. */
     private fun requestScreenShare(from: String, fromName: String) {
         if (ScreenCaptureService.running) return
-        // Screen and camera share one picture stream: one at a time.
-        if (CameraShareService.running) return busy(from, "This phone's camera is shared right now. Stop it to share the screen.")
+        // The screen and the camera are separate streams: both can be shared at once.
         val intent = ScreenShareActivity.intent(context, ScreenShareActivity.MODE_SCREEN, from, fromName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         // Works when Devti is open; otherwise the notification below lets the user say yes.
         runCatching { context.startActivity(intent) }
         Alerts.screenRequest(context, fromName, intent)
     }
 
-    /** A computer wants this phone's camera as its webcam. */
-    private fun requestCamera(from: String, fromName: String) {
-        if (CameraShareService.running) return
-        if (ScreenCaptureService.running) return busy(from, "This phone's screen is shared right now. Stop it to use the camera.")
-        val intent = ScreenShareActivity.intent(context, ScreenShareActivity.MODE_CAMERA, from, fromName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    /** A computer wants this phone's camera (front or back). */
+    private fun requestCamera(from: String, fromName: String, back: Boolean) {
+        // Already on (the computer switched camera): turn the other way round, no second yes.
+        if (CameraShareService.running || cameraAllowedRecently(from)) {
+            if (context.checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                CameraShareService.start(context, back)
+                return
+            }
+        }
+        val intent = ScreenShareActivity.intent(context, ScreenShareActivity.MODE_CAMERA, from, fromName, back).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // Works when Devti is open; otherwise the full-screen notification asks.
         runCatching { context.startActivity(intent) }
         Alerts.screenRequest(context, fromName, intent, camera = true)
     }
 
-    private fun busy(from: String, why: String) {
-        runCatching { node?.screenStopSharing(from) }
-        toast(why)
+    private val cameraAllowed = mutableMapOf<String, Long>()
+
+    /** The user just allowed `device` to use the camera. */
+    fun rememberCameraAllowed(device: String) {
+        cameraAllowed[device] = System.currentTimeMillis()
     }
+
+    /** Allowed in the last 10 minutes: switching or restarting the camera needs no new yes. */
+    private fun cameraAllowedRecently(device: String): Boolean =
+        System.currentTimeMillis() - (cameraAllowed[device] ?: 0L) < 10 * 60_000
 
     /** Says no to every viewer waiting for the screen (or the camera). */
     fun declineScreenShare(camera: Boolean = false) {
-        val cams = node?.cameraViewers().orEmpty().toSet()
-        node?.screenViewers()?.filter { (it in cams) == camera }?.forEach { runCatching { node?.screenStopSharing(it) } }
+        val source = if (camera) "camera" else "screen"
+        val viewers = if (camera) node?.cameraViewers() else node?.screenViewers()
+        viewers?.forEach { runCatching { node?.shareStop(it, source) } }
+    }
+
+    /** The camera couldn't start: tell the computers waiting for it, and the user here. */
+    fun cameraFailed(why: String) {
+        declineScreenShare(camera = true)
+        toast("The camera couldn't start: $why")
     }
 
     fun stopSharingScreen() {
@@ -365,8 +381,12 @@ class DevtiCore(private val context: Context) : EventListener {
     fun cameraOfferedRecently(): Boolean = System.currentTimeMillis() - cameraOfferedAt < 120_000
 
     fun stopCamera() {
-        node?.cameraViewers()?.forEach { runCatching { node?.screenStopSharing(it) } }
+        node?.cameraViewers()?.forEach { runCatching { node?.shareStop(it, "camera") } }
         CameraShareService.stop(context)
+    }
+
+    fun pushCameraFrame(width: Int, height: Int, jpeg: ByteArray) {
+        runCatching { node?.pushCameraFrame(width.toUInt(), height.toUInt(), jpeg) }
     }
 
     fun cameraSharing(on: Boolean) = _state.update { it.copy(cameraSharing = on) }

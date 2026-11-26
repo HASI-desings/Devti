@@ -310,10 +310,26 @@ export interface AutomationInfo {
   proximity: Record<string, boolean>;
 }
 
+export type CameraFacing = "front" | "back";
+
+/** A phone camera this computer is using. */
+export interface CameraState {
+  device: string;
+  /** Frames are arriving (false: waiting for the phone to allow it). */
+  live: boolean;
+  facing: CameraFacing | null;
+  /** Frames also go to the virtual webcam other apps see. */
+  webcam: boolean;
+}
+
 export interface MediaStatus {
   audio: [string, string][];
-  cameras: string[];
+  cameras: CameraState[];
+  /** Where camera frames go, or what's needed for other apps to see them. */
   webcam: string;
+  webcam_ready: boolean;
+  /** Devti can set the virtual webcam up with one password prompt (Linux). */
+  webcam_setup: boolean;
   mic: string;
 }
 
@@ -668,8 +684,16 @@ export interface Bridge {
   /** Continue what's playing / the copied link on a device; returns what was sent. */
   handoffCurrent(id: string): Promise<string>;
   mediaStatus(): Promise<MediaStatus>;
-  startPhoneCamera(id: string): Promise<void>;
+  /** Turns a phone camera on (or switches it to `facing`). The phone asks its user first. */
+  startPhoneCamera(id: string, facing?: CameraFacing | null): Promise<void>;
   stopPhoneCamera(id: string): Promise<void>;
+  /** Frames of a phone camera that's on, until the camera stops. */
+  cameraView(id: string, onFrame: (f: ScreenFrame) => void): Promise<void>;
+  /** Linux: loads the virtual webcam so other apps can use the phone camera. */
+  setupWebcam(): Promise<MediaStatus>;
+  onMedia(cb: (m: MediaStatus) => void): () => void;
+  /** Short messages from the Hub's background work (camera stopped, audio failed…). */
+  onNotice(cb: (text: string) => void): () => void;
   automation(): Promise<AutomationInfo>;
   saveRules(rules: Rule[]): Promise<void>;
   runRuleNow(id: string): Promise<void>;

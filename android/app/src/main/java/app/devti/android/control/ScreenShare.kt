@@ -79,6 +79,7 @@ class ScreenShareActivity : Activity() {
     private fun granted() {
         when (mode) {
             MODE_CAMERA -> {
+                core.rememberCameraAllowed(device)
                 CameraShareService.start(this, intent.getBooleanExtra(EXTRA_BACK, false))
                 finish()
             }

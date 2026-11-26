@@ -263,6 +263,8 @@ pub fn run() {
             commands::screen_unwatch,
             commands::save_capture,
             commands::screen_sources,
+            commands::camera_view,
+            commands::setup_webcam,
             commands::set_screen_source,
             commands::stop_screen_viewer,
             commands::screen_layout,

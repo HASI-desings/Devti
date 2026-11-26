@@ -7,9 +7,10 @@
 //!   monitor) that any app can pick. On Windows there is no free virtual-mic driver, so
 //!   it plays to "CABLE Input" when VB-Audio's free Virtual Cable is installed, or the
 //!   default output otherwise, and says so.
-//! * **Phone as webcam**: on Linux, frames go to a v4l2loopback device as YUYV, so
-//!   browsers and video apps see a camera. Without the module loaded, the UI explains
-//!   the one command needed.
+//! * **Phone camera**: always shown live in Devti's camera view (front or back). On
+//!   Linux the frames also go to a v4l2loopback device as YUYV, so browsers and video
+//!   apps see a "Devti Camera". The Hub can set the module up with one password prompt.
+//!   On Windows the camera view can be captured by OBS's virtual camera.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,22 +21,45 @@ use parking_lot::Mutex;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
+/// A phone camera this computer is using.
+#[derive(Clone, Debug, Serialize)]
+pub struct CameraState {
+    pub device: String,
+    /// Frames are arriving (false: waiting for the phone to allow it).
+    pub live: bool,
+    /// "front", "back", or null for the phone's choice.
+    pub facing: Option<String>,
+    /// Frames also go to the virtual webcam other apps see.
+    pub webcam: bool,
+}
+
 #[derive(Clone, Debug, Serialize, Default)]
 pub struct MediaStatus {
     /// Audio streams playing here: (device, kind).
     pub audio: Vec<(String, String)>,
-    /// Devices whose camera this computer is using.
-    pub cameras: Vec<String>,
+    /// Phone cameras in use.
+    pub cameras: Vec<CameraState>,
     /// Where camera frames go, or why they can't.
     pub webcam: String,
+    /// A virtual webcam is available to other apps.
+    pub webcam_ready: bool,
+    /// Devti can set the virtual webcam up (Linux, not set up yet).
+    pub webcam_setup: bool,
     pub mic: String,
+}
+
+struct Camera {
+    sink: Option<webcam::Sink>,
+    live: bool,
+    facing: Option<String>,
+    started: std::time::Instant,
 }
 
 pub struct Media {
     node: Node,
     app: AppHandle,
     players: Mutex<HashMap<(DeviceId, String), player::Player>>,
-    cameras: Mutex<HashMap<DeviceId, webcam::Sink>>,
+    cameras: Mutex<HashMap<DeviceId, Camera>>,
     status: Mutex<MediaStatus>,
 }
 
@@ -46,11 +70,7 @@ impl Media {
             app: app.clone(),
             players: Mutex::new(HashMap::new()),
             cameras: Mutex::new(HashMap::new()),
-            status: Mutex::new(MediaStatus {
-                webcam: webcam::describe(),
-                mic: player::describe_mic(),
-                ..Default::default()
-            }),
+            status: Mutex::new(MediaStatus { mic: player::describe_mic(), ..Default::default() }),
         });
         // Audio packets → players.
         let m = me.clone();
@@ -74,11 +94,24 @@ impl Media {
         tauri::async_runtime::spawn(async move {
             loop {
                 match frames.recv().await {
-                    Ok(f) => {
-                        if let Some(sink) = m.cameras.lock().get_mut(&f.from) {
-                            sink.frame(&f.jpeg, f.w, f.h);
+                    Ok(f) if f.source == "camera" => {
+                        let first = {
+                            let mut cams = m.cameras.lock();
+                            match cams.get_mut(&f.from) {
+                                Some(cam) => {
+                                    if let Some(sink) = cam.sink.as_mut() {
+                                        sink.frame(&f.jpeg);
+                                    }
+                                    !std::mem::replace(&mut cam.live, true)
+                                }
+                                None => false,
+                            }
+                        };
+                        if first {
+                            m.publish();
                         }
                     }
+                    Ok(_) => {}
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
                     Err(_) => break,
                 }
@@ -90,7 +123,21 @@ impl Media {
     pub fn status(&self) -> MediaStatus {
         let mut s = self.status.lock().clone();
         s.audio = self.players.lock().keys().map(|(d, k)| (d.to_string(), k.clone())).collect();
-        s.cameras = self.cameras.lock().keys().map(|d| d.to_string()).collect();
+        s.cameras = self
+            .cameras
+            .lock()
+            .iter()
+            .map(|(d, c)| CameraState {
+                device: d.to_string(),
+                live: c.live,
+                facing: c.facing.clone(),
+                webcam: c.sink.is_some(),
+            })
+            .collect();
+        // Checked every time: the module can be loaded while Devti runs.
+        s.webcam = webcam::describe();
+        s.webcam_ready = webcam::ready();
+        s.webcam_setup = webcam::can_set_up() && !s.webcam_ready;
         s
     }
 
@@ -98,22 +145,47 @@ impl Media {
         let _ = self.app.emit("devti://media", self.status());
     }
 
-    /// Use a phone's camera as this computer's webcam.
-    pub fn use_camera(&self, peer: &DeviceId) -> Result<(), String> {
-        let sink = webcam::Sink::open()?;
-        self.node.camera_start(peer, 1280, 30).map_err(|e| e.to_string())?;
-        self.cameras.lock().insert(*peer, sink);
+    fn notice(&self, text: impl Into<String>) {
+        let _ = self.app.emit("devti://notice", text.into());
+    }
+
+    /// Uses a phone's camera: shown in Devti, and fed to the virtual webcam when there is
+    /// one. Asking again (another facing) switches camera without stopping.
+    pub fn use_camera(self: &Arc<Self>, peer: &DeviceId, facing: Option<String>) -> Result<(), String> {
+        let running = self.cameras.lock().contains_key(peer);
+        if running {
+            // Switch camera: stop and ask again with the new facing.
+            self.node.camera_stop(peer).map_err(|e| e.to_string())?;
+        }
+        let sink = webcam::Sink::open().ok();
+        self.node.camera_start_facing(peer, 1280, 30, facing.as_deref()).map_err(|e| e.to_string())?;
+        self.cameras
+            .lock()
+            .insert(*peer, Camera { sink, live: false, facing: facing.clone(), started: std::time::Instant::now() });
         self.publish();
+        // Tell the user if the phone never answers (permission screen ignored, app closed…).
+        let me = self.clone();
+        let peer = *peer;
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(40)).await;
+            let waiting = me.cameras.lock().get(&peer).is_some_and(|c| !c.live && c.started.elapsed().as_secs() >= 39);
+            if waiting {
+                let name = me.node.peer(&peer).map(|p| p.info.name).unwrap_or_else(|| "The phone".into());
+                me.notice(format!(
+                    "{name} hasn't sent its camera yet. Check the phone: it asks before the camera turns on."
+                ));
+            }
+        });
         Ok(())
     }
 
     pub fn stop_camera(&self, peer: &DeviceId) {
         self.cameras.lock().remove(peer);
-        let _ = self.node.screen_stop(peer);
+        let _ = self.node.camera_stop(peer);
         self.publish();
     }
 
-    pub fn on_node_event(&self, ev: &NodeEvent) {
+    pub fn on_node_event(self: &Arc<Self>, ev: &NodeEvent) {
         match ev {
             NodeEvent::AudioStarted { from, kind, sample_rate, channels, .. } => {
                 match player::Player::open(kind, *sample_rate, *channels) {
@@ -130,28 +202,70 @@ impl Media {
                 self.players.lock().remove(&(*from, kind.clone()));
                 self.publish();
             }
-            NodeEvent::ScreenEnded { peer } => {
-                if self.cameras.lock().remove(peer).is_some() {
-                    self.publish();
+            NodeEvent::ScreenEnded { peer, source } if source == "camera" => {
+                if let Some(cam) = self.cameras.lock().remove(peer) {
+                    let name = self.node.peer(peer).map(|p| p.info.name).unwrap_or_else(|| "The phone".into());
+                    self.notice(if cam.live {
+                        format!("{name}'s camera stopped.")
+                    } else {
+                        format!("{name} didn't turn its camera on.")
+                    });
                 }
+                self.publish();
             }
-            NodeEvent::CameraOffered { from, from_name } => {
-                let msg = match self.use_camera(from) {
-                    Ok(()) => format!("Using {from_name}'s camera as a webcam."),
-                    Err(e) => format!("{from_name} offered its camera: {e}"),
-                };
-                let _ = self.app.emit("devti://notice", msg);
-            }
+            NodeEvent::CameraOffered { from, from_name } => self.on_camera_offered(from, from_name),
             _ => {}
         }
     }
+}
+
+impl Media {
+    /// The phone offered its camera: accept it (the phone already asked its user).
+    pub fn on_camera_offered(self: &Arc<Self>, from: &DeviceId, from_name: &str) {
+        let msg = match self.use_camera(from, None) {
+            Ok(()) => format!("Using {from_name}'s camera. Open it in Devti from the device page."),
+            Err(e) => format!("{from_name} offered its camera: {e}"),
+        };
+        self.notice(msg);
+    }
+}
+
+/// Sets up the virtual webcam for other apps (Linux).
+pub fn set_up_webcam() -> Result<String, String> {
+    webcam::set_up()
 }
 
 pub fn app_state(app: &AppHandle) -> Option<Arc<Media>> {
     app.try_state::<Arc<Media>>().map(|s| s.inner().clone())
 }
 
-/// JPEG → YUYV 4:2:2 (what v4l2loopback consumers expect).
+/// The virtual webcam's fixed picture size. A fixed size means the format is set once,
+/// so a phone turning sideways never makes the device busy for apps already using it.
+pub const WEBCAM_W: usize = 1280;
+pub const WEBCAM_H: usize = 720;
+
+/// Scales an RGB picture to fit `dw`×`dh` (nearest neighbour), centred on black.
+pub fn fit_rgb(rgb: &[u8], w: usize, h: usize, dw: usize, dh: usize) -> Vec<u8> {
+    let mut out = vec![0u8; dw * dh * 3];
+    if w == 0 || h == 0 || rgb.len() < w * h * 3 {
+        return out;
+    }
+    // Largest size with the source's shape that fits.
+    let (fw, fh) = if w * dh > h * dw { (dw, (h * dw / w).max(1)) } else { ((w * dh / h).max(1), dh) };
+    let (ox, oy) = ((dw - fw) / 2, (dh - fh) / 2);
+    for y in 0..fh {
+        let sy = y * h / fh;
+        let src_row = &rgb[sy * w * 3..(sy + 1) * w * 3];
+        let dst_row = &mut out[((oy + y) * dw + ox) * 3..((oy + y) * dw + ox + fw) * 3];
+        for x in 0..fw {
+            let sx = x * w / fw;
+            dst_row[x * 3..x * 3 + 3].copy_from_slice(&src_row[sx * 3..sx * 3 + 3]);
+        }
+    }
+    out
+}
+
+/// JPEG → YUYV 4:2:2 (what v4l2loopback consumers expect). `w` must be even.
 pub fn rgb_to_yuyv(rgb: &[u8], w: usize, h: usize) -> Vec<u8> {
     let mut out = Vec::with_capacity(w * h * 2);
     for y in 0..h {
@@ -354,7 +468,6 @@ mod webcam {
 
     pub struct Sink {
         file: File,
-        size: Option<(usize, usize)>,
     }
 
     /// The first v4l2loopback device (by its card name).
@@ -374,11 +487,80 @@ mod webcam {
         found
     }
 
+    pub fn ready() -> bool {
+        find().is_some()
+    }
+
+    pub fn can_set_up() -> bool {
+        true
+    }
+
+    /// Whether the v4l2loopback module is installed (loaded or not).
+    fn module_installed() -> bool {
+        std::process::Command::new("modinfo")
+            .arg("v4l2loopback")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+
+    fn install_hint() -> String {
+        let os = std::fs::read_to_string("/etc/os-release").unwrap_or_default().to_lowercase();
+        if os.contains("fedora") || os.contains("rhel") {
+            "Install it first: sudo dnf install v4l2loopback (from RPM Fusion), then press Set up again.".into()
+        } else if os.contains("arch") {
+            "Install it first: sudo pacman -S v4l2loopback-dkms, then press Set up again.".into()
+        } else if os.contains("suse") {
+            "Install it first: sudo zypper install v4l2loopback-kmp-default, then press Set up again.".into()
+        } else {
+            "Install it first: sudo apt install v4l2loopback-dkms, then press Set up again.".into()
+        }
+    }
+
     pub fn describe() -> String {
         match find() {
-            Some(d) => format!("Webcam ready ({d})."),
-            None => "To use a phone as a webcam, load v4l2loopback once: sudo modprobe v4l2loopback card_label=\"Devti Camera\" exclusive_caps=1".into(),
+            Some(d) => format!("Other apps see the phone as “Devti Camera” ({d})."),
+            None if module_installed() => {
+                "Set up the virtual webcam once so Zoom, Meet and other apps can use the phone camera.".into()
+            }
+            None => format!("For other apps to use the phone camera, Linux needs v4l2loopback. {}", install_hint()),
         }
+    }
+
+    /// Loads v4l2loopback now and on every start (one password prompt).
+    pub fn set_up() -> Result<String, String> {
+        if find().is_some() {
+            return Ok(describe());
+        }
+        if !module_installed() {
+            return Err(format!("v4l2loopback isn't installed. {}", install_hint()));
+        }
+        let script = r#"set -e
+modprobe v4l2loopback devices=1 video_nr=42 card_label="Devti Camera" exclusive_caps=1
+printf 'v4l2loopback\n' > /etc/modules-load.d/devti-camera.conf
+printf 'options v4l2loopback devices=1 video_nr=42 card_label="Devti Camera" exclusive_caps=1\n' > /etc/modprobe.d/devti-camera.conf"#;
+        let out = std::process::Command::new("pkexec")
+            .args(["sh", "-c", script])
+            .output()
+            .map_err(|_| "pkexec isn't available. Run in a terminal: sudo modprobe v4l2loopback card_label=\"Devti Camera\" exclusive_caps=1".to_string())?;
+        if !out.status.success() {
+            let why = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            return Err(if why.is_empty() || out.status.code() == Some(126) {
+                "Setup was cancelled.".into()
+            } else {
+                format!("Couldn't load v4l2loopback: {why}")
+            });
+        }
+        // udev needs a moment to create the device.
+        for _ in 0..20 {
+            if find().is_some() {
+                return Ok(describe());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        Err("v4l2loopback loaded, but no camera device appeared.".into())
     }
 
     #[repr(C)]
@@ -414,7 +596,11 @@ mod webcam {
             let path = find().ok_or_else(describe)?;
             let file =
                 std::fs::OpenOptions::new().write(true).open(&path).map_err(|e| format!("can't open {path}: {e}"))?;
-            Ok(Self { file, size: None })
+            let mut sink = Self { file };
+            if !sink.set_format(super::WEBCAM_W, super::WEBCAM_H) {
+                return Err(format!("{path} is busy (another app is feeding it)"));
+            }
+            Ok(sink)
         }
 
         fn set_format(&mut self, w: usize, h: usize) -> bool {
@@ -441,16 +627,10 @@ mod webcam {
             unsafe { libc::ioctl(self.file.as_raw_fd(), VIDIOC_S_FMT, &mut f as *mut Format) == 0 }
         }
 
-        pub fn frame(&mut self, jpeg: &[u8], _w: u32, _h: u32) {
+        pub fn frame(&mut self, jpeg: &[u8]) {
             let Some((rgb, w, h)) = super::decode_jpeg(jpeg) else { return };
-            let w = w & !1;
-            if self.size != Some((w, h)) {
-                if !self.set_format(w, h) {
-                    return;
-                }
-                self.size = Some((w, h));
-            }
-            let yuyv = super::rgb_to_yuyv(&rgb, w, h);
+            let fitted = super::fit_rgb(&rgb, w, h, super::WEBCAM_W, super::WEBCAM_H);
+            let yuyv = super::rgb_to_yuyv(&fitted, super::WEBCAM_W, super::WEBCAM_H);
             let _ = self.file.write_all(&yuyv);
         }
     }
@@ -466,7 +646,19 @@ mod webcam {
     pub struct Sink;
 
     pub fn describe() -> String {
-        "Windows has no free virtual-camera driver. Open the phone camera in Devti and capture that window with OBS (Window Capture → Start Virtual Camera).".into()
+        "The camera shows in Devti. For Zoom, Meet or Teams, capture Devti's camera window with OBS (Window Capture, then Start Virtual Camera).".into()
+    }
+
+    pub fn ready() -> bool {
+        false
+    }
+
+    pub fn can_set_up() -> bool {
+        false
+    }
+
+    pub fn set_up() -> Result<String, String> {
+        Err(describe())
     }
 
     impl Sink {
@@ -474,7 +666,7 @@ mod webcam {
             Err(describe())
         }
 
-        pub fn frame(&mut self, _jpeg: &[u8], _w: u32, _h: u32) {}
+        pub fn frame(&mut self, _jpeg: &[u8]) {}
     }
 }
 
@@ -491,5 +683,23 @@ mod tests {
         assert!((126..=130).contains(&y[1]) && (126..=130).contains(&y[3]), "neutral chroma {y:?}");
         let black = vec![0u8; 2 * 3];
         assert_eq!(rgb_to_yuyv(&black, 2, 1)[0], 16);
+    }
+
+    #[test]
+    fn portrait_frames_are_letterboxed_into_the_fixed_webcam_size() {
+        // A 3×4 portrait picture of solid red, odd width included.
+        let red: Vec<u8> = std::iter::repeat_n([255u8, 0, 0], 12).flatten().collect();
+        let out = fit_rgb(&red, 3, 4, 16, 9);
+        assert_eq!(out.len(), 16 * 9 * 3);
+        let px = |x: usize, y: usize| &out[(y * 16 + x) * 3..(y * 16 + x) * 3 + 3];
+        assert_eq!(px(8, 4), &[255, 0, 0], "centre is the picture");
+        assert_eq!(px(0, 4), &[0, 0, 0], "sides are black bars");
+        assert_eq!(px(15, 4), &[0, 0, 0]);
+        // Wider than 16:9 fills the width, with bars above and below.
+        let wide: Vec<u8> = std::iter::repeat_n([0u8, 255, 0], 32 * 9).flatten().collect();
+        let out = fit_rgb(&wide, 32, 9, 16, 9);
+        let px = |x: usize, y: usize| &out[(y * 16 + x) * 3..(y * 16 + x) * 3 + 3];
+        assert_eq!(px(0, 4), &[0, 255, 0], "edge to edge in the middle");
+        assert_eq!(px(0, 0), &[0, 0, 0], "bar on top");
     }
 }

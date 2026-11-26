@@ -242,6 +242,9 @@ pub enum NodeEvent {
         /// "screen" or "camera".
         #[serde(default)]
         source: String,
+        /// For the camera: "front" or "back", when the viewer asked for one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        facing: Option<String>,
     },
     /// A device offers its camera as a webcam for this one (Phase 6).
     CameraOffered {
@@ -256,9 +259,12 @@ pub enum NodeEvent {
         latency_ms: u32,
         kbps: u32,
     },
-    /// A screen this device was viewing stopped.
+    /// A screen (or camera) this device was viewing stopped.
     ScreenEnded {
         peer: DeviceId,
+        /// "screen" or "camera".
+        #[serde(default)]
+        source: String,
     },
     // ---- Phase 6: communication
     /// The phone's conversations (answer to `request_sms_threads`).

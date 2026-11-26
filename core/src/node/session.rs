@@ -423,7 +423,7 @@ fn handle_control(inner: &Arc<Inner>, peer_id: DeviceId, msg: ControlMsg) {
         | ControlMsg::DeckPress { .. }
         | ControlMsg::CatalogRequest
         | ControlMsg::Catalog { .. } => super::control::handle(inner, peer_id, msg),
-        ControlMsg::ScreenStart { .. } | ControlMsg::ScreenStop | ControlMsg::CameraOffer => {
+        ControlMsg::ScreenStart { .. } | ControlMsg::ScreenStop { .. } | ControlMsg::CameraOffer => {
             super::screen::handle(inner, peer_id, msg)
         }
         ControlMsg::SmsThreadsRequest

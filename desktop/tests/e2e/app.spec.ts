@@ -421,20 +421,67 @@ test("plugins: consent sheet lists what it may do, then its command runs", async
   await expect(page.getByText("Off", { exact: true })).toBeVisible();
 });
 
-test("settings: reach from anywhere shows addresses and validates typed ones", async ({ page }) => {
+test("settings: connect from anywhere, own relay, and the VPN fallback", async ({ page }) => {
   await freshApp(page, { onboarding_done: "true" });
   await rail(page).getByRole("button", { name: "Settings" }).click();
-  await expect(page.getByRole("heading", { name: "Reach from anywhere" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connect from anywhere" })).toBeVisible();
+  await expect(page.getByTestId("anywhere-status")).toContainText("Reachable from anywhere");
+  await expect(page.getByTestId("anywhere-status")).toContainText("203.0.113.42");
+
+  const relay = page.getByLabel("Your own relay (optional)");
+  await relay.fill("not a relay");
+  await page.getByRole("button", { name: "Save", exact: true }).first().click();
+  await expect(page.getByText("the relay address looks like https://relay.example.org")).toBeVisible();
+  await relay.fill("https://relay.example.org");
+  await page.getByRole("button", { name: "Save", exact: true }).first().click();
+  await expect(page.getByTestId("anywhere-status")).toContainText("through relay.example.org");
+
+  await page.getByRole("switch", { name: "Connect from anywhere" }).locator("xpath=ancestor::label").click();
+  await expect(page.getByTestId("anywhere-status")).toContainText("Off.");
+});
+
+test("settings: VPN and typed addresses show and are validated", async ({ page }) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByRole("heading", { name: "Other ways to connect" })).toBeVisible();
   await expect(page.getByText("100.101.12.7:47810")).toBeVisible();
   await expect(page.getByText("Private network · tailscale0")).toBeVisible();
 
   const field = page.getByLabel("Addresses you set up yourself");
   await field.fill("not an address");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).nth(1).click();
   await expect(page.getByText("isn't an address Devti can dial", { exact: false })).toBeVisible();
 
   await field.fill("home.example.org:47810");
   await page.getByRole("switch", { name: "Reach from anywhere" }).locator("xpath=ancestor::label").click();
   await expect(page.getByText("Your devices can now reach this computer from anywhere.")).toBeVisible();
   await expect(page.getByText("Set up by you")).toBeVisible();
+});
+
+test("phone camera: front or back, waits for the phone, shows live, switches and stops", async ({ page }) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Pair" }).click();
+  await pairPhone(page, "Pixel 8");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /Pixel 8, connected/ }).click();
+  await page.getByRole("button", { name: "Open device" }).click();
+
+  const status = page.getByTestId("camera-status");
+  await expect(status).toContainText("The phone asks before it turns on");
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await page.getByRole("button", { name: "Use camera" }).click();
+  await expect(status).toContainText("Waiting for Pixel 8");
+  await expect(status).toContainText("On: back camera");
+
+  // Clicking again never turns it off; Show opens the live view.
+  await page.getByRole("button", { name: "Show" }).click();
+  await expect(page.getByTestId("camera-canvas")).toBeVisible();
+  await expect(page.getByText(/Back camera · \d+ fps/)).toBeVisible();
+  await page.getByRole("button", { name: "Switch to front" }).click();
+  await expect(status).toContainText("On: front camera");
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(page.getByText("Pixel 8's camera stopped.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use camera" })).toBeVisible();
 });

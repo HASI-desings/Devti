@@ -435,11 +435,14 @@ private fun AccessDialog(p: PeerSnapshot, onChange: (Permissions) -> Unit, onClo
         onDismissRequest = onClose,
         title = { Text("What ${p.info.name} can do on this phone") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Toggle("See the screen and camera", "Mirror this phone, or use its camera. You still say yes each time.", perms.screenView) { onChange(perms.copy(screenView = it)) }
+                Toggle("Control this phone", "Taps, typing and volume while mirrored.", perms.control) { onChange(perms.copy(control = it)) }
                 Toggle("Send files", "Files it sends are saved in Downloads/Devti.", perms.files) { onChange(perms.copy(files = it)) }
                 Toggle("Clipboard", "Put text on this phone's clipboard.", perms.clipboard) { onChange(perms.copy(clipboard = it)) }
-                Toggle("Notifications", "Act on, reply to and dismiss this phone's notifications.", perms.notifications) { onChange(perms.copy(notifications = it)) }
-                Toggle("Ring this phone", "Find my phone, at full volume.", perms.commands) { onChange(perms.copy(commands = it)) }
+                Toggle("Notifications and texts", "Act on notifications, read and send texts, answer calls.", perms.notifications) { onChange(perms.copy(notifications = it)) }
+                Toggle("Ring, lock and commands", "Find my phone at full volume, lock it, run its shortcuts.", perms.commands) { onChange(perms.copy(commands = it)) }
+                Toggle("Sound and accessories", "Hear this phone's sound and microphone, control its accessories.", perms.bluetooth) { onChange(perms.copy(bluetooth = it)) }
                 Toggle("Browse this phone's folders", "Only the folders you share below, and only to read.", perms.browse) { onChange(perms.copy(browse = it)) }
             }
         },
