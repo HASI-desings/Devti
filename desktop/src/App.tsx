@@ -31,6 +31,7 @@ const ControlPage = lazy(() =>
 const DevicePage = lazy(() =>
   import("./features/device/DevicePage").then((m) => ({ default: m.DevicePage })),
 );
+const FindPage = lazy(() => import("./features/find/FindPage").then((m) => ({ default: m.FindPage })));
 const FilesPage = lazy(() => import("./features/files/FilesPage").then((m) => ({ default: m.FilesPage })));
 const HelpPage = lazy(() => import("./features/help/HelpPage").then((m) => ({ default: m.HelpPage })));
 const MessagesPage = lazy(() =>
@@ -210,6 +211,7 @@ export function App() {
           <Suspense fallback={null}>
             {page === "ecosystem" && <EcosystemPage onPair={() => setPairOpen(true)} />}
             {page === "device" && <DevicePage />}
+            {page === "find" && <FindPage />}
             {page === "files" && <FilesPage />}
             {page === "notifications" && <NotificationsPage />}
             {page === "battery" && <BatteryPage />}

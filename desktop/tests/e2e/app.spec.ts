@@ -485,3 +485,23 @@ test("phone camera: front or back, waits for the phone, shows live, switches and
   await expect(page.getByText("Pixel 8's camera stopped.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Use camera" })).toBeVisible();
 });
+
+test("find my devices: map, this computer, locate a phone with its IP and network", async ({ page }) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Pair" }).click();
+  await pairPhone(page, "Pixel 8");
+  await page.keyboard.press("Escape");
+  await rail(page).getByRole("button", { name: "Find" }).click();
+  await expect(page.getByRole("heading", { name: "Find my devices" })).toBeVisible();
+  await expect(page.getByTestId("find-map")).toBeVisible();
+  await expect(page.getByText("· this computer")).toBeVisible();
+
+  const phone = page.getByRole("listitem").filter({ hasText: "Pixel 8" });
+  await expect(phone).toContainText("Not located yet.");
+  await phone.getByRole("button", { name: "Locate" }).click();
+  await expect(phone).toContainText("Mobile data: Jazz");
+  await expect(phone).toContainText("203.0.113.42");
+  await expect(phone).toContainText(/31\.\d{5}, 74\.\d{5}/);
+  await expect(phone.getByRole("button", { name: "Open map" })).toBeVisible();
+  await expect(page.locator(".leaflet-marker-icon")).toHaveCount(2);
+});

@@ -14,6 +14,7 @@ mod commands;
 mod comms_host;
 mod continuity;
 mod edges;
+mod location;
 mod media;
 mod plugins;
 mod remote;
@@ -175,6 +176,7 @@ pub fn run() {
                             remote::on_node_event(&emitter, &remote, &ev);
                             comms_host::on_node_event(&emitter, &event_node, &ev);
                             media.on_node_event(&ev);
+                            location::on_node_event(&event_node, &ev);
                             automation.on_node_event(&ev);
                             plugins.on_node_event(&ev);
                             if matches!(ev, devti_core::NodeEvent::ScreenRequested { .. }) {
@@ -290,6 +292,9 @@ pub fn run() {
             commands::pick_folder,
             commands::reach_info,
             commands::anywhere_info,
+            commands::locate_device,
+            commands::device_locations,
+            commands::own_location,
             commands::set_anywhere,
             commands::set_reach,
             commands::peer_reach,

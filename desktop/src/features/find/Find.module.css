@@ -1,0 +1,197 @@
+.wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
+  gap: var(--s-5);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.map {
+  position: relative;
+  height: min(64vh, 560px);
+  min-height: 320px;
+  border-radius: var(--r-sheet);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  /* Leaflet's controls follow the theme. */
+  --map-filter: none;
+}
+
+:global(html[data-theme="dark"]) .map {
+  --map-filter: invert(0.92) hue-rotate(180deg) saturate(0.6) brightness(0.9);
+}
+
+@media (prefers-color-scheme: dark) {
+  :global(html:not([data-theme="light"])) .map {
+    --map-filter: invert(0.92) hue-rotate(180deg) saturate(0.6) brightness(0.9);
+  }
+}
+
+.map :global(.leaflet-tile-pane) {
+  filter: var(--map-filter);
+}
+
+.map :global(.leaflet-control-attribution) {
+  background: color-mix(in oklab, var(--surface) 85%, transparent);
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.map :global(.leaflet-control-attribution a) {
+  color: var(--text);
+}
+
+.map :global(.leaflet-bar a) {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.pin {
+  background: none;
+  border: none;
+}
+
+.pin span {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--pin);
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
+}
+
+.pin span[data-live="true"] {
+  animation: beacon 1.6s ease-out infinite;
+}
+
+@keyframes beacon {
+  0% {
+    box-shadow:
+      0 2px 8px rgb(0 0 0 / 0.35),
+      0 0 0 0 color-mix(in oklab, var(--pin) 70%, transparent);
+  }
+  100% {
+    box-shadow:
+      0 2px 8px rgb(0 0 0 / 0.35),
+      0 0 0 18px transparent;
+  }
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-5);
+  border-radius: var(--r-sheet);
+  background:
+    radial-gradient(90% 140% at 0% 0%, color-mix(in oklab, var(--voice) 14%, transparent), transparent 70%),
+    var(--surface);
+  border: 1px solid color-mix(in oklab, var(--voice) 25%, var(--line));
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.cardIcon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--voice);
+  background: color-mix(in oklab, var(--voice) 14%, var(--surface-2));
+  opacity: 0.6;
+}
+
+.cardIcon[data-online] {
+  opacity: 1;
+}
+
+.here {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px var(--s-4);
+  margin: 0;
+  font-size: var(--t-13);
+}
+
+.facts dt {
+  color: var(--text-faint);
+}
+
+.facts dd {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.coords {
+  all: unset;
+  cursor: pointer;
+  color: var(--text);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.coords:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.muted {
+  color: var(--text-dim);
+}
+
+.mapWrap {
+  position: sticky;
+  top: 0;
+}
+
+.offline {
+  position: absolute;
+  left: var(--s-4);
+  right: var(--s-4);
+  bottom: var(--s-6);
+  z-index: 500;
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: 12px;
+  font-size: var(--t-13);
+  color: var(--text-dim);
+  background: color-mix(in oklab, var(--surface) 90%, transparent);
+  border: 1px solid var(--line);
+  text-align: center;
+}

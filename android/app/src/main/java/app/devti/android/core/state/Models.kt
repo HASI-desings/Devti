@@ -235,6 +235,22 @@ data class ReachInfo(
     val extra: List<String>,
 )
 
+/** Where a device is (Find my device). */
+@Serializable
+data class DeviceLocation(
+    val lat: Double? = null,
+    val lon: Double? = null,
+    @SerialName("accuracy_m") val accuracyM: Float? = null,
+    val ts: Long = 0,
+    val source: String = "none",
+    @SerialName("public_ip") val publicIp: String? = null,
+    @SerialName("local_ips") val localIps: List<String> = emptyList(),
+    val network: String? = null,
+    val battery: Int? = null,
+    val error: String? = null,
+    val live: Boolean = false,
+)
+
 /** Connecting from anywhere (built in since 1.1). */
 @Serializable
 data class AnywhereInfo(
@@ -306,6 +322,8 @@ data class CoreState(
     val cameraSharing: Boolean = false,
     /** Advertising the walk-away beacon. */
     val walkAway: Boolean = false,
+    /** Find my device: where each device last said it was, by device id. */
+    val locations: Map<String, DeviceLocation> = emptyMap(),
 ) {
     /** The Hub this phone belongs to: the first paired computer. */
     val hub: PeerSnapshot?

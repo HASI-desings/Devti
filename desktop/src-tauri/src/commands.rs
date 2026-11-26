@@ -788,6 +788,27 @@ pub async fn set_anywhere(
     Ok(state.node.anywhere_info())
 }
 
+// ------------------------------------------------------------- Find my device
+
+/// Asks a device where it is; the answer arrives as a `location_received` event.
+#[tauri::command]
+pub fn locate_device(state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    state.node.locate(&parse_id(&id)?).map_err(err)
+}
+
+/// The last location heard from every paired device.
+#[tauri::command]
+pub fn device_locations(state: State<'_, AppState>) -> Vec<devti_core::node::locate::DeviceLocation> {
+    state.node.locations()
+}
+
+/// This computer's own location and addresses (may ask the OS for permission).
+#[tauri::command]
+pub async fn own_location(state: State<'_, AppState>) -> CmdResult<devti_core::node::locate::Location> {
+    let fix = tauri::async_runtime::spawn_blocking(crate::location::fix).await.map_err(err)?;
+    Ok(state.node.own_location(fix))
+}
+
 /// Where `id` said it can be reached away from home.
 #[tauri::command]
 pub fn peer_reach(state: State<'_, AppState>, id: String) -> CmdResult<Vec<String>> {

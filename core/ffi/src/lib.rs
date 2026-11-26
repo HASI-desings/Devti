@@ -565,6 +565,32 @@ impl DevtiMobile {
         Ok(self.node.set_reach(enabled, parse_json(&extra_json)?)?)
     }
 
+    // ---- 1.1: find my device
+
+    /// Asks a device where it is; the answer arrives as `location_received`.
+    pub fn locate(&self, device_id: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.locate(&device_id.parse()?)?)
+    }
+
+    /// Answers `locate_requested`: `fix_json` is a `LocationFix` (lat, lon, accuracy_m,
+    /// source, network, error). The core adds IP addresses and battery.
+    pub fn report_location(&self, device_id: String, fix_json: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.report_location(&device_id.parse()?, parse_json(&fix_json)?)?)
+    }
+
+    /// Sends this device's location without being asked (stolen mode).
+    pub fn push_location(&self, device_id: String, fix_json: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.push_location(&device_id.parse()?, parse_json(&fix_json)?)?)
+    }
+
+    /// The last location heard from every paired device (`[DeviceLocation]`).
+    pub fn locations_json(&self) -> String {
+        serde_json::to_string(&self.node.locations()).unwrap_or_else(|_| "[]".into())
+    }
+
     /// Connecting from anywhere (`AnywhereInfo`).
     pub fn anywhere_info_json(&self) -> String {
         serde_json::to_string(&self.node.anywhere_info()).unwrap_or_else(|_| "{}".into())

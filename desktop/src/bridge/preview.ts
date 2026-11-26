@@ -399,6 +399,12 @@ export function createPreviewBridge(): Bridge {
     ],
     extra: [],
   };
+  const locations = new Map<string, import("./types").DeviceLocationInfo>();
+  const SIM_SPOTS = [
+    { lat: 31.4504, lon: 74.2712 }, // near the university
+    { lat: 31.5204, lon: 74.3587 }, // city centre
+    { lat: 31.4697, lon: 74.4086 },
+  ];
   let anywhere: AnywhereInfo = {
     enabled: true,
     running: true,
@@ -1253,6 +1259,47 @@ export function createPreviewBridge(): Bridge {
     },
     async reachInfo() {
       return structuredClone(reach);
+    },
+    async locateDevice(id) {
+      const p = peers.get(id);
+      if (!p?.online) throw new Error("That device is offline.");
+      addLog("locate_sent", p.info);
+      // Simulated devices around Lahore; each answers a moment later.
+      const spot = SIM_SPOTS[[...peers.keys()].indexOf(id) % SIM_SPOTS.length]!;
+      window.setTimeout(() => {
+        const location = {
+          lat: spot.lat + (Math.random() - 0.5) * 0.0004,
+          lon: spot.lon + (Math.random() - 0.5) * 0.0004,
+          accuracy_m: p.info.kind === "phone" ? 9 : 60,
+          ts: Date.now(),
+          source: p.info.kind === "phone" ? "gps" : "os",
+          public_ip: "203.0.113.42",
+          local_ips: ["192.168.1.40"],
+          network: p.info.kind === "phone" ? "Mobile data: Jazz" : "Wi-Fi: Hostel 2G",
+          battery: p.status.battery?.percent,
+          live: false,
+        };
+        locations.set(id, location);
+        addLog("located", p.info, location.source);
+        emit({ type: "location_received", from: id, location });
+      }, 700);
+    },
+    async deviceLocations() {
+      return [...locations].map(([device, location]) => ({ device, location: structuredClone(location) }));
+    },
+    async ownLocation() {
+      return {
+        lat: 31.4475,
+        lon: 74.2681,
+        accuracy_m: 40,
+        ts: Date.now(),
+        source: "os",
+        public_ip: "203.0.113.42",
+        local_ips: ["192.168.1.24"],
+        network: "Wi-Fi: Hostel 2G",
+        battery: local.status.battery?.percent,
+        live: false,
+      };
     },
     async anywhereInfo() {
       return structuredClone(anywhere);

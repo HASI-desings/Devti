@@ -108,6 +108,12 @@ object Reducer {
                 if (on) state.copy(ringing = RingIn(obj.string("from") ?: "", obj.string("from_name") ?: ""))
                 else state.copy(ringing = null)
             }
+            "location_received" -> {
+                val from = obj.string("from") ?: return state
+                val loc = obj["location"]?.let { runCatching { json.decodeFromJsonElement(DeviceLocation.serializer(), it) }.getOrNull() }
+                    ?: return state
+                state.copy(locations = state.locations + (from to loc))
+            }
             "fs_listing" -> {
                 val from = obj.string("from") ?: return state
                 val path = obj.string("path") ?: return state

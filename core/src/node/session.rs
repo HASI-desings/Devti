@@ -436,6 +436,7 @@ fn handle_control(inner: &Arc<Inner>, peer_id: DeviceId, msg: ControlMsg) {
         | ControlMsg::Call { .. }
         | ControlMsg::CallAction { .. }
         | ControlMsg::Handoff { .. } => super::comms::handle(inner, peer_id, msg),
+        ControlMsg::LocateRequest | ControlMsg::Location { .. } => super::locate::handle(inner, peer_id, msg),
         ControlMsg::Reach { addrs, relay } => {
             super::anywhere::on_relay_hint(inner, &peer_id, relay);
             super::reach::handle(inner, peer_id, addrs)

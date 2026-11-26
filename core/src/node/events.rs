@@ -338,6 +338,16 @@ pub enum NodeEvent {
     },
     /// Connecting from anywhere started, stopped or came online (see `Node::anywhere_info`).
     AnywhereChanged,
+    /// A device wants to know where this one is: answer with `Node::report_location`.
+    LocateRequested {
+        from: DeviceId,
+        from_name: String,
+    },
+    /// A device said where it is.
+    LocationReceived {
+        from: DeviceId,
+        location: crate::node::locate::Location,
+    },
     /// A listing of another device's shared folder.
     FsListing {
         from: DeviceId,

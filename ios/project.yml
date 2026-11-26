@@ -28,6 +28,9 @@ targets:
         embed: false
       - sdk: SystemConfiguration.framework
       - sdk: Security.framework
+      # iroh (connect from anywhere) watches network changes through Network.framework.
+      - sdk: Network.framework
+      - sdk: CoreLocation.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.devti.ios
@@ -51,6 +54,7 @@ targets:
         UIAppFonts: [BricolageGrotesque.ttf, InstrumentSans.ttf]
         NSCameraUsageDescription: Devti uses the camera only to scan the pairing QR code your computer shows.
         NSLocalNetworkUsageDescription: Devti connects directly to your own computers on this network, encrypted.
+        NSLocationWhenInUseUsageDescription: Your own computers can ask where this iPhone is (Find my device). The location goes only to them, encrypted.
         # Received files appear in the Files app under On My iPhone → Devti.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

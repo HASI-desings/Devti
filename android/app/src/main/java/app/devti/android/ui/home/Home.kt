@@ -124,6 +124,7 @@ fun Home(core: DevtiCore, state: CoreState, onPairAnother: () -> Unit) {
 
         if (hub != null) {
             QuickActions(core, state, hub)
+            FindCard(core, state, hub)
             if (hub.online) QuietButton("Browse ${hub.info.name}'s shared folders", onClick = { browsing = true }, modifier = Modifier.fillMaxWidth())
             Transfers(core, state.transfers, state.preparing)
             ContinuitySettings(core, state)
@@ -600,6 +601,78 @@ private fun ShareChip(label: String, active: Boolean, modifier: Modifier, enable
                 else -> c.textFaint
             },
         )
+    }
+}
+
+/** Find my device: where the computer is, and whether this phone can be found. */
+@Composable
+private fun FindCard(core: DevtiCore, state: CoreState, hub: PeerSnapshot) {
+    val c = Devti.colors
+    val context = LocalContext.current
+    var allowed by remember { mutableStateOf(app.devti.android.continuity.Locator.permitted(context)) }
+    var always by remember { mutableStateOf(app.devti.android.continuity.Locator.permittedInBackground(context)) }
+    val background = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        always = ok
+        if (!ok) toast(context, "Without “Allow all the time”, your computer can find this phone only while Devti is open.")
+    }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res ->
+        allowed = res.values.any { it }
+        // Android asks for background location separately, after the first yes.
+        if (allowed && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q && !always) {
+            background.launch(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        }
+    }
+    val loc = state.locations[hub.info.id]
+    Card {
+        Text("Find my devices", style = Devti.type.heading, color = c.text)
+        Text(
+            when {
+                loc == null -> "Ask ${hub.info.name} where it is: its location, network and IP address."
+                loc.lat != null && loc.lon != null ->
+                    "${hub.info.name}: %.5f, %.5f".format(loc.lat, loc.lon) +
+                        (loc.accuracyM?.let { " (±${it.toInt()} m)" } ?: "") +
+                        (loc.network?.let { " · $it" } ?: "") + (loc.publicIp?.let { " · IP $it" } ?: "")
+                else -> "${hub.info.name} didn't share a position" + (loc.error?.let { " ($it)" } ?: "") +
+                    (loc.publicIp?.let { ". IP $it" } ?: "") + (loc.network?.let { " · $it" } ?: "")
+            },
+            style = Devti.type.small,
+            color = c.textDim,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            QuietButton("Locate ${hub.info.name}", onClick = {
+                core.locate(hub.info.id)?.let { toast(context, it) }
+            }, modifier = Modifier.weight(1f))
+            if (loc?.lat != null && loc.lon != null) {
+                QuietButton("Open in maps", onClick = {
+                    val uri = android.net.Uri.parse("geo:${loc.lat},${loc.lon}?q=${loc.lat},${loc.lon}(${android.net.Uri.encode(hub.info.name)})")
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+                        .onFailure { toast(context, "No maps app is installed.") }
+                }, modifier = Modifier.weight(1f))
+            }
+        }
+        Toggle(
+            "Let my computers find this phone",
+            when {
+                !allowed -> "Allow location so your computer can see where this phone is (Find my device and stolen mode)."
+                !always -> "On while Devti is open. Pick “Allow all the time” so it also works when Devti is closed."
+                else -> "On. Your computers can see where this phone is, any time. It never goes anywhere else."
+            },
+            allowed && always,
+        ) { on ->
+            if (on) {
+                if (!allowed) {
+                    ask.launch(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION))
+                } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    background.launch(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                }
+            } else {
+                // Android doesn't let apps give a permission back; send the user to the switch.
+                context.startActivity(
+                    Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", context.packageName, null))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+        }
     }
 }
 

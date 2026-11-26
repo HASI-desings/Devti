@@ -150,6 +150,19 @@ struct ReachInfo: Codable, Hashable {
     var extra: [String]
 }
 
+/// Where a device is (Find my device).
+struct DeviceLocation: Codable, Hashable {
+    var lat: Double?
+    var lon: Double?
+    var accuracyM: Double?
+    var ts: Int64
+    var source: String?
+    var publicIp: String?
+    var localIps: [String]?
+    var network: String?
+    var error: String?
+}
+
 /// Connecting from anywhere (built in since 1.1).
 struct AnywhereInfo: Codable, Hashable {
     var enabled: Bool
@@ -189,6 +202,8 @@ enum Events {
     struct FsFailed: Decodable { var path: String; var error: String }
     struct Handoff: Decodable { var fromName: String; var item: HandoffItem }
     struct ScreenRequested: Decodable { var from: String; var on: Bool }
+    struct LocateRequested: Decodable { var from: String }
+    struct LocationReceived: Decodable { var from: String; var location: DeviceLocation }
     struct LowBattery: Decodable { var name: String; var percent: Int }
     struct Dnd: Decodable { var on: Bool }
 }

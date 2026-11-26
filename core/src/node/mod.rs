@@ -18,6 +18,7 @@ mod continuity;
 mod control;
 mod events;
 pub(crate) mod link;
+pub mod locate;
 pub mod reach;
 pub mod screen;
 mod session;
@@ -753,6 +754,7 @@ impl Inner {
         self.store.remove_peer(id)?;
         reach::forget(self, id);
         anywhere::forget(self, id);
+        locate::forget(self, id);
         if let Some(s) = state.session {
             if reason == RemovalReason::RevokedHere {
                 let _ = s.tx.send(ControlMsg::Goodbye { reason: GoodbyeReason::Revoked });

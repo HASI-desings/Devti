@@ -373,6 +373,15 @@ pub struct Permissions {
     /// before it existed read as `false`.
     #[serde(default)]
     pub browse: bool,
+    /// See where this device is: its location, IP addresses and network (Find my
+    /// device). Records saved before it existed read as `true`, so finding a lost device
+    /// works on pairings made before 1.1.
+    #[serde(default = "yes")]
+    pub locate: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 impl Permissions {
@@ -388,6 +397,7 @@ impl Permissions {
                 commands: true,
                 bluetooth: true,
                 browse: true,
+                locate: true,
             },
             TrustRole::Restricted => Self {
                 screen_view: false,
@@ -398,6 +408,7 @@ impl Permissions {
                 commands: false,
                 bluetooth: false,
                 browse: false,
+                locate: false,
             },
         }
     }

@@ -62,6 +62,9 @@ android {
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        // cargo-ndk copies every cdylib it built; only devti-ffi is ours to load (iroh's
+        // own cdylibs are linked into it statically).
+        jniLibs.excludes += listOf("**/libiroh.so", "**/libiroh_relay.so")
     }
 }
 

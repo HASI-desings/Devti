@@ -31,6 +31,7 @@ import app.devti.android.control.PhoneCommands
 import app.devti.android.control.ScreenCaptureService
 import app.devti.android.control.ScreenShareActivity
 import app.devti.android.control.screenTargetOf
+import app.devti.android.core.state.AnywhereInfo
 import app.devti.android.core.state.Catalog
 import app.devti.android.core.state.CallInfo
 import app.devti.android.core.state.HandoffItem
@@ -206,6 +207,13 @@ class DevtiCore(private val context: Context) : EventListener {
                 clipboard.apply(it)
             }
             "ring_requested" -> if (ev["on"]?.jsonPrimitive?.booleanOrNull == true) ringer.start(str("from_name") ?: "") else ringer.stop()
+            // Find my device: answer with this phone's location and network.
+            "locate_requested" -> {
+                val from = str("from") ?: return
+                app.devti.android.continuity.Locator.fix(context) { fix ->
+                    io.launch { runCatching { node?.reportLocation(from, fix) } }
+                }
+            }
             "notification_action_requested" -> {
                 val ok = NotificationMirror.running()?.runAction(str("key") ?: return, str("action") ?: return, str("reply"))
                 if (ok != true) toast("Couldn't do that on this phone: the notification is gone or access is off")
@@ -446,6 +454,9 @@ class DevtiCore(private val context: Context) : EventListener {
     fun setReach(on: Boolean, extra: List<String> = reachInfo()?.extra.orEmpty()): String? = act {
         node?.setReach(on, Reducer.json.encodeToString(ListSerializer(String.serializer()), extra))
     }
+
+    /** Asks a computer where it is (Find my device); the answer lands in [CoreState.locations]. */
+    fun locate(deviceId: String): String? = act { node?.locate(deviceId) }
 
     fun anywhereInfo(): AnywhereInfo? = runCatching {
         Reducer.json.decodeFromString(AnywhereInfo.serializer(), node?.anywhereInfoJson() ?: return null)

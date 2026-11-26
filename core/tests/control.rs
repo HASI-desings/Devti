@@ -361,3 +361,46 @@ async fn camera_and_screen_share_side_by_side_and_survive_a_second_request() {
     .await;
     assert!(phone.node.camera_viewers().is_empty());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn find_my_device_reports_location_and_respects_the_permission() {
+    use devti_core::node::locate::LocationFix;
+    let mut hub = spawn("Studio Laptop", DeviceKind::Laptop).await;
+    let mut phone = spawn("Pixel 8", DeviceKind::Phone).await;
+    pair(&mut hub, &mut phone).await;
+    let (hid, pid) = (hub.node.device_id(), phone.node.device_id());
+
+    hub.node.locate(&pid).unwrap();
+    let from = wait_for(&mut phone.ev, "locate requested", |e| match e {
+        NodeEvent::LocateRequested { from, .. } => Some(*from),
+        _ => None,
+    })
+    .await;
+    assert_eq!(from, hid);
+    let fix = LocationFix {
+        lat: Some(31.5204),
+        lon: Some(74.3587),
+        accuracy_m: Some(12.0),
+        source: "gps".into(),
+        network: Some("Hostel Wi-Fi".into()),
+        ..Default::default()
+    };
+    phone.node.report_location(&hid, fix).unwrap();
+    let loc = wait_for(&mut hub.ev, "location", |e| match e {
+        NodeEvent::LocationReceived { from, location } if *from == pid => Some(location.clone()),
+        _ => None,
+    })
+    .await;
+    assert_eq!((loc.lat, loc.lon), (Some(31.5204), Some(74.3587)));
+    assert_eq!(loc.network.as_deref(), Some("Hostel Wi-Fi"));
+    assert_eq!(loc.local_ips, devti_core::net::local_addresses().iter().map(|a| a.to_string()).collect::<Vec<_>>());
+    // Remembered for the map, even when the phone goes offline later.
+    assert_eq!(hub.node.locations().first().map(|d| d.device), Some(pid));
+
+    // With "locate" off on the phone, the request is ignored.
+    let mut perms = Permissions::for_role(TrustRole::Trusted);
+    perms.locate = false;
+    phone.node.set_access(&hid, TrustRole::Trusted, perms).unwrap();
+    hub.node.locate(&pid).unwrap();
+    nothing_arrives(&mut phone.ev, "locate request", |e| matches!(e, NodeEvent::LocateRequested { .. })).await;
+}

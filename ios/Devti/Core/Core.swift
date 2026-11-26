@@ -38,6 +38,9 @@ final class Core: ObservableObject {
     @Published private(set) var peers: [PeerSnapshot] = []
     @Published var pairing: PairingStage?
     @Published private(set) var transfers: [TransferRecord] = []
+    /// Find my device: where each device last said it was.
+    @Published private(set) var locations: [String: DeviceLocation] = [:]
+    let locator = Locator()
     @Published private(set) var catalogs: [String: Catalog] = [:]
     @Published private(set) var listings: [String: FsListing] = [:]
     @Published var frame: ScreenFrame?
@@ -180,6 +183,13 @@ final class Core: ObservableObject {
                 try? node?.screenStopSharing(deviceId: e.from)
                 toast = "iPhone can't share its screen with Devti — Apple only allows that for screen-recording extensions."
             }
+        case "locate_requested":
+            if let e = JSON.decode(Events.LocateRequested.self, json) {
+                let from = e.from
+                locator.fix { [weak self] fix in try? self?.node?.reportLocation(deviceId: from, fixJson: fix) }
+            }
+        case "location_received":
+            if let e = JSON.decode(Events.LocationReceived.self, json) { locations[e.from] = e.location }
         case "low_battery":
             if let e = JSON.decode(Events.LowBattery.self, json) { notify("\(e.name) battery low", "\(e.percent)% left.") }
         default:
@@ -290,6 +300,8 @@ final class Core: ObservableObject {
         act { try $0.setAnywhere(enabled: on, relay: relay) }
         objectWillChange.send()
     }
+
+    func locate(_ id: String) { act { try $0.locate(deviceId: id) } }
 
     var reach: ReachInfo? { node.flatMap { JSON.decode(ReachInfo.self, $0.reachInfoJson()) } }
     func setReach(_ on: Bool) {

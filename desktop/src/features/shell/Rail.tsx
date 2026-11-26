@@ -5,6 +5,7 @@ import s from "./Rail.module.css";
 
 const ITEMS: { page: Page; label: string; icon: IconName }[] = [
   { page: "ecosystem", label: "Ecosystem", icon: "ecosystem" },
+  { page: "find", label: "Find", icon: "radar" },
   { page: "files", label: "Files", icon: "folder" },
   { page: "notifications", label: "Alerts", icon: "bell" },
   { page: "messages", label: "Messages", icon: "message" },

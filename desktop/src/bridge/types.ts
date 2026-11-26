@@ -157,6 +157,8 @@ export type NodeEvent =
   | { type: "audio_ended"; from: string; kind: string }
   | { type: "reach_changed"; peer: string }
   | { type: "anywhere_changed" }
+  | { type: "locate_requested"; from: string; from_name: string }
+  | { type: "location_received"; from: string; location: DeviceLocationInfo }
   | {
       type: "fs_listing";
       from: string;
@@ -168,6 +170,29 @@ export type NodeEvent =
   | { type: "fs_error"; from: string; path: string; error: string };
 
 // ------------------------------------------------------------------ Phase 7
+
+/** Where a device is (Find my device). */
+export interface DeviceLocationInfo {
+  lat?: number;
+  lon?: number;
+  /** Radius of the 68 % circle, in metres. */
+  accuracy_m?: number;
+  ts: number;
+  /** "gps", "network", "os" or "none". */
+  source: string;
+  public_ip?: string;
+  local_ips: string[];
+  network?: string;
+  battery?: number;
+  error?: string;
+  /** Sent by stolen mode rather than asked for. */
+  live: boolean;
+}
+
+export interface DeviceLocation {
+  device: string;
+  location: DeviceLocationInfo;
+}
 
 /** Connecting from anywhere (built in since 1.1). */
 export interface AnywhereInfo {
@@ -702,6 +727,12 @@ export interface Bridge {
   pickFolder(title: string): Promise<string | null>;
   reachInfo(): Promise<ReachInfo>;
   anywhereInfo(): Promise<AnywhereInfo>;
+  /** Asks a device where it is; the answer arrives as `location_received`. */
+  locateDevice(id: string): Promise<void>;
+  /** The last location heard from every paired device. */
+  deviceLocations(): Promise<DeviceLocation[]>;
+  /** This computer's own location and addresses (may ask the OS for permission). */
+  ownLocation(): Promise<DeviceLocationInfo>;
   setAnywhere(enabled: boolean, relay: string): Promise<AnywhereInfo>;
   setReach(enabled: boolean, extra: string[]): Promise<ReachInfo>;
   peerReach(id: string): Promise<string[]>;

@@ -25,6 +25,7 @@ export interface FsListing {
 
 export type Page =
   | "ecosystem"
+  | "find"
   | "device"
   | "files"
   | "notifications"

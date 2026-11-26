@@ -295,6 +295,13 @@ pub enum ControlMsg {
         path: String,
         error: String,
     },
+    // ---- 1.1: find my device
+    /// Where are you? (`locate` on the receiver)
+    LocateRequest,
+    /// The sender's location and addresses: an answer, or sent unasked by stolen mode.
+    Location {
+        location: crate::node::locate::Location,
+    },
     /// Stops sharing `source` with the sender ("screen" or "camera"; none: both).
     ScreenStop {
         #[serde(default, skip_serializing_if = "Option::is_none")]

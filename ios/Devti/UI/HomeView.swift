@@ -14,7 +14,7 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     hubCard
-                    if let hub = core.hub { actions(hub) }
+                    if let hub = core.hub { actions(hub); find(hub) }
                     transfers
                     devices
                     settings
@@ -94,6 +94,46 @@ struct HomeView: View {
                     .disabled(!hub.online)
             }
         }
+    }
+
+    /// Find my device: where the computer is (and letting it find this iPhone).
+    private func find(_ hub: PeerSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Find my devices").font(Theme.display(22))
+            Panel {
+                Text(findLine(hub)).font(Theme.ui(14)).foregroundStyle(Theme.textDim)
+                HStack(spacing: 10) {
+                    Button { core.locate(hub.id) } label: { Label("Locate \(hub.info.name)", systemImage: "location") }
+                        .buttonStyle(QuietButtonStyle())
+                        .disabled(!hub.online)
+                    if let l = core.locations[hub.id], let lat = l.lat, let lon = l.lon,
+                       let url = URL(string: "http://maps.apple.com/?ll=\(lat),\(lon)&q=\(hub.info.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "Computer")") {
+                        Link(destination: url) { Label("Open in Maps", systemImage: "map") }
+                            .buttonStyle(QuietButtonStyle())
+                    }
+                }
+                if !core.locator.allowed {
+                    Button("Let my computer find this iPhone") { core.locator.requestAccess() }
+                        .font(Theme.ui(14, .semibold))
+                        .foregroundStyle(Theme.textDim)
+                }
+            }
+        }
+    }
+
+    private func findLine(_ hub: PeerSnapshot) -> String {
+        guard let l = core.locations[hub.id] else {
+            return "Ask \(hub.info.name) where it is: its location, network and IP address."
+        }
+        var parts: [String] = []
+        if let lat = l.lat, let lon = l.lon {
+            parts.append(String(format: "%.5f, %.5f", lat, lon) + (l.accuracyM.map { " (±\(Int($0)) m)" } ?? ""))
+        } else {
+            parts.append("No position" + (l.error.map { " (\($0))" } ?? ""))
+        }
+        if let n = l.network { parts.append(n) }
+        if let ip = l.publicIp { parts.append("IP \(ip)") }
+        return parts.joined(separator: " · ")
     }
 
     @ViewBuilder private var transfers: some View {
@@ -221,7 +261,7 @@ struct HomeView: View {
         "Your computer's shortcuts deck and commands",
         "Your computer's screen on this iPhone or iPad",
         "Browse and download your computer's shared folders",
-        "Find this iPhone (while Devti is open) and find your computer",
+        "Find this iPhone (while Devti is open) and find your computer, with its location and IP",
         "Do Not Disturb everywhere, and connecting from anywhere",
     ]
 }
