@@ -343,6 +343,25 @@ pub enum NodeEvent {
         from: DeviceId,
         from_name: String,
     },
+    /// A computer asks to become this phone's stolen-mode owner: answer with
+    /// `Node::guard_accept` after asking the user.
+    GuardClaimRequested {
+        from: DeviceId,
+        from_name: String,
+    },
+    /// Stolen mode turned on or off on this device: show or hide the stolen screen.
+    GuardChanged {
+        state: crate::node::guard::GuardState,
+    },
+    /// This phone's stolen-mode owner changed.
+    GuardOwnerChanged {
+        owner: Option<DeviceId>,
+    },
+    /// A phone reported how it's protected (to its owner).
+    GuardStatusReceived {
+        from: DeviceId,
+        status: crate::node::guard::GuardStatus,
+    },
     /// A device said where it is.
     LocationReceived {
         from: DeviceId,

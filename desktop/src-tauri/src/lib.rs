@@ -14,6 +14,7 @@ mod commands;
 mod comms_host;
 mod continuity;
 mod edges;
+mod guard_setup;
 mod location;
 mod media;
 mod plugins;
@@ -293,6 +294,13 @@ pub fn run() {
             commands::reach_info,
             commands::anywhere_info,
             commands::locate_device,
+            commands::guard_claim,
+            commands::guard_set,
+            commands::guard_release,
+            commands::guard_unlock_code,
+            commands::guard_statuses,
+            commands::guard_setup_check,
+            commands::guard_setup_run,
             commands::device_locations,
             commands::own_location,
             commands::set_anywhere,

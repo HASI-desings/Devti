@@ -302,6 +302,21 @@ pub enum ControlMsg {
     Location {
         location: crate::node::locate::Location,
     },
+    // ---- 1.1: stolen mode (see node::guard)
+    /// Owner → phone: become this phone's stolen-mode owner (the phone's user confirms).
+    GuardClaim {
+        secret: ByteBuf,
+    },
+    /// Owner → phone: turn stolen mode on or off.
+    GuardSet {
+        state: crate::node::guard::GuardState,
+    },
+    /// Owner → phone: stop being the owner.
+    GuardRelease,
+    /// Phone → owner (or a computer that asked): how the phone is protected.
+    GuardStatus {
+        status: crate::node::guard::GuardStatus,
+    },
     /// Stops sharing `source` with the sender ("screen" or "camera"; none: both).
     ScreenStop {
         #[serde(default, skip_serializing_if = "Option::is_none")]

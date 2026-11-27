@@ -345,6 +345,7 @@ fn register_session(
     super::continuity::on_session_up(inner, peer_id);
     super::transfer::resume_for(inner, peer_id);
     super::reach::on_session(inner, peer_id);
+    super::guard::on_session(inner, peer_id);
     inner.log(Some((&peer_id, &snap.info.name)), "connected", &path.address);
     inner.emit(NodeEvent::PeerChanged { peer: snap });
     Ok(())
@@ -437,6 +438,10 @@ fn handle_control(inner: &Arc<Inner>, peer_id: DeviceId, msg: ControlMsg) {
         | ControlMsg::CallAction { .. }
         | ControlMsg::Handoff { .. } => super::comms::handle(inner, peer_id, msg),
         ControlMsg::LocateRequest | ControlMsg::Location { .. } => super::locate::handle(inner, peer_id, msg),
+        ControlMsg::GuardClaim { .. }
+        | ControlMsg::GuardSet { .. }
+        | ControlMsg::GuardRelease
+        | ControlMsg::GuardStatus { .. } => super::guard::handle(inner, peer_id, msg),
         ControlMsg::Reach { addrs, relay } => {
             super::anywhere::on_relay_hint(inner, &peer_id, relay);
             super::reach::handle(inner, peer_id, addrs)

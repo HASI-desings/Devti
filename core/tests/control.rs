@@ -404,3 +404,89 @@ async fn find_my_device_reports_location_and_respects_the_permission() {
     hub.node.locate(&pid).unwrap();
     nothing_arrives(&mut phone.ev, "locate request", |e| matches!(e, NodeEvent::LocateRequested { .. })).await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn stolen_mode_obeys_only_its_owner_and_the_owners_offline_code() {
+    use devti_core::node::guard::{GuardReport, GuardState};
+    let mut laptop = spawn("Studio Laptop", DeviceKind::Laptop).await;
+    let mut phone = spawn("Pixel 8", DeviceKind::Phone).await;
+    let mut other = spawn("Someone's Laptop", DeviceKind::Laptop).await;
+    pair(&mut laptop, &mut phone).await;
+    pair(&mut other, &mut phone).await;
+    let (lid, pid) = (laptop.node.device_id(), phone.node.device_id());
+
+    // Setup: the phone's user says yes once on the phone.
+    laptop.node.guard_claim(&pid).unwrap();
+    let from = wait_for(&mut phone.ev, "claim", |e| match e {
+        NodeEvent::GuardClaimRequested { from, .. } => Some(*from),
+        _ => None,
+    })
+    .await;
+    assert_eq!(from, lid);
+    phone.node.guard_accept(&lid, true).unwrap();
+    phone.node.guard_set_report(GuardReport {
+        level: "device_owner".into(),
+        protections: vec!["Power menu blocked".into()],
+        missing: vec![],
+    });
+    wait_for(&mut laptop.ev, "owner status", |e| match e {
+        NodeEvent::GuardStatusReceived { status, .. } if status.owner && status.report.level == "device_owner" => {
+            Some(())
+        }
+        _ => None,
+    })
+    .await;
+    assert!(laptop.node.guard_owns(&pid));
+
+    // Another computer can't take over, nor turn stolen mode on.
+    other.node.guard_claim(&pid).unwrap();
+    nothing_arrives(&mut phone.ev, "second claim", |e| matches!(e, NodeEvent::GuardClaimRequested { .. })).await;
+    other.node.guard_set(&pid, GuardState { on: true, ..Default::default() }).unwrap();
+    nothing_arrives(&mut phone.ev, "stranger's stolen mode", |e| matches!(e, NodeEvent::GuardChanged { .. })).await;
+    assert!(!phone.node.guard_local().state.on);
+
+    // The owner turns it on; the phone can't pause Devti or drop the owner meanwhile.
+    let st = GuardState { on: true, message: String::new(), contact: "+92 300 0000000".into(), ..Default::default() };
+    laptop.node.guard_set(&pid, st).unwrap();
+    let on = wait_for(&mut phone.ev, "stolen on", |e| match e {
+        NodeEvent::GuardChanged { state } => Some(state.clone()),
+        _ => None,
+    })
+    .await;
+    assert!(on.on);
+    assert_eq!(on.message, devti_core::node::guard::DEFAULT_MESSAGE);
+    assert!(phone.node.set_paused(true).is_err());
+    assert!(phone.node.revoke(&lid).is_err());
+
+    // Offline: the owner's answer to the phone's question unlocks it.
+    let challenge = phone.node.guard_local().challenge;
+    assert_eq!(challenge.len(), 8);
+    assert!(other.node.guard_unlock_code(&pid, &challenge).is_err(), "only the owner can answer");
+    let code = laptop.node.guard_unlock_code(&pid, &challenge).unwrap();
+    assert_eq!(code.len(), 10);
+    assert!(phone.node.guard_try_code(&code).unwrap());
+    assert!(!phone.node.guard_local().state.on);
+    wait_for(&mut laptop.ev, "owner hears it's off", |e| {
+        matches!(e, NodeEvent::GuardStatusReceived { status, .. } if !status.state.on && status.state.reason == "code")
+            .then_some(())
+    })
+    .await;
+
+    // On again: a wrong code backs off and asks a new question.
+    laptop.node.guard_set(&pid, GuardState { on: true, ..Default::default() }).unwrap();
+    eventually("stolen on again", || phone.node.guard_local().state.on).await;
+    let challenge = phone.node.guard_local().challenge;
+    assert!(!phone.node.guard_try_code("0000000000").unwrap());
+    assert!(phone.node.guard_try_code("0000000000").is_err(), "must wait after a wrong code");
+    let fresh = phone.node.guard_local();
+    assert_ne!(fresh.challenge, challenge, "a new question after a wrong answer");
+    assert!(fresh.retry_at > 0);
+    // Even the right answer waits out the back-off.
+    let code = laptop.node.guard_unlock_code(&pid, &fresh.challenge).unwrap();
+    assert!(phone.node.guard_try_code(&code).is_err());
+
+    // The owner turns it off over the network.
+    laptop.node.guard_set(&pid, GuardState { on: false, ..Default::default() }).unwrap();
+    eventually("stolen off", || !phone.node.guard_local().state.on).await;
+    assert!(phone.node.set_paused(true).is_ok());
+}

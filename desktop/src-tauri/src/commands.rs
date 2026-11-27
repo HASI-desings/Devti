@@ -809,6 +809,67 @@ pub async fn own_location(state: State<'_, AppState>) -> CmdResult<devti_core::n
     Ok(state.node.own_location(fix))
 }
 
+// ------------------------------------------------------------- Stolen mode
+
+/// Asks a phone to make this computer its stolen-mode owner (confirmed on the phone).
+#[tauri::command]
+pub fn guard_claim(state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    state.node.guard_claim(&parse_id(&id)?).map_err(err)
+}
+
+/// Turns stolen mode on or off on a phone this computer owns.
+#[tauri::command]
+pub fn guard_set(state: State<'_, AppState>, id: String, guard: devti_core::node::guard::GuardState) -> CmdResult<()> {
+    state.node.guard_set(&parse_id(&id)?, guard).map_err(err)
+}
+
+#[tauri::command]
+pub fn guard_release(state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    state.node.guard_release(&parse_id(&id)?).map_err(err)
+}
+
+/// The answer to the question a phone's stolen screen shows.
+#[tauri::command]
+pub fn guard_unlock_code(state: State<'_, AppState>, id: String, challenge: String) -> CmdResult<String> {
+    state.node.guard_unlock_code(&parse_id(&id)?, &challenge).map_err(err)
+}
+
+#[derive(Serialize)]
+pub struct GuardEntry {
+    device: String,
+    /// This computer holds the phone's secret (it's the owner).
+    owns: bool,
+    status: Option<devti_core::node::guard::GuardStatus>,
+}
+
+/// Stolen protection of every paired device, as last reported.
+#[tauri::command]
+pub fn guard_statuses(state: State<'_, AppState>) -> Vec<GuardEntry> {
+    let statuses: std::collections::HashMap<_, _> = state.node.guard_statuses().into_iter().collect();
+    state
+        .node
+        .peers()
+        .into_iter()
+        .map(|p| GuardEntry {
+            device: p.info.id.to_string(),
+            owns: state.node.guard_owns(&p.info.id),
+            status: statuses.get(&p.info.id).cloned(),
+        })
+        .collect()
+}
+
+/// Is adb installed, and which phones are plugged in over USB?
+#[tauri::command]
+pub async fn guard_setup_check() -> CmdResult<crate::guard_setup::SetupCheck> {
+    tauri::async_runtime::spawn_blocking(crate::guard_setup::check).await.map_err(err)
+}
+
+/// Makes Devti the phone's device owner (strongest stolen protection).
+#[tauri::command]
+pub async fn guard_setup_run(serial: String) -> CmdResult<String> {
+    tauri::async_runtime::spawn_blocking(move || crate::guard_setup::make_owner(&serial)).await.map_err(err)?
+}
+
 /// Where `id` said it can be reached away from home.
 #[tauri::command]
 pub fn peer_reach(state: State<'_, AppState>, id: String) -> CmdResult<Vec<String>> {

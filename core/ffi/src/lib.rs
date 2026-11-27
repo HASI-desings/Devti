@@ -591,6 +591,38 @@ impl DevtiMobile {
         serde_json::to_string(&self.node.locations()).unwrap_or_else(|_| "[]".into())
     }
 
+    // ---- 1.1: stolen mode (this phone's side)
+
+    /// This phone's stolen-mode state (`LocalGuard`): owner, on/off, message, challenge.
+    pub fn guard_local_json(&self) -> String {
+        serde_json::to_string(&self.node.guard_local()).unwrap_or_else(|_| "{}".into())
+    }
+
+    /// The user's answer to "make <computer> the owner of stolen protection?".
+    pub fn guard_accept(&self, device_id: String, accept: bool) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.guard_accept(&device_id.parse()?, accept)?)
+    }
+
+    /// How well this phone can protect itself (`GuardReport` JSON); the owner is told.
+    pub fn guard_set_report(&self, report_json: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        self.node.guard_set_report(parse_json(&report_json)?);
+        Ok(())
+    }
+
+    /// The offline unlock code typed on the stolen screen. True: stolen mode is off.
+    pub fn guard_try_code(&self, code: String) -> Result<bool, DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.guard_try_code(&code)?)
+    }
+
+    /// The SIM card was removed. True when that turned stolen mode on.
+    pub fn guard_sim_removed(&self) -> bool {
+        let _g = self.runtime.enter();
+        self.node.guard_sim_removed()
+    }
+
     /// Connecting from anywhere (`AnywhereInfo`).
     pub fn anywhere_info_json(&self) -> String {
         serde_json::to_string(&self.node.anywhere_info()).unwrap_or_else(|_| "{}".into())

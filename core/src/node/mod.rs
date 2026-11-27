@@ -17,6 +17,7 @@ mod comms;
 mod continuity;
 mod control;
 mod events;
+pub mod guard;
 pub(crate) mod link;
 pub mod locate;
 pub mod reach;
@@ -201,6 +202,8 @@ pub(crate) struct Inner {
     /// Live audio streams received.
     pub audio: audio::State,
     pub anywhere_mode: AnywhereMode,
+    /// A stolen-mode owner request waiting for the user's answer.
+    pub guard_pending: Mutex<Option<(DeviceId, Vec<u8>)>>,
     /// Where peers said they can be reached away from the local network.
     pub reach: reach::State,
     /// The connect-from-anywhere endpoint and paired devices' keys.
@@ -290,6 +293,7 @@ impl Node {
             screen: screen::State::new(),
             audio: audio::State::new(),
             anywhere_mode: config.anywhere.clone(),
+            guard_pending: Mutex::new(None),
             reach: reach::State::new(),
             anywhere: anywhere::State::new(),
         });
@@ -437,6 +441,9 @@ impl Node {
 
     /// Removes a paired device everywhere and disconnects it.
     pub fn revoke(&self, id: &DeviceId) -> Result<()> {
+        if self.guard_local().state.on {
+            return Err(Error::InvalidInput("not while this device is in stolen mode".into()));
+        }
         self.inner.remove_peer(id, RemovalReason::RevokedHere)
     }
 
@@ -457,6 +464,9 @@ impl Node {
 
     /// Kill switch: disconnects everyone and refuses all connections until resumed.
     pub fn set_paused(&self, paused: bool) -> Result<()> {
+        if paused && self.guard_local().state.on {
+            return Err(Error::InvalidInput("not while this device is in stolen mode".into()));
+        }
         self.inner.set_paused(paused)
     }
 
@@ -755,6 +765,7 @@ impl Inner {
         reach::forget(self, id);
         anywhere::forget(self, id);
         locate::forget(self, id);
+        guard::forget(self, id);
         if let Some(s) = state.session {
             if reason == RemovalReason::RevokedHere {
                 let _ = s.tx.send(ControlMsg::Goodbye { reason: GoodbyeReason::Revoked });
