@@ -231,6 +231,15 @@ export function createPreviewBridge(): Bridge {
   const mediaListeners = new Set<(m: import("./types").MediaStatus) => void>();
   const noticeListeners = new Set<(text: string) => void>();
   const recordings = new Map<string, { started: number; asked: number }>();
+  let sound: import("./types").SoundStatus = {
+    mode: "separate",
+    voice_pause: true,
+    can_send: true,
+    playing: {},
+    paused_for_voice: false,
+    note: null,
+  };
+  const soundListeners = new Set<(s: import("./types").SoundStatus) => void>();
   const mediaSnapshot = (): import("./types").MediaStatus => ({
     recordings: [...recordings].map(([key, r]) => {
       const [device, kind] = key.split("|") as [string, "mic" | "relay"];
@@ -1330,6 +1339,27 @@ export function createPreviewBridge(): Bridge {
         battery: local.status.battery?.percent,
         live: false,
       };
+    },
+    async soundStatus() {
+      return structuredClone(sound);
+    },
+    async setSoundMode(mode, device) {
+      if (mode !== "separate") {
+        const p = device ? peers.get(device) : undefined;
+        if (!p?.online) throw new Error("That device is offline.");
+      }
+      sound = { ...sound, mode, device: mode === "separate" ? undefined : device, note: null };
+      for (const cb of soundListeners) cb(structuredClone(sound));
+      return structuredClone(sound);
+    },
+    async setVoicePause(on) {
+      sound = { ...sound, voice_pause: on };
+      for (const cb of soundListeners) cb(structuredClone(sound));
+      return structuredClone(sound);
+    },
+    onSound(cb) {
+      soundListeners.add(cb);
+      return () => soundListeners.delete(cb);
     },
     async setRadio(id, radio, on) {
       const p = peers.get(id);

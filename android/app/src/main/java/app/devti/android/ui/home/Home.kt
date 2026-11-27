@@ -460,6 +460,7 @@ private fun AccessDialog(p: PeerSnapshot, onChange: (Permissions) -> Unit, onClo
                 Toggle("Ring, lock and commands", "Find my phone at full volume, lock it, run its shortcuts.", perms.commands) { onChange(perms.copy(commands = it)) }
                 Toggle("Sound and accessories", "Hear this phone's sound and microphone, control its accessories.", perms.bluetooth) { onChange(perms.copy(bluetooth = it)) }
                 Toggle("Browse this phone's folders", "Only the folders you share below, and only to read.", perms.browse) { onChange(perms.copy(browse = it)) }
+                Toggle("See where this phone is", "Find my device: its location, network and IP address.", perms.locate) { onChange(perms.copy(locate = it)) }
             }
         },
         confirmButton = { TextButton(onClick = onClose) { Text("Done") } },

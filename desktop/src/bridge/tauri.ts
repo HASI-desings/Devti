@@ -2,7 +2,15 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { AccessoryList, BluetoothEvent, Bridge, MediaStatus, NodeEvent, ScreenFrame } from "./types";
+import type {
+  AccessoryList,
+  BluetoothEvent,
+  Bridge,
+  MediaStatus,
+  NodeEvent,
+  ScreenFrame,
+  SoundStatus,
+} from "./types";
 
 /** 12-byte header (seq u32, w u16, h u16, latency u16, fps u8, 0) + JPEG; see commands.rs. */
 export function decodeFrame(buf: ArrayBuffer): ScreenFrame | null {
@@ -212,6 +220,21 @@ export function createTauriBridge(): Bridge {
     locateDevice: (id) => invoke("locate_device", { id }),
     deviceLocations: () => invoke("device_locations"),
     ownLocation: () => invoke("own_location"),
+    soundStatus: () => invoke("sound_status"),
+    setSoundMode: (mode, device) => invoke("set_sound_mode", { mode, device: device ?? null }),
+    setVoicePause: (on) => invoke("set_voice_pause", { on }),
+    onSound(cb) {
+      let unlisten: (() => void) | undefined;
+      let cancelled = false;
+      listen<SoundStatus>("devti://sound", (e) => cb(e.payload)).then((u) => {
+        if (cancelled) u();
+        else unlisten = u;
+      });
+      return () => {
+        cancelled = true;
+        unlisten?.();
+      };
+    },
     setRadio: (id, radio, on) => invoke("set_radio", { id, radio, on }),
     recordStart: (id, kind) => invoke("record_start", { id, kind }),
     recordStop: (id, kind) => invoke("record_stop", { id, kind }),

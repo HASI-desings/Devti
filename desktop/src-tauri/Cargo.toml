@@ -66,4 +66,4 @@ webkit2gtk = "2.0"
 
 [target."cfg(windows)".dependencies]
 cpal = "0.18"
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_LibraryLoader", "Foundation", "Devices_Geolocation"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_LibraryLoader", "Foundation", "Foundation_Collections", "Devices_Geolocation", "Media_Control"] }

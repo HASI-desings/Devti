@@ -198,12 +198,22 @@ pub(crate) async fn serve_connection(inner: Arc<Inner>, conn: Link, peer_fp: Fin
                 }
                 inner.rt.spawn(super::transfer::receive(inner.clone(), peer_id, send, recv));
             }
-            StreamOpen::Audio { kind, sample_rate, channels } => {
+            StreamOpen::Audio { kind, sample_rate, channels, codec } => {
                 if !inner.trust.is_trusted(&peer_fp) {
                     conn.close(close_code::UNTRUSTED, b"not paired");
                     return;
                 }
-                inner.rt.spawn(super::audio::receive(inner.clone(), peer_id, kind, sample_rate, channels, send, recv));
+                let opus = codec.as_deref() == Some("opus");
+                inner.rt.spawn(super::audio::receive(
+                    inner.clone(),
+                    peer_id,
+                    kind,
+                    sample_rate,
+                    channels,
+                    opus,
+                    send,
+                    recv,
+                ));
             }
             StreamOpen::Screen => {
                 if !inner.trust.is_trusted(&peer_fp) {
@@ -438,9 +448,11 @@ fn handle_control(inner: &Arc<Inner>, peer_id: DeviceId, msg: ControlMsg) {
         | ControlMsg::CallAction { .. }
         | ControlMsg::Handoff { .. } => super::comms::handle(inner, peer_id, msg),
         ControlMsg::LocateRequest | ControlMsg::Location { .. } => super::locate::handle(inner, peer_id, msg),
-        ControlMsg::Radio { .. } | ControlMsg::RadioResult { .. } | ControlMsg::AudioRequest { .. } => {
-            super::radio::handle(inner, peer_id, msg)
-        }
+        ControlMsg::Radio { .. }
+        | ControlMsg::RadioResult { .. }
+        | ControlMsg::AudioRequest { .. }
+        | ControlMsg::MediaActivity { .. }
+        | ControlMsg::MediaCommand { .. } => super::radio::handle(inner, peer_id, msg),
         ControlMsg::GuardClaim { .. }
         | ControlMsg::GuardSet { .. }
         | ControlMsg::GuardRelease

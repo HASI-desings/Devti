@@ -108,6 +108,10 @@ class DevtiCore(private val context: Context) : EventListener {
     private val phone = PhoneCommands(context)
     val sms = SmsBridge(context)
     val calls = CallBridge(context)
+    private val player = app.devti.android.comms.AudioPlayer()
+    private val voice = app.devti.android.comms.VoiceWatcher(context) { music, voice, app ->
+        runCatching { node?.reportMediaActivity(music, voice, app) }
+    }
     private val beacon = Beacon(context) { runCatching { node?.proximityToken() }.getOrNull() }
     @Volatile private var call: CallInfo? = null
     @Volatile private var cameraOfferedAt = 0L
@@ -162,6 +166,8 @@ class DevtiCore(private val context: Context) : EventListener {
             watchDevice()
             watchSim()
             watchRadios()
+            created.subscribeAudio(player)
+            voice.start()
             syncGuard()
             io.launch { files.cleanStale() }
             io.launch { runCatching { created.setCatalog(Reducer.json.encodeToString(Catalog.serializer(), phone.catalog())) } }
@@ -214,6 +220,17 @@ class DevtiCore(private val context: Context) : EventListener {
                 clipboard.apply(it)
             }
             "ring_requested" -> if (ev["on"]?.jsonPrimitive?.booleanOrNull == true) ringer.start(str("from_name") ?: "") else ringer.stop()
+            // ---- Shared headphones: a computer's sound plays here; voice messages pause music
+            "audio_started" -> {
+                val from = str("from") ?: return
+                if (str("kind") == "relay") {
+                    val rate = ev["sample_rate"]?.jsonPrimitive?.intOrNull ?: 48_000
+                    val channels = ev["channels"]?.jsonPrimitive?.intOrNull ?: 2
+                    player.open(from, rate, channels)
+                }
+            }
+            "audio_ended" -> str("from")?.let { player.close(it) }
+            "media_command_requested" -> str("action")?.let { a -> main.post { voice.command(a) } }
             // ---- Radios and audio on request
             "radio_requested" -> {
                 val from = str("from") ?: return

@@ -35,6 +35,8 @@ data class Permissions(
     val bluetooth: Boolean,
     /** Browse and download from this device's shared folders (Phase 7). */
     val browse: Boolean = false,
+    /** See where this device is: location, network, IP (1.1). */
+    val locate: Boolean = true,
 )
 
 @Serializable

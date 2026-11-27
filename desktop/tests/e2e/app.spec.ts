@@ -564,3 +564,26 @@ test("phone radios ask before cutting a connection, and recording saves a file",
   await page.getByRole("button", { name: "Stop" }).click();
   await expect(page.getByText(/Recording saved: .*Pixel 8 microphone/)).toBeVisible();
 });
+
+test("shared headphones: choose where everything plays, voice-message pause switch", async ({ page }) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Pair" }).click();
+  await pairPhone(page, "Pixel 8");
+  await page.keyboard.press("Escape");
+  await rail(page).getByRole("button", { name: "Accessories" }).click();
+  await expect(page.getByRole("heading", { name: "One pair of headphones for everything" })).toBeVisible();
+
+  const here = page.getByRole("radio", { name: /Pixel 8's sound here, together with this computer's/ });
+  await here.check({ force: true });
+  await expect(here).toBeChecked();
+  const onPhone = page.getByRole("radio", { name: /This computer's sound on Pixel 8/ });
+  await onPhone.check({ force: true });
+  await expect(onPhone).toBeChecked();
+  await expect(here).not.toBeChecked();
+
+  await expect(page.getByTestId("voice-status")).toContainText("pauses the music on the others");
+  const pause = page.getByRole("switch", { name: "Pause the music for voice messages" });
+  await expect(pause).toBeChecked();
+  await pause.locator("xpath=ancestor::label").click();
+  await expect(pause).not.toBeChecked();
+});

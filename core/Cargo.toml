@@ -19,6 +19,7 @@ api = ["dep:axum"]
 tokio.workspace = true
 quinn.workspace = true
 iroh.workspace = true
+opus-pure.workspace = true
 rustls.workspace = true
 rcgen.workspace = true
 ring.workspace = true

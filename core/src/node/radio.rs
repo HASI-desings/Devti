@@ -36,11 +36,34 @@ pub(crate) fn handle(inner: &Arc<Inner>, peer: DeviceId, msg: ControlMsg) {
             inner.log(Some((&peer, &name)), if on { "audio_requested" } else { "audio_request_stopped" }, &kind);
             inner.emit(NodeEvent::AudioRequested { from: peer, from_name: name, kind, on });
         }
+        ControlMsg::MediaActivity { music, voice, app } => {
+            let app: String = app.chars().take(64).collect();
+            inner.emit(NodeEvent::MediaActivity { from: peer, music, voice, app });
+        }
+        ControlMsg::MediaCommand { action } => {
+            if !perms.control || !(action == "pause" || action == "play") {
+                return;
+            }
+            inner.emit(NodeEvent::MediaCommandRequested { from: peer, action });
+        }
         _ => {}
     }
 }
 
 impl Node {
+    /// Tells every connected device what this one is playing (music, voice message).
+    pub fn report_media_activity(&self, music: bool, voice: bool, app: &str) {
+        self.inner.broadcast(ControlMsg::MediaActivity { music, voice, app: app.into() });
+    }
+
+    /// Asks a device to pause or resume its music ("pause" or "play").
+    pub fn media_command(&self, peer: &DeviceId, action: &str) -> Result<()> {
+        if action != "pause" && action != "play" {
+            return Err(Error::InvalidInput("“pause” or “play”".into()));
+        }
+        self.inner.send_to(peer, ControlMsg::MediaCommand { action: action.into() })
+    }
+
     /// Asks a phone to switch one of its radios ("wifi", "data", "bluetooth", "hotspot",
     /// "airplane"). The answer arrives as `RadioResult`.
     pub fn set_radio(&self, peer: &DeviceId, radio: &str, on: bool) -> Result<()> {

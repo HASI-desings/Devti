@@ -49,6 +49,12 @@ pub trait EventListener: Send + Sync {
     fn on_event(&self, event_json: String);
 }
 
+/// Receives audio a computer streams to this phone (1.1), on a background thread.
+#[uniffi::export(callback_interface)]
+pub trait AudioListener: Send + Sync {
+    fn on_audio(&self, device_id: String, kind: String, sample_rate: u32, channels: u8, pcm: Vec<u8>);
+}
+
 /// Receives frames of a screen this phone is viewing (Phase 4), on a background thread.
 #[uniffi::export(callback_interface)]
 pub trait FrameListener: Send + Sync {
@@ -237,6 +243,33 @@ impl DevtiMobile {
         status.radios = Some(parse_json(&radios_json)?);
         self.node.set_status(status);
         Ok(())
+    }
+
+    /// Tells the computers what this phone is playing: music, and/or a voice message.
+    pub fn report_media_activity(&self, music: bool, voice: bool, app: String) {
+        let _g = self.runtime.enter();
+        self.node.report_media_activity(music, voice, &app);
+    }
+
+    /// Audio computers send to this phone (their sound for its headphones), as PCM on a
+    /// background thread. Call once; `audio_started` / `audio_ended` events frame it.
+    pub fn subscribe_audio(&self, listener: Box<dyn AudioListener>) {
+        let mut rx = self.node.subscribe_audio();
+        self.runtime.spawn(async move {
+            loop {
+                match rx.recv().await {
+                    Ok(p) => listener.on_audio(
+                        p.from.to_string(),
+                        p.kind.clone(),
+                        p.sample_rate,
+                        p.channels,
+                        p.pcm.as_ref().clone(),
+                    ),
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(_) => break,
+                }
+            }
+        });
     }
 
     /// Answers `radio_requested`: whether it worked, and what to tell the computer.

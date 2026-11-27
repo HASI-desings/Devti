@@ -53,6 +53,7 @@ async fn start(
     cfg.port = 0;
     cfg.discovery = false;
     cfg.anywhere = net.mode();
+    cfg.app_version = "1.1.0".into();
     let node = Node::start(cfg, secrets).await.unwrap();
     let mut ev = node.subscribe();
     let n = node.clone();
@@ -133,6 +134,23 @@ async fn pairs_and_reconnects_through_a_relay_only() {
     // Control messages flow: ring the phone from the laptop.
     hub.ring(&pid, true).unwrap();
     wait_for(&mut phone_ev, "ring", |e| matches!(e, NodeEvent::RingRequested { on: true, .. }).then_some(())).await;
+
+    // Sound over the relay travels as Opus and arrives as PCM.
+    let mut audio = hub.subscribe_audio();
+    let sender = phone.start_audio(&hid, "relay", 48_000, 2).unwrap();
+    assert!(sender.opus, "compressed away from the local network");
+    let chunk: Vec<u8> = (0..960 * 2).flat_map(|i| (((i as f32 * 0.05).sin() * 8000.0) as i16).to_le_bytes()).collect();
+    let pusher = tokio::spawn(async move {
+        for _ in 0..30 {
+            sender.push(chunk.clone());
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        sender
+    });
+    let pkt = tokio::time::timeout(WAIT, audio.recv()).await.unwrap().unwrap();
+    assert_eq!((pkt.sample_rate, pkt.channels), (48_000, 2));
+    assert_eq!(pkt.pcm.len(), 960 * 2 * 2, "one decoded 20 ms frame of stereo PCM");
+    drop(pusher.await.unwrap());
 
     // Restart the phone: it has no local address for the laptop, only its key.
     phone.shutdown().await;

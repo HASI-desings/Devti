@@ -438,6 +438,21 @@ export interface MediaStatus {
   recordings_folder: string;
 }
 
+/** Shared headphones and voice-message pausing (1.1). */
+export interface SoundStatus {
+  /** "separate": each device plays its own; "here": a phone's sound plays here too;
+   *  "on_phone": this computer's sound plays on a phone. */
+  mode: "separate" | "here" | "on_phone";
+  device?: string;
+  voice_pause: boolean;
+  /** This computer can send its own sound to a phone. */
+  can_send: boolean;
+  /** What's playing where: id ("this" = this computer) → [music, voice]. */
+  playing: Record<string, [boolean, boolean]>;
+  paused_for_voice: boolean;
+  note: string | null;
+}
+
 /** A phone's microphone or sound being recorded on this computer. */
 export interface RecordingState {
   device: string;
@@ -823,6 +838,11 @@ export interface Bridge {
   deviceLocations(): Promise<DeviceLocation[]>;
   /** This computer's own location and addresses (may ask the OS for permission). */
   ownLocation(): Promise<DeviceLocationInfo>;
+  soundStatus(): Promise<SoundStatus>;
+  /** Where everything plays (see `SoundStatus.mode`). */
+  setSoundMode(mode: SoundStatus["mode"], device?: string): Promise<SoundStatus>;
+  setVoicePause(on: boolean): Promise<SoundStatus>;
+  onSound(cb: (s: SoundStatus) => void): () => void;
   /** Asks a phone to switch a radio; the answer arrives as `radio_result`. */
   setRadio(id: string, radio: RadioName, on: boolean): Promise<void>;
   /** Records a phone's microphone or sound into the recordings folder. */

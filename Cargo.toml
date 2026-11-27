@@ -41,6 +41,7 @@ keyring = "4.2"
 parking_lot = "0.13"
 futures = "0.3"
 bytes = "1"
+opus-pure = "0.2.5"
 iroh = { version = "1.5", default-features = false, features = ["tls-ring", "portmapper"] }
 tempfile = "3"
 

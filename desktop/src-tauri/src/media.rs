@@ -449,13 +449,13 @@ mod player {
 
 #[cfg(not(target_os = "linux"))]
 mod player {
-    use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
 
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+    use devti_core::node::audio::JitterBuffer;
 
     pub struct Player {
-        buf: Arc<Mutex<VecDeque<i16>>>,
+        buf: Arc<Mutex<JitterBuffer>>,
         _stream: cpal::Stream,
     }
 
@@ -482,17 +482,13 @@ mod player {
                 sample_rate: rate,
                 buffer_size: cpal::BufferSize::Default,
             };
-            let buf: Arc<Mutex<VecDeque<i16>>> = Arc::new(Mutex::new(VecDeque::new()));
+            // 80 ms of cushion against network jitter; the buffer never holds more than 3×.
+            let buf = Arc::new(Mutex::new(JitterBuffer::new(rate, channels, 80)));
             let b = buf.clone();
             let stream = device
                 .build_output_stream(
                     config,
-                    move |out: &mut [i16], _| {
-                        let mut q = b.lock().unwrap();
-                        for s in out.iter_mut() {
-                            *s = q.pop_front().unwrap_or(0);
-                        }
-                    },
+                    move |out: &mut [i16], _| b.lock().unwrap().pull(out),
                     |e| tracing::warn!(error = %e, "audio output error"),
                     None,
                 )
@@ -502,15 +498,7 @@ mod player {
         }
 
         pub fn write(&mut self, pcm: &[u8]) {
-            let mut q = self.buf.lock().unwrap();
-            for c in pcm.chunks_exact(2) {
-                q.push_back(i16::from_le_bytes([c[0], c[1]]));
-            }
-            // Keep at most ~0.5 s queued: late audio is worse than a skip.
-            let max = 48_000;
-            while q.len() > max {
-                q.pop_front();
-            }
+            self.buf.lock().unwrap().push(pcm);
         }
     }
 }

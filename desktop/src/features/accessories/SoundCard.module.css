@@ -1,0 +1,136 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-5) var(--s-6);
+  margin-bottom: var(--s-6);
+  border-radius: var(--r-sheet);
+  background:
+    radial-gradient(
+      70% 120% at 100% 0%,
+      color-mix(in oklab, var(--voice-aqua) 14%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      70% 120% at 0% 100%,
+      color-mix(in oklab, var(--voice-iris) 12%, transparent),
+      transparent 70%
+    ),
+    var(--surface);
+  border: 1px solid var(--line);
+}
+
+.head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-4);
+  align-items: center;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  color: var(--voice-aqua);
+  background: color-mix(in oklab, var(--voice-aqua) 16%, var(--surface-2));
+}
+
+.title {
+  font-size: var(--t-20);
+  margin-bottom: 2px;
+}
+
+.choices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--s-2);
+}
+
+.choice {
+  position: relative;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: start;
+  padding: var(--s-3) var(--s-4);
+  border-radius: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.radio {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.choice:hover:not([data-disabled]) {
+  border-color: color-mix(in oklab, var(--voice-aqua) 40%, var(--line));
+}
+
+.choice:has(.radio:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.choice[data-checked] {
+  border-color: var(--voice-aqua);
+  background: color-mix(in oklab, var(--voice-aqua) 10%, var(--surface-2));
+}
+
+.choice[data-disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dot {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border-radius: 50%;
+  border: 2px solid var(--text-faint);
+}
+
+.choice[data-checked] .dot {
+  border-color: var(--voice-aqua);
+  background: radial-gradient(circle, var(--voice-aqua) 45%, transparent 50%);
+}
+
+.choiceText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.choiceTitle {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.choiceHint {
+  font-size: var(--t-13);
+  color: var(--text-dim);
+}
+
+.note {
+  margin: 0;
+  font-size: var(--t-13);
+  color: var(--warn);
+}
+
+.fine {
+  margin: 0;
+  font-size: var(--t-12);
+  color: var(--text-faint);
+}

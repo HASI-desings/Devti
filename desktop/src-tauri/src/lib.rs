@@ -21,6 +21,7 @@ mod plugins;
 mod recorder;
 mod remote;
 mod screens;
+mod sound;
 mod system;
 mod tray;
 
@@ -160,6 +161,7 @@ pub fn run() {
             app.manage(accessories::Accessories::start(&handle, node.clone()));
             let media = media::Media::start(&handle, node.clone());
             app.manage(media.clone());
+            app.manage(sound::Sound::start(&handle, node.clone()));
             let automation = automation::Automation::start(&handle, node.clone());
             app.manage(automation.clone());
             let plugins = plugins::Plugins::start(&handle, node.clone(), &data_dir);
@@ -179,6 +181,9 @@ pub fn run() {
                             comms_host::on_node_event(&emitter, &event_node, &ev);
                             media.on_node_event(&ev);
                             location::on_node_event(&event_node, &ev);
+                            if let Some(s) = sound::app_state(&emitter) {
+                                s.on_node_event(&ev);
+                            }
                             automation.on_node_event(&ev);
                             plugins.on_node_event(&ev);
                             if matches!(ev, devti_core::NodeEvent::ScreenRequested { .. }) {
@@ -295,6 +300,9 @@ pub fn run() {
             commands::reach_info,
             commands::anywhere_info,
             commands::locate_device,
+            commands::sound_status,
+            commands::set_sound_mode,
+            commands::set_voice_pause,
             commands::set_radio,
             commands::record_start,
             commands::record_stop,

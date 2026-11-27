@@ -33,7 +33,14 @@ pub enum StreamOpen {
     Screen,
     /// Live audio (Phase 6): PCM chunks from the sender (`kind`: "relay" = what the
     /// sender is playing, "mic" = its microphone).
-    Audio { kind: String, sample_rate: u32, channels: u8 },
+    Audio {
+        kind: String,
+        sample_rate: u32,
+        channels: u8,
+        /// "pcm" (default: s16le) or "opus" (one packet per chunk; 1.1+ peers).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        codec: Option<String>,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -320,6 +327,18 @@ pub enum ControlMsg {
     AudioRequest {
         kind: String,
         on: bool,
+    },
+    /// What the sender is playing: music, and/or a voice message (WhatsApp, Instagram…).
+    MediaActivity {
+        music: bool,
+        voice: bool,
+        /// The app playing the voice message (or the music), for the UI.
+        #[serde(default)]
+        app: String,
+    },
+    /// Pause or resume the receiver's music ("pause" or "play"; `control`).
+    MediaCommand {
+        action: String,
     },
     // ---- 1.1: stolen mode (see node::guard)
     /// Owner → phone: become this phone's stolen-mode owner (the phone's user confirms).

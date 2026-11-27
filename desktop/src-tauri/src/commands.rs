@@ -809,6 +809,34 @@ pub async fn own_location(state: State<'_, AppState>) -> CmdResult<devti_core::n
     Ok(state.node.own_location(fix))
 }
 
+// ------------------------------------------------------------- Shared headphones
+
+#[tauri::command]
+pub fn sound_status(app: AppHandle) -> CmdResult<crate::sound::SoundStatus> {
+    Ok(crate::sound::app_state(&app).ok_or("sound isn't ready")?.status())
+}
+
+/// Where everything plays: "separate", "here" (the phone's sound here) or "on_phone"
+/// (this computer's sound on the phone), with the phone's id.
+#[tauri::command]
+pub fn set_sound_mode(app: AppHandle, mode: String, device: Option<String>) -> CmdResult<crate::sound::SoundStatus> {
+    let s = crate::sound::app_state(&app).ok_or("sound isn't ready")?;
+    let m = match (mode.as_str(), device) {
+        ("here", Some(device)) => crate::sound::Mode::Here { device },
+        ("on_phone", Some(device)) => crate::sound::Mode::OnPhone { device },
+        _ => crate::sound::Mode::Separate,
+    };
+    s.set_mode(m)?;
+    Ok(s.status())
+}
+
+#[tauri::command]
+pub fn set_voice_pause(app: AppHandle, on: bool) -> CmdResult<crate::sound::SoundStatus> {
+    let s = crate::sound::app_state(&app).ok_or("sound isn't ready")?;
+    s.set_voice_pause(on);
+    Ok(s.status())
+}
+
 // ------------------------------------------------------------- Radios and recording
 
 /// Asks a phone to switch a radio ("wifi", "data", "bluetooth", "hotspot", "airplane").

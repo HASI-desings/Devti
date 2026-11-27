@@ -364,6 +364,18 @@ pub enum NodeEvent {
         kind: String,
         on: bool,
     },
+    /// A device started or stopped playing music or a voice message.
+    MediaActivity {
+        from: DeviceId,
+        music: bool,
+        voice: bool,
+        app: String,
+    },
+    /// A computer asks this device to pause or resume its music.
+    MediaCommandRequested {
+        from: DeviceId,
+        action: String,
+    },
     /// A computer asks to become this phone's stolen-mode owner: answer with
     /// `Node::guard_accept` after asking the user.
     GuardClaimRequested {

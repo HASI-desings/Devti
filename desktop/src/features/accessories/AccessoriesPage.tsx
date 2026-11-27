@@ -8,6 +8,7 @@ import { useStore } from "../../state/store";
 import { Button, Segmented, Switch } from "../../ui";
 import p from "../shell/page.module.css";
 import s from "./Accessories.module.css";
+import { SoundCard } from "./SoundCard";
 
 const KIND_ICON: Record<Accessory["kind"], IconName> = {
   headphones: "headphones",
@@ -54,6 +55,7 @@ export function AccessoriesPage() {
           </p>
           {data.status && <p className={p.note}>{data.status}</p>}
         </header>
+        <SoundCard accessories={data.list} />
         {list.length === 0 ? (
           <div className={s.empty}>
             <Icon name="bluetooth" size={36} />
