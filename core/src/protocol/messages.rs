@@ -302,6 +302,25 @@ pub enum ControlMsg {
     Location {
         location: crate::node::locate::Location,
     },
+    // ---- 1.1: radios and audio on request (see node::radio)
+    /// Switch a radio on the receiver (`commands`).
+    Radio {
+        radio: String,
+        on: bool,
+    },
+    /// How switching a radio went.
+    RadioResult {
+        radio: String,
+        ok: bool,
+        #[serde(default)]
+        message: String,
+    },
+    /// Start or stop sending the receiver's microphone ("mic") or sound ("relay") to the
+    /// sender (`bluetooth`; the receiver still asks its user).
+    AudioRequest {
+        kind: String,
+        on: bool,
+    },
     // ---- 1.1: stolen mode (see node::guard)
     /// Owner → phone: become this phone's stolen-mode owner (the phone's user confirms).
     GuardClaim {
@@ -781,7 +800,7 @@ mod tests {
             ControlMsg::Hello {
                 proto: PROTOCOL_VERSION,
                 info: info(),
-                status: DeviceStatus { battery: Some(BatteryState::new(50, true)) },
+                status: DeviceStatus { battery: Some(BatteryState::new(50, true)), ..Default::default() },
             },
             ControlMsg::Status { status: DeviceStatus::default() },
             ControlMsg::Info { info: info() },

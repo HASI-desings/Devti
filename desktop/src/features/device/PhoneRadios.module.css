@@ -1,0 +1,61 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  width: 100%;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--s-2);
+}
+
+.radio {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-radius: 14px;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.radio[data-on] {
+  color: var(--voice, var(--text));
+  background: color-mix(in oklab, var(--voice, var(--ok)) 10%, var(--surface-2));
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  font-size: var(--t-14);
+  font-weight: 560;
+}
+
+.via {
+  color: var(--text-faint);
+  font-size: var(--t-12);
+  font-weight: 400;
+}
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--warn) 45%, var(--line));
+  background: color-mix(in oklab, var(--warn) 8%, var(--surface));
+}
+
+.confirm p {
+  margin: 0;
+  font-size: var(--t-13);
+}

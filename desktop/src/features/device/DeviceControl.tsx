@@ -8,6 +8,7 @@ import { Button, Sheet } from "../../ui";
 import p from "../shell/page.module.css";
 import s from "./DevicePage.module.css";
 import { PhoneCamera } from "./PhoneCamera";
+import { PhoneRadios, PhoneRecorder } from "./PhoneRadios";
 
 const POWER: { a: SystemAction["a"]; label: string; icon: IconName; confirm?: string }[] = [
   { a: "lock", label: "Lock", icon: "lock" },
@@ -89,6 +90,8 @@ export function DeviceControl({ peer }: { peer: PeerSnapshot }) {
               </Button>
             </div>
             {android && <PhoneCamera peer={peer} />}
+            {android && <PhoneRadios peer={peer} />}
+            {android && <PhoneRecorder peer={peer} />}
             <div className={p.item}>
               <div className={p.itemText}>
                 <span className={p.itemTitle}>Media</span>

@@ -438,6 +438,9 @@ fn handle_control(inner: &Arc<Inner>, peer_id: DeviceId, msg: ControlMsg) {
         | ControlMsg::CallAction { .. }
         | ControlMsg::Handoff { .. } => super::comms::handle(inner, peer_id, msg),
         ControlMsg::LocateRequest | ControlMsg::Location { .. } => super::locate::handle(inner, peer_id, msg),
+        ControlMsg::Radio { .. } | ControlMsg::RadioResult { .. } | ControlMsg::AudioRequest { .. } => {
+            super::radio::handle(inner, peer_id, msg)
+        }
         ControlMsg::GuardClaim { .. }
         | ControlMsg::GuardSet { .. }
         | ControlMsg::GuardRelease

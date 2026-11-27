@@ -18,6 +18,7 @@ mod guard_setup;
 mod location;
 mod media;
 mod plugins;
+mod recorder;
 mod remote;
 mod screens;
 mod system;
@@ -294,6 +295,9 @@ pub fn run() {
             commands::reach_info,
             commands::anywhere_info,
             commands::locate_device,
+            commands::set_radio,
+            commands::record_start,
+            commands::record_stop,
             commands::guard_claim,
             commands::guard_set,
             commands::guard_release,

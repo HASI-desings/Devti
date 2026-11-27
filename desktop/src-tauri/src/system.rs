@@ -22,7 +22,7 @@ pub fn spawn_battery_poller(node: Node) {
     tauri::async_runtime::spawn(async move {
         loop {
             let battery = tauri::async_runtime::spawn_blocking(read_battery).await.ok().flatten();
-            node.set_status(DeviceStatus { battery });
+            node.set_status(DeviceStatus { battery, ..Default::default() });
             tokio::time::sleep(Duration::from_secs(60)).await;
         }
     });

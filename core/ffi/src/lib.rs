@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use devti_core::model::{BatteryState, Capability, DeviceId, DeviceKind, DeviceStatus, Platform};
+use devti_core::model::{BatteryState, Capability, DeviceId, DeviceKind, Platform};
 use devti_core::secret::SecretStore;
 use devti_core::{Node, NodeConfig};
 
@@ -225,7 +225,24 @@ impl DevtiMobile {
 
     pub fn set_battery(&self, percent: u8, charging: bool) {
         let _g = self.runtime.enter();
-        self.node.set_status(DeviceStatus { battery: Some(BatteryState::new(percent, charging)) });
+        let mut status = self.node.local().status;
+        status.battery = Some(BatteryState::new(percent, charging));
+        self.node.set_status(status);
+    }
+
+    /// This phone's radios and which it can switch by itself (`Radios` JSON).
+    pub fn set_radios(&self, radios_json: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        let mut status = self.node.local().status;
+        status.radios = Some(parse_json(&radios_json)?);
+        self.node.set_status(status);
+        Ok(())
+    }
+
+    /// Answers `radio_requested`: whether it worked, and what to tell the computer.
+    pub fn report_radio(&self, device_id: String, radio: String, ok: bool, message: String) -> Result<(), DevtiError> {
+        let _g = self.runtime.enter();
+        Ok(self.node.report_radio(&device_id.parse()?, &radio, ok, &message)?)
     }
 
     pub fn rename(&self, name: String) -> Result<(), DevtiError> {

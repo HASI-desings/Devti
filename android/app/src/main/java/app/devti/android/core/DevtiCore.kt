@@ -161,6 +161,7 @@ class DevtiCore(private val context: Context) : EventListener {
             refresh()
             watchDevice()
             watchSim()
+            watchRadios()
             syncGuard()
             io.launch { files.cleanStale() }
             io.launch { runCatching { created.setCatalog(Reducer.json.encodeToString(Catalog.serializer(), phone.catalog())) } }
@@ -213,6 +214,30 @@ class DevtiCore(private val context: Context) : EventListener {
                 clipboard.apply(it)
             }
             "ring_requested" -> if (ev["on"]?.jsonPrimitive?.booleanOrNull == true) ringer.start(str("from_name") ?: "") else ringer.stop()
+            // ---- Radios and audio on request
+            "radio_requested" -> {
+                val from = str("from") ?: return
+                val radio = str("radio") ?: return
+                val on = ev["on"]?.jsonPrimitive?.booleanOrNull ?: return
+                io.launch {
+                    val (ok, msg) = app.devti.android.control.Radios.set(context, radio, on)
+                    runCatching { node?.reportRadio(from, radio, ok, msg) }
+                    kotlinx.coroutines.delay(1500)
+                    publishRadios()
+                }
+            }
+            "audio_requested" -> {
+                val from = str("from") ?: return
+                val kind = str("kind") ?: return
+                if (ev["on"]?.jsonPrimitive?.booleanOrNull == true) {
+                    val mode = if (kind == "relay") ScreenShareActivity.MODE_RELAY else ScreenShareActivity.MODE_MIC
+                    val consent = ScreenShareActivity.intent(context, mode, from, str("from_name") ?: "").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    runCatching { context.startActivity(consent) }
+                    Alerts.audioRequest(context, str("from_name") ?: "Your computer", kind, consent)
+                } else if (_state.value.audioSharing.contains(kind)) {
+                    stopAudio()
+                }
+            }
             // ---- Stolen mode
             "guard_claim_requested" -> {
                 val from = str("from") ?: return
@@ -516,6 +541,29 @@ class DevtiCore(private val context: Context) : EventListener {
             androidx.core.app.NotificationManagerCompat.from(context).cancel(Alerts.ID_GUARD)
         }
         _state.update { it.copy(guardVersion = it.guardVersion + 1) }
+    }
+
+    /** Tells paired computers which radios are on and which they can switch. */
+    fun publishRadios() {
+        runCatching { node?.setRadios(app.devti.android.control.Radios.state(context)) }
+    }
+
+    private fun watchRadios() {
+        publishRadios()
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) = publishRadios()
+        }
+        val filter = IntentFilter().apply {
+            addAction(android.net.wifi.WifiManager.WIFI_STATE_CHANGED_ACTION)
+            addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED)
+            addAction(android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED)
+            addAction("android.net.wifi.WIFI_AP_STATE_CHANGED")
+        }
+        runCatching { ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED) }
+        runCatching {
+            rikka.shizuku.Shizuku.addBinderReceivedListenerSticky { publishRadios() }
+            rikka.shizuku.Shizuku.addRequestPermissionResultListener { _, _ -> publishRadios() }
+        }
     }
 
     private var simSeen = false

@@ -126,6 +126,9 @@ tasks.named("preBuild") {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    // Shizuku: lets a computer switch Wi-Fi, data, Bluetooth, hotspot and airplane mode.
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

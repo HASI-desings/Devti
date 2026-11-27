@@ -36,6 +36,8 @@ object Alerts {
     const val ID_CAMERA = 6
     const val ID_GUARD = 7
     const val ID_GUARD_CLAIM = 8
+    const val ID_RADIO = 9
+    const val ID_AUDIO_REQUEST = 10
     private const val ID_BATTERY_BASE = 1000
     private const val ID_FILE_BASE = 2000
     private const val ID_MIRROR_BASE = 3000
@@ -153,6 +155,35 @@ object Alerts {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(openApp(context)),
+    )
+
+    /** A computer asked for a radio change Android only lets the user make. */
+    fun radioRequest(context: Context, label: String, on: Boolean, page: android.content.Intent) = post(
+        context,
+        ID_RADIO,
+        NotificationCompat.Builder(context, RING)
+            .setSmallIcon(R.drawable.ic_stat_devti)
+            .setContentTitle("Your computer asks to turn ${if (on) "on" else "off"} $label")
+            .setContentText("Tap to open the switch.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(PendingIntent.getActivity(context, 12, page, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)),
+    )
+
+    /** A computer asks for this phone's microphone or sound; tapping opens Android's question. */
+    fun audioRequest(context: Context, fromName: String, kind: String, consent: android.content.Intent) = post(
+        context,
+        ID_AUDIO_REQUEST,
+        NotificationCompat.Builder(context, RING)
+            .setSmallIcon(R.drawable.ic_stat_devti)
+            .setContentTitle(if (kind == "mic") "$fromName wants to use this phone's microphone" else "$fromName wants to play this phone's sound")
+            .setContentText("Tap to allow.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setAutoCancel(true)
+            .setTimeoutAfter(60_000)
+            .setContentIntent(PendingIntent.getActivity(context, 13, consent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+            .setFullScreenIntent(PendingIntent.getActivity(context, 14, consent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT), true),
     )
 
     /** Brings the stolen screen up when Android won't let Devti open it from the background. */

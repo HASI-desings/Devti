@@ -415,6 +415,7 @@ private fun ContinuitySettings(core: DevtiCore, state: CoreState) {
         }
     }
     Reach(core)
+    RadiosCard(core)
     Card {
         Toggle(
             "Share the clipboard",
@@ -615,6 +616,47 @@ private fun ShareChip(label: String, active: Boolean, modifier: Modifier, enable
                 else -> c.textFaint
             },
         )
+    }
+}
+
+/** Radio switches from the computer: Shizuku makes them possible on Android 10+. */
+@Composable
+private fun RadiosCard(core: DevtiCore) {
+    val c = Devti.colors
+    val context = LocalContext.current
+    var tick by remember { mutableStateOf(0) }
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) tick++ }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+    val allowed = remember(tick) { app.devti.android.control.Radios.shizukuAllowed() }
+    val running = remember(tick) { app.devti.android.control.Radios.shizukuRunning() }
+    Card {
+        Text("Wi-Fi, data, Bluetooth and hotspot from your computer", style = Devti.type.label, color = c.text)
+        Text(
+            when {
+                allowed -> "On. Your computer can switch this phone's Wi-Fi, mobile data, Bluetooth, hotspot and airplane mode (through Shizuku)."
+                running -> "Shizuku is running. Allow Devti in it, and your computer can switch this phone's radios."
+                else -> "Android doesn't let apps switch radios by themselves. With Shizuku (free, open source), started once with Wireless debugging, it can. Without it, the phone opens the right switch for you."
+            },
+            style = Devti.type.small,
+            color = c.textDim,
+        )
+        when {
+            allowed -> {}
+            running -> QuietButton("Allow Devti in Shizuku", onClick = {
+                app.devti.android.control.Radios.requestShizuku()
+                tick++
+                core.publishRadios()
+            })
+            else -> GhostButton("Get Shizuku", onClick = {
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://shizuku.rikka.app/download/")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            })
+        }
     }
 }
 

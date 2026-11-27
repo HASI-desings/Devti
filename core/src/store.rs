@@ -560,7 +560,7 @@ mod tests {
         let mut info = a.info.clone();
         info.name = "Renamed".into();
         s.update_peer_info(&info).unwrap();
-        let status = DeviceStatus { battery: Some(BatteryState::new(42, false)) };
+        let status = DeviceStatus { battery: Some(BatteryState::new(42, false)), ..Default::default() };
         s.update_peer_status(&a.info.id, &status).unwrap();
         let perms = Permissions::for_role(TrustRole::Restricted);
         assert!(s.set_peer_access(&a.info.id, TrustRole::Restricted, &perms).unwrap());

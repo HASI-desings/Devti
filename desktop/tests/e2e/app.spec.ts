@@ -542,3 +542,25 @@ test("stolen mode: USB setup, the phone's yes, lock with a message, unlock code,
   await sheet.getByRole("button", { name: "Turn off stolen mode" }).click();
   await expect(sheet.getByRole("heading", { name: "Pixel 8 is protected" })).toBeVisible();
 });
+
+test("phone radios ask before cutting a connection, and recording saves a file", async ({ page }) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Pair" }).click();
+  await pairPhone(page, "Pixel 8");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /Pixel 8, connected/ }).click();
+  await page.getByRole("button", { name: "Open device" }).click();
+
+  await expect(page.getByText("Its radios")).toBeVisible();
+  await page.getByRole("switch", { name: "Airplane mode" }).locator("xpath=ancestor::label").click();
+  await expect(page.getByText("Airplane mode cuts every connection")).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("switch", { name: "Bluetooth", exact: true }).locator("xpath=ancestor::label").click();
+  await expect(page.getByText("install Shizuku on the phone", { exact: false })).toBeVisible();
+
+  const status = page.getByTestId("record-status");
+  await page.getByRole("button", { name: "Microphone" }).click();
+  await expect(status).toContainText(/Recording the microphone · 0:0\d/);
+  await page.getByRole("button", { name: "Stop" }).click();
+  await expect(page.getByText(/Recording saved: .*Pixel 8 microphone/)).toBeVisible();
+});

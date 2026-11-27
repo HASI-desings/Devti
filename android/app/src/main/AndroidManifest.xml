@@ -141,6 +141,15 @@
 
         <receiver android:name=".continuity.StopRingReceiver" android:exported="false" />
 
+        <!-- 1.1: Shizuku hands Devti its shell binder for the radio switches. -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
         <!-- 1.1: stolen mode. Devti is device owner only after the setup on your computer. -->
         <receiver
             android:name=".guard.GuardAdmin"

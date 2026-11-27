@@ -96,6 +96,7 @@ const TRUSTED: Permissions = {
   commands: true,
   bluetooth: true,
   browse: true,
+  locate: true,
 };
 
 /** What a simulated device shares (Phase 7 browse). */
@@ -229,7 +230,19 @@ export function createPreviewBridge(): Bridge {
   >();
   const mediaListeners = new Set<(m: import("./types").MediaStatus) => void>();
   const noticeListeners = new Set<(text: string) => void>();
+  const recordings = new Map<string, { started: number; asked: number }>();
   const mediaSnapshot = (): import("./types").MediaStatus => ({
+    recordings: [...recordings].map(([key, r]) => {
+      const [device, kind] = key.split("|") as [string, "mic" | "relay"];
+      return {
+        device,
+        kind,
+        live: r.started > 0,
+        seconds: r.started ? (Date.now() - r.started) / 1000 : 0,
+        path: "",
+      };
+    }),
+    recordings_folder: "~/Music/Devti",
     audio: [],
     cameras: [...cameras].map(([device, c]) => ({ device, live: c.live, facing: c.facing, webcam: false })),
     webcam: "Simulated in the browser preview: the camera shows in Devti.",
@@ -464,7 +477,21 @@ export function createPreviewBridge(): Bridge {
       last_seen: now(),
       online: true,
       connection: { kind: "lan", address: "192.168.1.42:47810", rtt_ms: 6, since: now() },
-      status: { battery: { percent: 64, charging: false } },
+      status: {
+        battery: { percent: 64, charging: false },
+        radios:
+          pending.peer.platform === "android"
+            ? {
+                wifi: true,
+                data: true,
+                bluetooth: true,
+                hotspot: false,
+                airplane: false,
+                direct: [],
+                via: "settings",
+              }
+            : null,
+      },
     };
     peers.set(peer.info.id, peer);
     addLog("paired", peer.info);
@@ -606,7 +633,7 @@ export function createPreviewBridge(): Bridge {
       if (!p.online || !p.status.battery) continue;
       const b = p.status.battery;
       const percent = b.charging ? Math.min(100, b.percent + 1) : Math.max(4, b.percent - 1);
-      const next = { ...p, status: { battery: { ...b, percent } } };
+      const next = { ...p, status: { ...p.status, battery: { ...b, percent } } };
       peers.set(p.info.id, next);
       emit({ type: "peer_changed", peer: next });
     }
@@ -1303,6 +1330,51 @@ export function createPreviewBridge(): Bridge {
         battery: local.status.battery?.percent,
         live: false,
       };
+    },
+    async setRadio(id, radio, on) {
+      const p = peers.get(id);
+      if (!p?.online) throw new Error("That device is offline.");
+      const r = p.status.radios;
+      if (!r) throw new Error("That device has no radios to switch.");
+      addLog("radio_requested", p.info, `${radio} ${on ? "on" : "off"}`);
+      window.setTimeout(() => {
+        const direct = r.direct.includes(radio);
+        if (direct) {
+          const next = { ...p, status: { ...p.status, radios: { ...r, [radio]: on } } };
+          peers.set(id, next);
+          emit({ type: "peer_changed", peer: next });
+        }
+        emit({
+          type: "radio_result",
+          from: id,
+          radio,
+          ok: direct,
+          message: direct
+            ? `${radio === "wifi" ? "Wi-Fi" : radio} is ${on ? "on" : "off"}.`
+            : "Android doesn't let apps switch that by themselves. The phone shows its settings to whoever holds it. To switch it from here, install Shizuku on the phone and allow Devti in it.",
+        });
+      }, 500);
+    },
+    async recordStart(id, kind) {
+      const p = peers.get(id);
+      if (!p?.online) throw new Error("That device is offline.");
+      recordings.set(`${id}|${kind}`, { started: 0, asked: Date.now() });
+      publishMedia();
+      window.setTimeout(() => {
+        const r = recordings.get(`${id}|${kind}`);
+        if (r) {
+          r.started = Date.now();
+          publishMedia();
+        }
+      }, 900);
+    },
+    async recordStop(id, kind) {
+      const r = recordings.get(`${id}|${kind}`);
+      recordings.delete(`${id}|${kind}`);
+      publishMedia();
+      if (!r?.started) return null;
+      const name = peers.get(id)?.info.name ?? "Phone";
+      return `~/Music/Devti/${name} ${kind === "mic" ? "microphone" : "sound"} (simulated).wav`;
     },
     async guardStatuses() {
       return [...peers.keys()].map((device) => ({

@@ -240,7 +240,7 @@ async fn battery_history_and_low_battery_alert() {
     assert_eq!(hub.node.low_battery_threshold(), 20);
     let pid = phone.node.device_id();
     for pct in [50u8, 30, 19] {
-        phone.node.set_status(DeviceStatus { battery: Some(BatteryState::new(pct, false)) });
+        phone.node.set_status(DeviceStatus { battery: Some(BatteryState::new(pct, false)), ..Default::default() });
         tokio::time::sleep(Duration::from_millis(150)).await;
     }
     let pct = wait_for(&mut hub.ev, "low battery", |e| match e {

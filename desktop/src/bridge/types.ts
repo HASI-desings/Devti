@@ -23,6 +23,23 @@ export interface BatteryState {
 
 export interface DeviceStatus {
   battery: BatteryState | null;
+  /** A phone's radios (1.1). */
+  radios?: Radios | null;
+}
+
+export type RadioName = "wifi" | "data" | "bluetooth" | "hotspot" | "airplane";
+
+/** A phone's radios; `null`/missing: unknown or not there. */
+export interface Radios {
+  wifi?: boolean | null;
+  data?: boolean | null;
+  bluetooth?: boolean | null;
+  hotspot?: boolean | null;
+  airplane?: boolean | null;
+  /** Radios the phone switches by itself; the rest open its Settings. */
+  direct: RadioName[];
+  /** "shizuku", "device_owner" or "settings". */
+  via: string;
 }
 
 export interface Permissions {
@@ -35,6 +52,8 @@ export interface Permissions {
   bluetooth: boolean;
   /** Browse and download from this device's shared folders (Phase 7). */
   browse: boolean;
+  /** See where this device is: location, network, IP (1.1). */
+  locate: boolean;
 }
 
 export interface ConnectionSnapshot {
@@ -158,6 +177,9 @@ export type NodeEvent =
   | { type: "reach_changed"; peer: string }
   | { type: "anywhere_changed" }
   | { type: "locate_requested"; from: string; from_name: string }
+  | { type: "radio_requested"; from: string; from_name: string; radio: string; on: boolean }
+  | { type: "radio_result"; from: string; radio: string; ok: boolean; message: string }
+  | { type: "audio_requested"; from: string; from_name: string; kind: string; on: boolean }
   | { type: "guard_claim_requested"; from: string; from_name: string }
   | { type: "guard_changed"; state: GuardState }
   | { type: "guard_owner_changed"; owner: string | null }
@@ -411,6 +433,19 @@ export interface MediaStatus {
   /** Devti can set the virtual webcam up with one password prompt (Linux). */
   webcam_setup: boolean;
   mic: string;
+  recordings: RecordingState[];
+  /** Where recordings are saved. */
+  recordings_folder: string;
+}
+
+/** A phone's microphone or sound being recorded on this computer. */
+export interface RecordingState {
+  device: string;
+  kind: "mic" | "relay";
+  /** The phone allowed it and audio is arriving. */
+  live: boolean;
+  seconds: number;
+  path: string;
 }
 
 // ------------------------------------------------------------------ Phase 3
@@ -788,6 +823,12 @@ export interface Bridge {
   deviceLocations(): Promise<DeviceLocation[]>;
   /** This computer's own location and addresses (may ask the OS for permission). */
   ownLocation(): Promise<DeviceLocationInfo>;
+  /** Asks a phone to switch a radio; the answer arrives as `radio_result`. */
+  setRadio(id: string, radio: RadioName, on: boolean): Promise<void>;
+  /** Records a phone's microphone or sound into the recordings folder. */
+  recordStart(id: string, kind: "mic" | "relay"): Promise<void>;
+  /** Stops a recording; the saved file's path, or null when nothing was recorded. */
+  recordStop(id: string, kind: "mic" | "relay"): Promise<string | null>;
   /** Stolen protection of every paired device. */
   guardStatuses(): Promise<GuardEntry[]>;
   /** Asks a phone to make this computer its stolen-mode owner (confirmed on the phone). */

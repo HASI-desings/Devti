@@ -326,11 +326,49 @@ impl BatteryState {
 pub struct DeviceStatus {
     #[serde(default)]
     pub battery: Option<BatteryState>,
+    /// A phone's radios, and which of them a computer can switch (1.1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub radios: Option<Radios>,
 }
 
 impl DeviceStatus {
     pub fn sanitized(mut self) -> Self {
         self.battery = self.battery.map(|b| BatteryState::new(b.percent, b.charging));
+        self.radios = self.radios.map(Radios::sanitized);
+        self
+    }
+}
+
+/// A phone's radios. `None`: unknown, or the phone has no such radio.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Radios {
+    #[serde(default)]
+    pub wifi: Option<bool>,
+    #[serde(default)]
+    pub data: Option<bool>,
+    #[serde(default)]
+    pub bluetooth: Option<bool>,
+    #[serde(default)]
+    pub hotspot: Option<bool>,
+    #[serde(default)]
+    pub airplane: Option<bool>,
+    /// Radios the phone switches by itself when asked; the rest open its Settings for
+    /// the person holding it.
+    #[serde(default)]
+    pub direct: Vec<String>,
+    /// How: "shizuku", "device_owner" or "settings".
+    #[serde(default)]
+    pub via: String,
+}
+
+/// The radios a computer may ask about.
+pub const RADIOS: [&str; 5] = ["wifi", "data", "bluetooth", "hotspot", "airplane"];
+
+impl Radios {
+    pub fn sanitized(mut self) -> Self {
+        self.direct.retain(|r| RADIOS.contains(&r.as_str()));
+        self.direct.dedup();
+        self.via = self.via.chars().take(16).collect();
         self
     }
 }
@@ -572,7 +610,8 @@ mod tests {
     #[test]
     fn battery_is_clamped() {
         assert_eq!(BatteryState::new(140, true).percent, 100);
-        let status = DeviceStatus { battery: Some(BatteryState { percent: 250, charging: false }) };
+        let status =
+            DeviceStatus { battery: Some(BatteryState { percent: 250, charging: false }), ..Default::default() };
         assert_eq!(status.sanitized().battery.unwrap().percent, 100);
     }
 

@@ -118,7 +118,7 @@ async fn qr_pairing_connects_and_syncs_state() {
     assert_eq!(h.info.name, "Studio PC");
 
     // Battery travels to the hub.
-    phone.node.set_status(DeviceStatus { battery: Some(BatteryState::new(42, true)) });
+    phone.node.set_status(DeviceStatus { battery: Some(BatteryState::new(42, true)), ..Default::default() });
     let pid = phone.node.device_id();
     let pct = wait_for(&mut hub.events, "battery", |e| match e {
         NodeEvent::PeerChanged { peer } if peer.info.id == pid => peer.status.battery.map(|b| b.percent),
@@ -379,7 +379,7 @@ fn api_is_callable_from_threads_outside_the_runtime() {
         assert!(node.pair_with_uri(&w.uri).is_ok());
         node.set_paused(true).unwrap();
         node.set_paused(false).unwrap();
-        node.set_status(DeviceStatus { battery: Some(BatteryState::new(50, false)) });
+        node.set_status(DeviceStatus { battery: Some(BatteryState::new(50, false)), ..Default::default() });
         node.rename("Still fine").unwrap();
         node
     });

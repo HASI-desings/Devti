@@ -809,6 +809,26 @@ pub async fn own_location(state: State<'_, AppState>) -> CmdResult<devti_core::n
     Ok(state.node.own_location(fix))
 }
 
+// ------------------------------------------------------------- Radios and recording
+
+/// Asks a phone to switch a radio ("wifi", "data", "bluetooth", "hotspot", "airplane").
+#[tauri::command]
+pub fn set_radio(state: State<'_, AppState>, id: String, radio: String, on: bool) -> CmdResult<()> {
+    state.node.set_radio(&parse_id(&id)?, &radio, on).map_err(err)
+}
+
+/// Records a phone's microphone ("mic") or sound ("relay") into Music/Devti.
+#[tauri::command]
+pub fn record_start(app: AppHandle, id: String, kind: String) -> CmdResult<()> {
+    crate::media::app_state(&app).ok_or("media isn't ready")?.start_recording(&parse_id(&id)?, &kind)
+}
+
+/// Stops a recording; the saved file's path (none when nothing was recorded).
+#[tauri::command]
+pub fn record_stop(app: AppHandle, id: String, kind: String) -> CmdResult<Option<String>> {
+    Ok(crate::media::app_state(&app).ok_or("media isn't ready")?.stop_recording(&parse_id(&id)?, &kind))
+}
+
 // ------------------------------------------------------------- Stolen mode
 
 /// Asks a phone to make this computer its stolen-mode owner (confirmed on the phone).

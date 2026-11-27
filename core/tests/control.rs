@@ -490,3 +490,62 @@ async fn stolen_mode_obeys_only_its_owner_and_the_owners_offline_code() {
     eventually("stolen off", || !phone.node.guard_local().state.on).await;
     assert!(phone.node.set_paused(true).is_ok());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn radios_and_audio_requests_travel_and_respect_permissions() {
+    use devti_core::model::{DeviceStatus, Radios};
+    let mut hub = spawn("Studio Laptop", DeviceKind::Laptop).await;
+    let mut phone = spawn("Pixel 8", DeviceKind::Phone).await;
+    pair(&mut hub, &mut phone).await;
+    let (hid, pid) = (hub.node.device_id(), phone.node.device_id());
+
+    // The phone's radios show on the laptop.
+    let radios = Radios {
+        wifi: Some(true),
+        data: Some(false),
+        direct: vec!["wifi".into(), "nonsense".into()],
+        via: "shizuku".into(),
+        ..Default::default()
+    };
+    phone.node.set_status(DeviceStatus { radios: Some(radios), ..Default::default() });
+    let seen = wait_for(&mut hub.ev, "radios", |e| match e {
+        NodeEvent::PeerChanged { peer } if peer.info.id == pid => peer.status.radios.clone(),
+        _ => None,
+    })
+    .await;
+    assert_eq!(seen.direct, vec!["wifi".to_string()], "unknown radios are dropped");
+
+    hub.node.set_radio(&pid, "data", true).unwrap();
+    let (radio, on) = wait_for(&mut phone.ev, "radio request", |e| match e {
+        NodeEvent::RadioRequested { radio, on, .. } => Some((radio.clone(), *on)),
+        _ => None,
+    })
+    .await;
+    assert_eq!((radio.as_str(), on), ("data", true));
+    phone.node.report_radio(&hid, "data", false, "opened the switch on the phone").unwrap();
+    let msg = wait_for(&mut hub.ev, "radio result", |e| match e {
+        NodeEvent::RadioResult { ok: false, message, .. } => Some(message.clone()),
+        _ => None,
+    })
+    .await;
+    assert!(msg.contains("opened"));
+    assert!(hub.node.set_radio(&pid, "toaster", true).is_err());
+
+    hub.node.request_audio(&pid, "mic", true).unwrap();
+    wait_for(&mut phone.ev, "audio request", |e| {
+        matches!(e, NodeEvent::AudioRequested { kind, on: true, .. } if kind == "mic").then_some(())
+    })
+    .await;
+
+    // Without `commands` and `bluetooth`, neither arrives.
+    let mut perms = Permissions::for_role(TrustRole::Trusted);
+    perms.commands = false;
+    perms.bluetooth = false;
+    phone.node.set_access(&hid, TrustRole::Trusted, perms).unwrap();
+    hub.node.set_radio(&pid, "wifi", false).unwrap();
+    hub.node.request_audio(&pid, "relay", true).unwrap();
+    nothing_arrives(&mut phone.ev, "radio or audio request", |e| {
+        matches!(e, NodeEvent::RadioRequested { .. } | NodeEvent::AudioRequested { .. })
+    })
+    .await;
+}

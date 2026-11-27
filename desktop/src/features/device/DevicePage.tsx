@@ -25,6 +25,11 @@ export const PERMISSION_COPY: { key: keyof Permissions; title: string; hint: str
   },
   { key: "files", title: "Send files", hint: "Files it sends are saved in your received-files folder." },
   {
+    key: "locate",
+    title: "See where this computer is",
+    hint: "Find my device: its location, network and IP address.",
+  },
+  {
     key: "browse",
     title: "Browse shared folders",
     hint: "See and download what you share in Files → Browse.",
@@ -88,6 +93,7 @@ export function DevicePage() {
       commands: true,
       bluetooth: true,
       browse: true,
+      locate: true,
     },
     restricted: {
       screen_view: false,
@@ -98,6 +104,7 @@ export function DevicePage() {
       commands: false,
       bluetooth: false,
       browse: false,
+      locate: false,
     },
   };
 

@@ -191,7 +191,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if ticks.is_multiple_of(battery_every / 5) {
                     battery = battery.saturating_sub(1).max(5);
                 }
-                node.set_status(DeviceStatus { battery: Some(BatteryState::new(battery, false)) });
+                node.set_status(DeviceStatus { battery: Some(BatteryState::new(battery, false)), ..Default::default() });
                 // Look for the Hub's saved commands (the smoke test adds one while running).
                 if let (Some(h), false) = (hub, ran) {
                     let _ = node.request_catalog(&h);

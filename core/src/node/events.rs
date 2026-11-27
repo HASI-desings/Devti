@@ -343,6 +343,27 @@ pub enum NodeEvent {
         from: DeviceId,
         from_name: String,
     },
+    /// A computer asks this phone to switch a radio: do it, then `Node::report_radio`.
+    RadioRequested {
+        from: DeviceId,
+        from_name: String,
+        radio: String,
+        on: bool,
+    },
+    /// A phone answered a radio switch.
+    RadioResult {
+        from: DeviceId,
+        radio: String,
+        ok: bool,
+        message: String,
+    },
+    /// A computer asks for this phone's microphone or sound (or to stop).
+    AudioRequested {
+        from: DeviceId,
+        from_name: String,
+        kind: String,
+        on: bool,
+    },
     /// A computer asks to become this phone's stolen-mode owner: answer with
     /// `Node::guard_accept` after asking the user.
     GuardClaimRequested {

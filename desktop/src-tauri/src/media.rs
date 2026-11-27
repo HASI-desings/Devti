@@ -46,6 +46,10 @@ pub struct MediaStatus {
     /// Devti can set the virtual webcam up (Linux, not set up yet).
     pub webcam_setup: bool,
     pub mic: String,
+    /// Recordings in progress.
+    pub recordings: Vec<crate::recorder::RecordingState>,
+    /// Where recordings are saved.
+    pub recordings_folder: String,
 }
 
 struct Camera {
@@ -60,6 +64,7 @@ pub struct Media {
     app: AppHandle,
     players: Mutex<HashMap<(DeviceId, String), player::Player>>,
     cameras: Mutex<HashMap<DeviceId, Camera>>,
+    recordings: Mutex<HashMap<(DeviceId, String), crate::recorder::Recording>>,
     status: Mutex<MediaStatus>,
 }
 
@@ -70,6 +75,7 @@ impl Media {
             app: app.clone(),
             players: Mutex::new(HashMap::new()),
             cameras: Mutex::new(HashMap::new()),
+            recordings: Mutex::new(HashMap::new()),
             status: Mutex::new(MediaStatus { mic: player::describe_mic(), ..Default::default() }),
         });
         // Audio packets → players.
@@ -79,7 +85,11 @@ impl Media {
             loop {
                 match audio.recv().await {
                     Ok(p) => {
-                        if let Some(pl) = m.players.lock().get_mut(&(p.from, p.kind.clone())) {
+                        let key = (p.from, p.kind.clone());
+                        if let Some(r) = m.recordings.lock().get_mut(&key) {
+                            r.write(&p.pcm);
+                        }
+                        if let Some(pl) = m.players.lock().get_mut(&key) {
                             pl.write(&p.pcm);
                         }
                     }
@@ -138,7 +148,46 @@ impl Media {
         s.webcam = webcam::describe();
         s.webcam_ready = webcam::ready();
         s.webcam_setup = webcam::can_set_up() && !s.webcam_ready;
+        s.recordings = self.recordings.lock().iter().map(|((d, k), r)| r.state(&d.to_string(), k)).collect();
+        s.recordings_folder = crate::recorder::folder().to_string_lossy().into();
         s
+    }
+
+    /// Records a phone's microphone ("mic") or sound ("relay") into `Music/Devti`. The
+    /// phone asks its user first.
+    pub fn start_recording(self: &Arc<Self>, peer: &DeviceId, kind: &str) -> Result<(), String> {
+        let name = self.node.peer(peer).map(|p| p.info.name).ok_or("that device isn't paired")?;
+        let key = (*peer, kind.to_string());
+        if self.recordings.lock().contains_key(&key) {
+            return Ok(());
+        }
+        self.recordings.lock().insert(key.clone(), crate::recorder::Recording::new(&name, kind));
+        if let Err(e) = self.node.request_audio(peer, kind, true) {
+            self.recordings.lock().remove(&key);
+            return Err(e.to_string());
+        }
+        self.publish();
+        // The phone never answered: say so and give up.
+        let me = self.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(45)).await;
+            let stale =
+                me.recordings.lock().get(&key).is_some_and(|r| !r.state("", "").live && r.waited().as_secs() >= 44);
+            if stale {
+                me.recordings.lock().remove(&key);
+                me.notice(format!("{name} didn't start sending its audio. Check the phone: it asks first."));
+                me.publish();
+            }
+        });
+        Ok(())
+    }
+
+    /// Stops a recording; the saved file's path.
+    pub fn stop_recording(&self, peer: &DeviceId, kind: &str) -> Option<String> {
+        let rec = self.recordings.lock().remove(&(*peer, kind.to_string()));
+        let _ = self.node.request_audio(peer, kind, false);
+        self.publish();
+        rec.and_then(|r| r.finish()).map(|p| p.to_string_lossy().into_owned())
     }
 
     fn publish(&self) {
@@ -188,6 +237,11 @@ impl Media {
     pub fn on_node_event(self: &Arc<Self>, ev: &NodeEvent) {
         match ev {
             NodeEvent::AudioStarted { from, kind, sample_rate, channels, .. } => {
+                if let Some(r) = self.recordings.lock().get_mut(&(*from, kind.clone()))
+                    && let Err(e) = r.begin(*sample_rate, *channels)
+                {
+                    self.notice(format!("Couldn't save the recording: {e}"));
+                }
                 match player::Player::open(kind, *sample_rate, *channels) {
                     Ok(p) => {
                         self.players.lock().insert((*from, kind.clone()), p);
@@ -200,6 +254,9 @@ impl Media {
             }
             NodeEvent::AudioEnded { from, kind } => {
                 self.players.lock().remove(&(*from, kind.clone()));
+                if let Some(path) = self.recordings.lock().remove(&(*from, kind.clone())).and_then(|r| r.finish()) {
+                    self.notice(format!("Recording saved: {path}", path = path.display()));
+                }
                 self.publish();
             }
             NodeEvent::ScreenEnded { peer, source } if source == "camera" => {

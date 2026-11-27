@@ -51,6 +51,7 @@ fast_image_resize = "5.1.4"
 chrono = "0.4"
 sysinfo = { version = "0.36", default-features = false, features = ["system"] }
 zune-jpeg = "0.5"
+hound = "3.5"
 
 [features]
 # Tauri uses this to switch between dev server and bundled assets.
