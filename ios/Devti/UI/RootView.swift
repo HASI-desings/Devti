@@ -25,9 +25,19 @@ struct RootView: View {
                 .tint(Theme.text)
             }
             if let from = core.ringingFrom { RingOverlay(from: from) }
+            if let g = core.stolen { StolenOverlay(lock: g) }
         }
         .foregroundStyle(Theme.text)
         .sheet(isPresented: $pairing) { PairView(onClose: { pairing = false }).environmentObject(core) }
+        .alert(
+            "Let \(core.guardClaim?.name ?? "your computer") protect this iPhone?",
+            isPresented: Binding(get: { core.guardClaim != nil }, set: { if !$0 { core.guardClaim = nil } })
+        ) {
+            Button("Allow") { core.answerGuardClaim(true) }
+            Button("Don't allow", role: .cancel) { core.answerGuardClaim(false) }
+        } message: {
+            Text("It can show your message on this iPhone and see where it is while Devti is open. Apple doesn't let apps lock an iPhone, so also turn on Find My iPhone.")
+        }
         .overlay(alignment: .top) { ToastView() }
         .preferredColorScheme(.dark)
     }
@@ -107,5 +117,50 @@ struct ToastView: View {
                 .onTapGesture { withAnimation { core.toast = nil } }
                 .accessibilityAddTraits(.isStaticText)
         }
+    }
+}
+
+/// The stolen screen on iPhone: covers Devti while it's open. iOS doesn't let it do more.
+private struct StolenOverlay: View {
+    @EnvironmentObject private var core: Core
+    let lock: LocalGuard
+    @State private var answer = ""
+    @State private var note: String?
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 54)).foregroundStyle(.red)
+            Text(lock.state.message).font(.system(size: 28, weight: .bold)).multilineTextAlignment(.center)
+            if !lock.state.contact.isEmpty {
+                Text("Owner: \(lock.state.contact)").font(.system(size: 18)).foregroundStyle(.white.opacity(0.85))
+            }
+            Text("This iPhone is locked by its owner and is sharing its location.")
+                .font(.system(size: 14)).foregroundStyle(.white.opacity(0.6)).multilineTextAlignment(.center)
+            Spacer().frame(height: 24)
+            Text("Owner's unlock · question \(lock.challenge)").font(.system(size: 15, weight: .semibold))
+            TextField("Answer", text: $answer)
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.center)
+                .padding(12)
+                .background(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.3)))
+                .frame(maxWidth: 280)
+            Button("Unlock") {
+                switch core.tryStolenCode(answer) {
+                case .some(true): note = nil
+                case .some(false): note = "That's not the answer. A new question is shown."
+                case .none: note = "Please wait before trying again."
+                }
+                answer = ""
+            }
+            .buttonStyle(QuietButtonStyle())
+            .frame(maxWidth: 280)
+            if let note { Text(note).font(.system(size: 13)).foregroundStyle(.red.opacity(0.9)) }
+            Spacer()
+        }
+        .padding(28)
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black.ignoresSafeArea())
     }
 }

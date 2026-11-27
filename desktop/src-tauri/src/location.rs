@@ -124,14 +124,16 @@ mod imp {
     use windows::Devices::Geolocation::{GeolocationAccessStatus, Geolocator};
 
     pub fn locate() -> Result<(f64, f64, f64), String> {
-        let access = Geolocator::RequestAccessAsync()
-            .and_then(|op| op.get())
+        // windows-future 0.3: `join()` blocks until the async operation finishes.
+        let access: GeolocationAccessStatus = Geolocator::RequestAccessAsync()
+            .and_then(|op| op.join())
             .map_err(|e| format!("Windows location isn't available ({e})"))?;
         if access != GeolocationAccessStatus::Allowed {
             return Err("location is off for Devti (Windows Settings → Privacy & security → Location)".into());
         }
         let locator = Geolocator::new().map_err(|e| e.to_string())?;
-        let pos = locator.GetGeopositionAsync().and_then(|op| op.get()).map_err(|e| e.to_string())?;
+        let pos: windows::Devices::Geolocation::Geoposition =
+            locator.GetGeopositionAsync().and_then(|op| op.join()).map_err(|e| e.to_string())?;
         let coord = pos.Coordinate().map_err(|e| e.to_string())?;
         let point = coord.Point().and_then(|p| p.Position()).map_err(|e| e.to_string())?;
         let accuracy = coord.Accuracy().unwrap_or(1000.0);

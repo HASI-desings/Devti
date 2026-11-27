@@ -210,6 +210,20 @@ fun Home(core: DevtiCore, state: CoreState, onPairAnother: () -> Unit) {
         val live = state.peers.firstOrNull { it.info.id == p.info.id } ?: p
         AccessDialog(live, onChange = { core.setPermissions(live.info.id, it) }, onClose = { access = null })
     }
+    state.guardClaim?.let { (_, name) ->
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Let $name protect this phone?") },
+            text = {
+                Text(
+                    "If this phone is stolen, $name can lock it to a black screen with your message, see where it is " +
+                        "every 30 seconds, and unlock it again. Only $name can do this. You can stop it from $name later.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { core.answerGuardClaim(true) }) { Text("Allow") } },
+            dismissButton = { TextButton(onClick = { core.answerGuardClaim(false) }) { Text("Don't allow") } },
+        )
+    }
     forget?.let { p ->
         AlertDialog(
             onDismissRequest = { forget = null },
@@ -649,6 +663,15 @@ private fun FindCard(core: DevtiCore, state: CoreState, hub: PeerSnapshot) {
                         .onFailure { toast(context, "No maps app is installed.") }
                 }, modifier = Modifier.weight(1f))
             }
+        }
+        val guard = remember(state.guardVersion) { core.guardLocal() }
+        if (guard?.owner != null) {
+            Text(
+                "Stolen protection: ${guard.ownerName ?: "your computer"} can lock this phone if it's stolen" +
+                    if (app.devti.android.guard.Guard.isDeviceOwner(context)) " (full protection)." else " (basic: run the USB setup on the computer for full protection).",
+                style = Devti.type.small,
+                color = c.textDim,
+            )
         }
         Toggle(
             "Let my computers find this phone",

@@ -505,3 +505,40 @@ test("find my devices: map, this computer, locate a phone with its IP and networ
   await expect(phone.getByRole("button", { name: "Open map" })).toBeVisible();
   await expect(page.locator(".leaflet-marker-icon")).toHaveCount(2);
 });
+
+test("stolen mode: USB setup, the phone's yes, lock with a message, unlock code, turn off", async ({
+  page,
+}) => {
+  await freshApp(page, { onboarding_done: "true" });
+  await rail(page).getByRole("button", { name: "Pair" }).click();
+  await pairPhone(page, "Pixel 8");
+  await page.keyboard.press("Escape");
+  await rail(page).getByRole("button", { name: "Find" }).click();
+  await page
+    .getByRole("listitem")
+    .filter({ hasText: "Pixel 8" })
+    .getByRole("button", { name: "Stolen mode" })
+    .click();
+
+  const sheet = page.getByRole("dialog");
+  await expect(sheet.getByRole("heading", { name: "Protect Pixel 8 if it's stolen" })).toBeVisible();
+  await sheet.getByRole("button", { name: "Find the phone" }).click();
+  await sheet.getByRole("button", { name: "Make Devti the protector" }).click();
+  await expect(sheet.getByRole("status")).toContainText("Devti can now fully protect this phone");
+  await sheet.getByRole("button", { name: "Ask the phone" }).click();
+  await expect(sheet.getByRole("heading", { name: "Pixel 8 is protected" })).toBeVisible();
+  await expect(sheet.getByText("Full protection")).toBeVisible();
+  await expect(sheet.getByText("Power menu blocked")).toBeVisible();
+
+  await sheet.getByLabel("How to reach you (optional)").fill("+92 300 1234567");
+  await sheet.getByRole("button", { name: "Turn on stolen mode" }).click();
+  await sheet.getByRole("button", { name: "Lock it now" }).click();
+  await expect(sheet.getByRole("heading", { name: "Stolen mode is on for Pixel 8" })).toBeVisible();
+
+  await sheet.getByLabel("Question on the phone").fill("1234 5678");
+  await sheet.getByRole("button", { name: "Get the answer" }).click();
+  await expect(sheet.getByTestId("unlock-code")).toHaveText(/^\d{5} \d{5}$/);
+
+  await sheet.getByRole("button", { name: "Turn off stolen mode" }).click();
+  await expect(sheet.getByRole("heading", { name: "Pixel 8 is protected" })).toBeVisible();
+});

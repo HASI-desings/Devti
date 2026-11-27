@@ -1,0 +1,228 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-6) var(--s-8);
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-4);
+  align-items: start;
+  padding: var(--s-4);
+  border-radius: var(--r-sheet);
+  background:
+    radial-gradient(90% 140% at 0% 0%, color-mix(in oklab, var(--ok) 16%, transparent), transparent 70%),
+    var(--surface-2);
+}
+
+.hero[data-on] {
+  background:
+    radial-gradient(90% 140% at 0% 0%, color-mix(in oklab, var(--danger) 26%, transparent), transparent 70%),
+    var(--surface-2);
+}
+
+.heroIcon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  color: var(--ok);
+  background: color-mix(in oklab, var(--ok) 16%, var(--surface));
+}
+
+.hero[data-on] .heroIcon {
+  color: var(--danger);
+  background: color-mix(in oklab, var(--danger) 16%, var(--surface));
+}
+
+.title {
+  font-size: var(--t-20);
+  margin-bottom: var(--s-1);
+}
+
+.level {
+  display: inline-block;
+  margin-left: var(--s-1);
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: var(--t-12);
+  font-weight: 600;
+  vertical-align: 1px;
+}
+
+.level[data-tone="ok"] {
+  color: var(--ok);
+  background: color-mix(in oklab, var(--ok) 14%, transparent);
+}
+
+.level[data-tone="warn"] {
+  color: var(--warn);
+  background: color-mix(in oklab, var(--warn) 14%, transparent);
+}
+
+.level[data-tone="danger"] {
+  color: var(--danger);
+  background: color-mix(in oklab, var(--danger) 14%, transparent);
+}
+
+.steps {
+  list-style: none;
+  counter-reset: step;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.step {
+  counter-increment: step;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  border-radius: var(--r-sheet);
+  border: 1px solid var(--line);
+}
+
+.steps > .step::before {
+  content: counter(step);
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: var(--t-13);
+  color: var(--bg);
+  background: var(--text);
+}
+
+.stepTitle {
+  font-size: var(--t-16);
+}
+
+.recommended {
+  margin-left: var(--s-2);
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: var(--t-12);
+  font-weight: 600;
+  color: var(--ok);
+  background: color-mix(in oklab, var(--ok) 14%, transparent);
+}
+
+.howto {
+  margin: 0;
+  padding-left: 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  color: var(--text-dim);
+  font-size: var(--t-13);
+}
+
+.usbPhone {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.usbName {
+  font-weight: 600;
+}
+
+.note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--t-13);
+}
+
+.result {
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: 12px;
+  font-size: var(--t-13);
+  color: var(--danger);
+  background: color-mix(in oklab, var(--danger) 10%, transparent);
+}
+
+.result[data-ok="true"] {
+  color: var(--ok);
+  background: color-mix(in oklab, var(--ok) 10%, transparent);
+}
+
+.lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s-3);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  font-size: var(--t-13);
+  color: var(--text);
+}
+
+.list li {
+  display: flex;
+  gap: var(--s-2);
+  align-items: baseline;
+}
+
+.list li > svg {
+  flex: none;
+  color: var(--ok);
+}
+
+.list[data-missing] li {
+  color: var(--text-dim);
+}
+
+.list[data-missing] li > svg {
+  color: var(--danger);
+}
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border-radius: var(--r-sheet);
+  border: 1px solid color-mix(in oklab, var(--danger) 45%, var(--line));
+  background: color-mix(in oklab, var(--danger) 8%, var(--surface));
+}
+
+.confirm p {
+  margin: 0;
+}
+
+.unlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  border-radius: var(--r-sheet);
+  border: 1px solid var(--line);
+}
+
+.code {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--t-39);
+  letter-spacing: 0.06em;
+  color: var(--text);
+}

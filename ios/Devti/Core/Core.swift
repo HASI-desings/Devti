@@ -47,6 +47,11 @@ final class Core: ObservableObject {
     @Published var ringingFrom: String?
     @Published var toast: String?
     @Published private(set) var dnd = false
+    /// A computer asking to protect this iPhone: (id, name).
+    @Published var guardClaim: (id: String, name: String)?
+    /// Stolen mode as this iPhone sees it, while it's on.
+    @Published private(set) var stolen: LocalGuard?
+    private var stolenTimer: Timer?
 
     private var node: DevtiMobile?
     private let listener = CoreListener()
@@ -86,6 +91,7 @@ final class Core: ObservableObject {
             try? n.setDownloadsDir(path: Self.receivedDir.path)
             refresh()
             watchBattery()
+            syncGuard()
         } catch {
             self.error = "Devti couldn't start: \(readable(error))"
         }
@@ -183,6 +189,10 @@ final class Core: ObservableObject {
                 try? node?.screenStopSharing(deviceId: e.from)
                 toast = "iPhone can't share its screen with Devti — Apple only allows that for screen-recording extensions."
             }
+        case "guard_claim_requested":
+            if let e = JSON.decode(Events.GuardClaim.self, json) { guardClaim = (e.from, e.fromName) }
+        case "guard_changed", "guard_owner_changed":
+            syncGuard()
         case "locate_requested":
             if let e = JSON.decode(Events.LocateRequested.self, json) {
                 let from = e.from
@@ -302,6 +312,47 @@ final class Core: ObservableObject {
     }
 
     func locate(_ id: String) { act { try $0.locate(deviceId: id) } }
+
+    // MARK: Stolen mode (the honest iPhone version)
+
+    /// Apple lets no app lock an iPhone, block its buttons or its USB port; the owner is
+    /// told exactly that, and pointed to Apple's Lost Mode.
+    private static let report = """
+    {"level":"unsupported","protections":["Stolen screen with your message while Devti is open","Live location while Devti is open"],    "missing":["Apple lets no app lock an iPhone, block its power button, USB or Control Centre","Nothing runs while Devti is closed: use Apple's Lost Mode at icloud.com/find, which works even when the iPhone is off"]}
+    """
+
+    func answerGuardClaim(_ accept: Bool) {
+        guard let claim = guardClaim else { return }
+        guardClaim = nil
+        act { try $0.guardAccept(deviceId: claim.id, accept: accept) }
+        syncGuard()
+    }
+
+    func tryStolenCode(_ code: String) -> Bool? {
+        guard let n = node else { return nil }
+        do {
+            let ok = try n.guardTryCode(code: code)
+            syncGuard()
+            return ok
+        } catch {
+            return nil
+        }
+    }
+
+    func syncGuard() {
+        guard let n = node else { return }
+        try? n.guardSetReport(reportJson: Self.report)
+        let g = JSON.decode(LocalGuard.self, n.guardLocalJson())
+        stolen = g?.state.on == true ? g : nil
+        stolenTimer?.invalidate()
+        guard let g, g.state.on, let owner = g.owner else { return }
+        // Live location to the owner while Devti is on the screen.
+        let send = { [weak self] in
+            self?.locator.fix { fix in try? self?.node?.pushLocation(deviceId: owner, fixJson: fix) }
+        }
+        send()
+        stolenTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in Task { @MainActor in send() } }
+    }
 
     var reach: ReachInfo? { node.flatMap { JSON.decode(ReachInfo.self, $0.reachInfoJson()) } }
     func setReach(_ on: Bool) {

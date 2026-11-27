@@ -235,6 +235,27 @@ data class ReachInfo(
     val extra: List<String>,
 )
 
+/** Stolen mode as this phone sees it (`LocalGuard` from the core). */
+@Serializable
+data class GuardStateModel(
+    val on: Boolean = false,
+    val message: String = "",
+    val contact: String = "",
+    @SerialName("sim_lock") val simLock: Boolean = false,
+    val reason: String = "",
+    val since: Long = 0,
+)
+
+@Serializable
+data class LocalGuard(
+    val owner: String? = null,
+    @SerialName("owner_name") val ownerName: String? = null,
+    val state: GuardStateModel = GuardStateModel(),
+    val challenge: String = "",
+    val attempts: Int = 0,
+    @SerialName("retry_at") val retryAt: Long = 0,
+)
+
 /** Where a device is (Find my device). */
 @Serializable
 data class DeviceLocation(
@@ -324,6 +345,10 @@ data class CoreState(
     val walkAway: Boolean = false,
     /** Find my device: where each device last said it was, by device id. */
     val locations: Map<String, DeviceLocation> = emptyMap(),
+    /** A computer asking to protect this phone: (device id, name). */
+    val guardClaim: Pair<String, String>? = null,
+    /** Bumped whenever stolen mode changes, so screens re-read it. */
+    val guardVersion: Int = 0,
 ) {
     /** The Hub this phone belongs to: the first paired computer. */
     val hub: PeerSnapshot?

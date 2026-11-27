@@ -10,6 +10,7 @@ import { orderedPeers, useStore } from "../../state/store";
 import { Button } from "../../ui";
 import p from "../shell/page.module.css";
 import s from "./Find.module.css";
+import { StolenSheet } from "./StolenSheet";
 
 const err = (e: unknown) => String(e instanceof Error ? e.message : e);
 const HERE = "this";
@@ -29,7 +30,7 @@ interface Row {
  * its IP addresses. Locations travel only between your own devices; the map tiles come
  * from OpenStreetMap.
  */
-export function FindPage({ onStolen }: { onStolen?: (id: string) => void }) {
+export function FindPage() {
   const bridge = useBridge();
   const toast = useStore((st) => st.toast);
   const local = useStore((st) => st.local)!;
@@ -38,6 +39,8 @@ export function FindPage({ onStolen }: { onStolen?: (id: string) => void }) {
   const [locs, setLocs] = useState<Record<string, DeviceLocationInfo>>({});
   const [asking, setAsking] = useState<Record<string, boolean>>({});
   const [focus, setFocus] = useState<string | null>(null);
+  const [stolenFor, setStolenFor] = useState<string | null>(null);
+  const onStolen = (id: string) => setStolenFor(id);
 
   useEffect(() => {
     void bridge.deviceLocations().then(
@@ -236,7 +239,7 @@ export function FindPage({ onStolen }: { onStolen?: (id: string) => void }) {
                         Open map
                       </Button>
                     )}
-                    {!r.isHere && r.kind === "phone" && onStolen && (
+                    {!r.isHere && (r.kind === "phone" || r.kind === "tablet") && (
                       <Button size="sm" variant="danger" icon="lock" onPress={() => onStolen(r.id)}>
                         Stolen mode
                       </Button>
@@ -248,6 +251,10 @@ export function FindPage({ onStolen }: { onStolen?: (id: string) => void }) {
           </ul>
         </div>
       </div>
+      <StolenSheet
+        peer={peers.find((x) => x.info.id === stolenFor) ?? null}
+        onClose={() => setStolenFor(null)}
+      />
     </div>
   );
 }

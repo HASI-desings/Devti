@@ -34,6 +34,8 @@ object Alerts {
     private const val ID_SCREEN_REQUEST = 4
     const val ID_AUDIO = 5
     const val ID_CAMERA = 6
+    const val ID_GUARD = 7
+    const val ID_GUARD_CLAIM = 8
     private const val ID_BATTERY_BASE = 1000
     private const val ID_FILE_BASE = 2000
     private const val ID_MIRROR_BASE = 3000
@@ -136,6 +138,35 @@ object Alerts {
             // brings the question up right away (like an incoming call) where allowed.
             .setFullScreenIntent(
                 PendingIntent.getActivity(context, 10, consent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
+                true,
+            ),
+    )
+
+    /** A computer asks to protect this phone; tapping opens Devti, which asks the question. */
+    fun guardClaim(context: Context, fromName: String) = post(
+        context,
+        ID_GUARD_CLAIM,
+        NotificationCompat.Builder(context, RING)
+            .setSmallIcon(R.drawable.ic_stat_devti)
+            .setContentTitle("$fromName wants to protect this phone")
+            .setContentText("Open Devti to allow stolen protection.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(openApp(context)),
+    )
+
+    /** Brings the stolen screen up when Android won't let Devti open it from the background. */
+    fun stolenScreen(context: Context, screen: android.content.Intent) = post(
+        context,
+        ID_GUARD,
+        NotificationCompat.Builder(context, RING)
+            .setSmallIcon(R.drawable.ic_stat_devti)
+            .setContentTitle("This phone is locked by its owner")
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setOngoing(true)
+            .setFullScreenIntent(
+                PendingIntent.getActivity(context, 11, screen, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
                 true,
             ),
     )

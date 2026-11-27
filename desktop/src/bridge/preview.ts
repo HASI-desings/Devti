@@ -400,6 +400,9 @@ export function createPreviewBridge(): Bridge {
     extra: [],
   };
   const locations = new Map<string, import("./types").DeviceLocationInfo>();
+  const guards = new Map<string, import("./types").GuardStatus>();
+  const guardOwnerPhones = new Set<string>();
+  const guardTimers = new Map<string, number>();
   const SIM_SPOTS = [
     { lat: 31.4504, lon: 74.2712 }, // near the university
     { lat: 31.5204, lon: 74.3587 }, // city centre
@@ -1300,6 +1303,118 @@ export function createPreviewBridge(): Bridge {
         battery: local.status.battery?.percent,
         live: false,
       };
+    },
+    async guardStatuses() {
+      return [...peers.keys()].map((device) => ({
+        device,
+        owns: guards.has(device),
+        status: guards.get(device) ? structuredClone(guards.get(device)!) : null,
+      }));
+    },
+    async guardClaim(id) {
+      const p = peers.get(id);
+      if (!p?.online) throw new Error("That device is offline.");
+      addLog("guard_claim_sent", p.info);
+      // The phone's user says yes on the phone a moment later.
+      window.setTimeout(() => {
+        const status: import("./types").GuardStatus = {
+          owner: true,
+          other_owner: false,
+          state: { on: false, message: "", contact: "", sim_lock: false, reason: "", since: 0 },
+          report: guardOwnerPhones.has(id)
+            ? {
+                level: "device_owner",
+                protections: [
+                  "Black stolen screen that can't be left",
+                  "Power menu blocked",
+                  "USB data off: no computer or OTG drive can connect",
+                  "Bluetooth off, no new devices",
+                  "Safe mode, factory reset and airplane mode blocked",
+                  "Wi-Fi and location kept on",
+                  "Live location every 30 seconds",
+                ],
+                missing: ["Holding the power button for 15 s still forces a restart (hardware)"],
+              }
+            : {
+                level: "basic",
+                protections: ["Stolen screen", "Live location every 30 seconds"],
+                missing: [
+                  "Power menu, USB and safe mode stay available: finish the USB setup for full protection",
+                ],
+              },
+        };
+        guards.set(id, status);
+        emit({ type: "guard_status_received", from: id, status: structuredClone(status) });
+      }, 800);
+    },
+    async guardSet(id, state) {
+      const p = peers.get(id);
+      const g = guards.get(id);
+      if (!p?.online) throw new Error("That device is offline.");
+      if (!g) throw new Error("this computer isn't that phone's stolen-mode owner");
+      g.state = {
+        ...state,
+        message:
+          state.message.trim() || "This device is stolen. Return it to its owner. Police is on the way.",
+        reason: state.on ? "owner" : "",
+        since: Date.now(),
+      };
+      addLog(state.on ? "stolen_mode_sent_on" : "stolen_mode_sent_off", p.info);
+      window.clearInterval(guardTimers.get(id));
+      if (state.on) {
+        const spot = SIM_SPOTS[1]!;
+        let step = 0;
+        guardTimers.set(
+          id,
+          window.setInterval(() => {
+            step += 1;
+            const location = {
+              lat: spot.lat + step * 0.0003,
+              lon: spot.lon + step * 0.0002,
+              accuracy_m: 8,
+              ts: Date.now(),
+              source: "gps",
+              public_ip: "203.0.113.77",
+              local_ips: [],
+              network: "Mobile data: Jazz",
+              battery: p.status.battery?.percent,
+              live: true,
+            };
+            locations.set(id, location);
+            emit({ type: "location_received", from: id, location });
+          }, 1500),
+        );
+      }
+      window.setTimeout(
+        () => emit({ type: "guard_status_received", from: id, status: structuredClone(g) }),
+        300,
+      );
+    },
+    async guardRelease(id) {
+      guards.delete(id);
+      window.clearInterval(guardTimers.get(id));
+    },
+    async guardUnlockCode(id, challenge) {
+      if (!guards.has(id)) throw new Error("this computer isn't that phone's stolen-mode owner");
+      const c = challenge.replace(/\D/g, "");
+      if (c.length !== 8) throw new Error("the code on the phone has 8 digits");
+      // Not the real HMAC (that lives in the core): a stable stand-in for the preview.
+      let h = 0;
+      for (const ch of `${id}:${c}`) h = (Math.imul(h, 31) + ch.charCodeAt(0)) >>> 0;
+      return String(h).padStart(10, "7").slice(0, 10);
+    },
+    async guardSetupCheck() {
+      const phones = [...peers.values()]
+        .filter((p) => p.info.platform === "android" && p.online)
+        .map((p) => ({ serial: `R5C${p.info.id.slice(0, 6)}`, state: "device", model: p.info.name }));
+      return { adb: "/usr/bin/adb", install_hint: "Install it with: sudo apt install adb", phones };
+    },
+    async guardSetupRun(serial) {
+      const p = [...peers.values()].find((x) => `R5C${x.info.id.slice(0, 6)}` === serial);
+      if (!p)
+        throw new Error("The phone isn't connected. Plug it in with a USB cable and turn on USB debugging.");
+      guardOwnerPhones.add(p.info.id);
+      return "Done. Devti can now fully protect this phone. Add your accounts back on the phone.";
     },
     async anywhereInfo() {
       return structuredClone(anywhere);

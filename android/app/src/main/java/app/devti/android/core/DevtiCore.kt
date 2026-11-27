@@ -33,6 +33,7 @@ import app.devti.android.control.ScreenShareActivity
 import app.devti.android.control.screenTargetOf
 import app.devti.android.core.state.AnywhereInfo
 import app.devti.android.core.state.Catalog
+import app.devti.android.core.state.LocalGuard
 import app.devti.android.core.state.CallInfo
 import app.devti.android.core.state.HandoffItem
 import app.devti.android.core.state.ReachInfo
@@ -159,6 +160,8 @@ class DevtiCore(private val context: Context) : EventListener {
             }
             refresh()
             watchDevice()
+            watchSim()
+            syncGuard()
             io.launch { files.cleanStale() }
             io.launch { runCatching { created.setCatalog(Reducer.json.encodeToString(Catalog.serializer(), phone.catalog())) } }
             created
@@ -185,6 +188,9 @@ class DevtiCore(private val context: Context) : EventListener {
                 cameraSharing = prev.cameraSharing,
                 walkAway = prev.walkAway,
                 fsListings = prev.fsListings,
+                locations = prev.locations,
+                guardClaim = prev.guardClaim,
+                guardVersion = prev.guardVersion,
             )
     }
 
@@ -207,6 +213,14 @@ class DevtiCore(private val context: Context) : EventListener {
                 clipboard.apply(it)
             }
             "ring_requested" -> if (ev["on"]?.jsonPrimitive?.booleanOrNull == true) ringer.start(str("from_name") ?: "") else ringer.stop()
+            // ---- Stolen mode
+            "guard_claim_requested" -> {
+                val from = str("from") ?: return
+                val name = str("from_name") ?: "Your computer"
+                _state.update { it.copy(guardClaim = from to name) }
+                Alerts.guardClaim(context, name)
+            }
+            "guard_changed", "guard_owner_changed" -> syncGuard()
             // Find my device: answer with this phone's location and network.
             "locate_requested" -> {
                 val from = str("from") ?: return
@@ -453,6 +467,81 @@ class DevtiCore(private val context: Context) : EventListener {
     /** Lets paired computers reconnect to this phone away from home (VPN / typed addresses). */
     fun setReach(on: Boolean, extra: List<String> = reachInfo()?.extra.orEmpty()): String? = act {
         node?.setReach(on, Reducer.json.encodeToString(ListSerializer(String.serializer()), extra))
+    }
+
+    // ---- Stolen mode (this phone's side; the owner computer controls it)
+
+    fun guardLocal(): LocalGuard? = runCatching {
+        Reducer.json.decodeFromString(LocalGuard.serializer(), node?.guardLocalJson() ?: return null)
+    }.getOrNull()
+
+    /** The user's answer to "may <computer> protect this phone?". */
+    fun answerGuardClaim(accept: Boolean) {
+        val (from, _) = _state.value.guardClaim ?: return
+        _state.update { it.copy(guardClaim = null) }
+        act { node?.guardAccept(from, accept) }?.let { toast(it) }
+        syncGuard()
+    }
+
+    /** The owner's offline answer typed on the stolen screen: true unlocks, false is wrong,
+     *  null means wait (too many wrong answers). */
+    fun guardTryCode(code: String): Boolean? = try {
+        node?.guardTryCode(code).also { if (it == true) syncGuard() }
+    } catch (e: DevtiException) {
+        null
+    }
+
+    fun pushLocation(deviceId: String, fixJson: String) {
+        io.launch { runCatching { node?.pushLocation(deviceId, fixJson) } }
+    }
+
+    /**
+     * Makes the phone match stolen mode: tells the owner how well it's protected, and
+     * locks down (stolen screen, device-owner policy, live location) or lets go.
+     */
+    fun syncGuard() {
+        val n = node ?: return
+        runCatching { n.guardSetReport(app.devti.android.guard.Guard.report(context)) }
+        val g = guardLocal() ?: return
+        if (g.state.on) {
+            app.devti.android.guard.Guard.applyPolicy(context)
+            val screen = app.devti.android.guard.StolenActivity.intent(context)
+            runCatching { context.startActivity(screen) }
+            // Android may refuse a background start; the full-screen notification can't be refused.
+            if (!app.devti.android.guard.StolenScreen.visible) Alerts.stolenScreen(context, screen)
+            runCatching { app.devti.android.guard.GuardService.start(context) }
+        } else {
+            app.devti.android.guard.Guard.liftPolicy(context)
+            app.devti.android.guard.GuardService.stop(context)
+            androidx.core.app.NotificationManagerCompat.from(context).cancel(Alerts.ID_GUARD)
+        }
+        _state.update { it.copy(guardVersion = it.guardVersion + 1) }
+    }
+
+    private var simSeen = false
+
+    /** Stolen mode can turn itself on when the SIM card is taken out (the owner's choice). */
+    private fun watchSim() {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                when (i.getStringExtra("ss")) {
+                    "READY", "LOADED", "IMSI" -> simSeen = true
+                    // Only a SIM that was there and is now gone counts (not a phone without one).
+                    "ABSENT" -> if (simSeen) {
+                        simSeen = false
+                        runCatching { node?.guardSimRemoved() }
+                    }
+                }
+            }
+        }
+        runCatching {
+            ContextCompat.registerReceiver(
+                context,
+                receiver,
+                IntentFilter("android.intent.action.SIM_STATE_CHANGED"),
+                ContextCompat.RECEIVER_EXPORTED,
+            )
+        }
     }
 
     /** Asks a computer where it is (Find my device); the answer lands in [CoreState.locations]. */

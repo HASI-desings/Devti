@@ -150,6 +150,22 @@ struct ReachInfo: Codable, Hashable {
     var extra: [String]
 }
 
+/// Stolen mode as this device sees it (`LocalGuard`).
+struct GuardStateModel: Codable, Hashable {
+    var on: Bool
+    var message: String
+    var contact: String
+}
+
+struct LocalGuard: Codable, Hashable {
+    var owner: String?
+    var ownerName: String?
+    var state: GuardStateModel
+    var challenge: String
+    var attempts: Int
+    var retryAt: Int64
+}
+
 /// Where a device is (Find my device).
 struct DeviceLocation: Codable, Hashable {
     var lat: Double?
@@ -203,6 +219,7 @@ enum Events {
     struct Handoff: Decodable { var fromName: String; var item: HandoffItem }
     struct ScreenRequested: Decodable { var from: String; var on: Bool }
     struct LocateRequested: Decodable { var from: String }
+    struct GuardClaim: Decodable { var from: String; var fromName: String }
     struct LocationReceived: Decodable { var from: String; var location: DeviceLocation }
     struct LowBattery: Decodable { var name: String; var percent: Int }
     struct Dnd: Decodable { var on: Bool }

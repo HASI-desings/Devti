@@ -158,6 +158,10 @@ export type NodeEvent =
   | { type: "reach_changed"; peer: string }
   | { type: "anywhere_changed" }
   | { type: "locate_requested"; from: string; from_name: string }
+  | { type: "guard_claim_requested"; from: string; from_name: string }
+  | { type: "guard_changed"; state: GuardState }
+  | { type: "guard_owner_changed"; owner: string | null }
+  | { type: "guard_status_received"; from: string; status: GuardStatus }
   | { type: "location_received"; from: string; location: DeviceLocationInfo }
   | {
       type: "fs_listing";
@@ -170,6 +174,57 @@ export type NodeEvent =
   | { type: "fs_error"; from: string; path: string; error: string };
 
 // ------------------------------------------------------------------ Phase 7
+
+// ------------------------------------------------------------------ Stolen mode
+
+/** What the stolen screen says, and what's on. */
+export interface GuardState {
+  on: boolean;
+  message: string;
+  /** How to reach the owner, shown on the stolen screen. */
+  contact: string;
+  /** Turn stolen mode on by itself when the SIM card is removed. */
+  sim_lock: boolean;
+  /** Why it's on: "owner", "sim_removed" (or why it went off: "code"). */
+  reason: string;
+  since: number;
+}
+
+export interface GuardReport {
+  /** "device_owner" (strongest), "admin", "basic" or "unsupported" (iPhone). */
+  level: string;
+  protections: string[];
+  missing: string[];
+}
+
+export interface GuardStatus {
+  /** This computer is the phone's owner. */
+  owner: boolean;
+  other_owner: boolean;
+  state: GuardState;
+  report: GuardReport;
+}
+
+export interface GuardEntry {
+  device: string;
+  /** This computer holds the phone's secret. */
+  owns: boolean;
+  status: GuardStatus | null;
+}
+
+export interface UsbPhone {
+  serial: string;
+  /** "device" (ready), "unauthorized" (allow USB debugging on the phone), "offline". */
+  state: string;
+  model: string;
+}
+
+export interface GuardSetupCheck {
+  /** Where adb was found ("" = not installed). */
+  adb: string;
+  install_hint: string;
+  phones: UsbPhone[];
+}
 
 /** Where a device is (Find my device). */
 export interface DeviceLocationInfo {
@@ -733,6 +788,18 @@ export interface Bridge {
   deviceLocations(): Promise<DeviceLocation[]>;
   /** This computer's own location and addresses (may ask the OS for permission). */
   ownLocation(): Promise<DeviceLocationInfo>;
+  /** Stolen protection of every paired device. */
+  guardStatuses(): Promise<GuardEntry[]>;
+  /** Asks a phone to make this computer its stolen-mode owner (confirmed on the phone). */
+  guardClaim(id: string): Promise<void>;
+  guardSet(id: string, state: GuardState): Promise<void>;
+  guardRelease(id: string): Promise<void>;
+  /** The answer to the 8-digit question a stolen phone shows. */
+  guardUnlockCode(id: string, challenge: string): Promise<string>;
+  /** Is adb installed, and which phones are plugged in over USB? */
+  guardSetupCheck(): Promise<GuardSetupCheck>;
+  /** Makes Devti the phone's device owner; resolves to a success message. */
+  guardSetupRun(serial: string): Promise<string>;
   setAnywhere(enabled: boolean, relay: string): Promise<AnywhereInfo>;
   setReach(enabled: boolean, extra: string[]): Promise<ReachInfo>;
   peerReach(id: string): Promise<string[]>;
